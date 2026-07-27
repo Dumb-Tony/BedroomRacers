@@ -79,12 +79,21 @@ Grip is the lever. Everything else is trim.
 Units are world units/second. Assume roughly **1 world unit = 1 screen pixel at
 zoom 1**, and a car is about 28 units long.
 
+> **Corrected in Phase 1.** The grip constants were originally written as
+> `gripNormal: 0.92 / gripDrifting: 0.62` under the description "lateral
+> velocity retained per frame". That is inverted — retaining *less* lateral
+> velocity means *more* grip, so as written, pressing drift made the car grippier.
+> Renamed to `lateralRetention*` so the direction is unambiguous, and the values
+> replaced with measured ones.
+
 ```js
 const PHYSICS = {
-  // Grip — the drift lever
-  gripNormal:      0.92,   // lateral velocity retained per frame when driving
-  gripDrifting:    0.62,   // ...when the drift button is held
-  gripRecoverRate: 4.0,    // how fast grip returns after releasing drift
+  // Grip — the drift lever.
+  // Fraction of LATERAL velocity RETAINED per tick.
+  // LOW = killed fast = grippy.  HIGH = persists = slidey.
+  lateralRetentionNormal: 0.86,  // driving normally
+  lateralRetentionDrift:  0.94,  // drift held
+  retentionBlendRate:      6.0,  // how snappily grip changes on press/release
 
   // Steering
   turnRateBase:    2.6,    // radians/sec at optimal speed
@@ -164,6 +173,31 @@ before adding anything else.
 - A drift held too long **scrubs speed** — there is a cost to overcommitting.
 - Counter-steering out of a slide feels controllable, not like fighting the car.
 - Releasing drift mid-corner recovers grip predictably.
+
+### Measured, Phase 1
+
+Automated 90-degree corner test at full entry speed, Red Racer. Ticks are at
+60Hz, so lower is faster through the corner.
+
+| `lateralRetentionDrift` | Max slip | Ticks | Speed kept |
+| --- | --- | --- | --- |
+| *(steering only)* | 14° | 55 | 94% |
+| 0.90 | 27° | 40 | 85% |
+| 0.92 | 33° | 40 | 84% |
+| **0.94** *(default)* | **40°** | **40** | **84%** |
+| 0.96 | 50° | 41 | 88% |
+| 0.97 | 56° | 42 | 91% |
+
+Two targets are confirmed by measurement rather than opinion:
+
+- **Drift beats steering** — 40 ticks vs 55, roughly 27% faster, across the
+  entire usable range of the constant.
+- **Overcommitting scrubs speed** — two seconds of continuous full-lock drift
+  drops the car from 237 to 125 units/sec.
+
+The remaining targets are subjective and still need a human driving. The value
+above was chosen for how the slide *looks*: past about 50° the car is near
+sideways and reads as comical rather than skilful.
 
 ## Jump model
 
@@ -264,16 +298,25 @@ props only. Do not migrate the vehicle model.
 
 ## Open questions
 
-1. **`GROUND_TILT` value.** 0.62 is a guess. Affects visibility distance and
-   therefore track design. Resolve in Phase 1, before any track is authored.
-2. **Fixed vs variable timestep.** Recommend a fixed 60Hz accumulator for
-   determinism (needed for replay ghosts in Time Trial). Confirm in Phase 1.
+1. **`GROUND_TILT` value.** 0.62 is still a guess. Affects visibility distance and
+   therefore track design. **Blocks all vehicle art and track authoring.** Live
+   slider exists in the Phase 1 debug panel — drag it and decide.
+2. ~~**Fixed vs variable timestep.**~~ **Resolved in Phase 1.** Fixed 60Hz
+   accumulator with render interpolation, capped at 6 steps per frame.
+   Determinism verified: identical input sequences produce bit-identical
+   positions over 300 ticks including wall collisions.
 3. **Does drift need a visible charge tier** for readability, given we rejected
    discrete tiers? Playtest with children specifically.
-4. **Camera behaviour** — pure follow, or look-ahead biased by velocity? Look-ahead
-   reads better at speed but can feel unstable during drifts.
+4. **Camera behaviour** — pure follow, or look-ahead biased by velocity? Both are
+   implemented; set `CAMERA.lookAhead` to 0 to compare.
 5. **Air control amount.** 0.35 is arbitrary. Too much trivialises jump shortcuts;
    too little makes landings feel arbitrary.
+6. **Wall riding.** *(New, found in Phase 1.)* A car that deflects off a wall
+   slides along it while keeping full speed, because only the normal component of
+   velocity is damped. That is correct physics and it makes glancing blows feel
+   good — but it also means leaning on a wall through a corner is free. Real
+   arcade racers usually add a tangential scrub. Needs a decision before Phase 3,
+   since it changes how barriers get placed in track design (`05_Tracks.md`).
 
 ## Related
 

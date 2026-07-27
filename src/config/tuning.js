@@ -1,0 +1,146 @@
+/* =============================================================================
+   TUNING — every number that affects how the car feels.
+   =============================================================================
+   Phase 1 exists to find these values. They are guesses from
+   GAME_BIBLE/03_Driving_Physics.md, not tuned numbers.
+
+   RULE (17_Claude_Rules.md): no magic numbers anywhere else in the codebase.
+   If it changes the feel, it lives here and it has a comment saying what it
+   does to the feel.
+
+   When a value is settled by playtesting, copy it back into
+   GAME_BIBLE/03_Driving_Physics.md. The debug panel has a "Copy tuning" button
+   that dumps this object with current values.
+   ========================================================================== */
+
+window.BR = window.BR || {};
+
+BR.PHYSICS = {
+
+  /* ── GRIP — the drift lever ──────────────────────────────────────────────
+     Fraction of LATERAL velocity RETAINED per 1/60s tick.
+     This is the whole drift mechanic. Everything else is trim.
+
+       LOW  (0.86) = lateral velocity killed fast = car goes where it points
+       HIGH (0.97) = lateral velocity persists    = car slides
+
+     Note the direction: higher retention means LESS grip. 03_Driving_Physics.md
+     originally had these named `gripNormal: 0.92 / gripDrifting: 0.62`, which
+     is inverted — it made pressing drift INCREASE grip. Renamed here to make
+     the direction unambiguous, and the bible has been corrected.
+
+     The GAP between these two is how dramatic pressing drift feels.
+
+     Measured on a 90-degree corner at full entry speed (Phase 1):
+       retention   slip   ticks   speed kept      (steering only: 55 ticks,
+         0.90       27°     40       85%           94% kept, 14 deg slip)
+         0.92       33°     40       84%
+         0.94       40°     40       84%   <- default: dramatic, still readable
+         0.96       50°     41       88%
+         0.97       56°     42       91%   <- near-sideways, looks comical
+     Every value beats steering through the corner, so this is a look choice
+     rather than a balance one. Drag the slider and pick.                    */
+  lateralRetentionNormal: 0.86,  // driving normally — grippy
+  lateralRetentionDrift:  0.94,  // drift held — slidey
+  retentionBlendRate:      6.0,  // units/sec moving between the two.
+                                 // Low = floaty vague transition,
+                                 // high = snappy bite on press and release
+
+  /* ── STEERING ────────────────────────────────────────────────────────────
+     Turn rate is a CURVE over speed, not a constant. See turnRateFor().
+     Sluggish when crawling, tightest mid-range, slightly reduced at top speed
+     so fast straights feel committed instead of twitchy.                    */
+  turnRateBase:   2.6,   // rad/sec at optimal speed. Higher = darty
+  turnSpeedFloor:  40,   // below this, steering authority ramps in
+  turnSpeedPeak:  180,   // speed of maximum turn rate
+  turnRateAtMax:  0.75,  // turn rate multiplier at top speed
+  driftTurnBonus: 1.35,  // steering multiplier while drifting.
+                         // This is why drifting corners tighter than steering
+  airControl:     0.35,  // steering multiplier while airborne.
+                         // Too high trivialises jump shortcuts, too low
+                         // makes landings feel arbitrary
+
+  /* ── LONGITUDINAL ────────────────────────────────────────────────────────
+     engineForce is the BASE. A vehicle's `acceleration` stat is normalised
+     against the reference vehicle (Red Racer, 160) to become a multiplier.  */
+  engineForce:      420,    // units/sec^2. Higher = snappier off the line
+  brakeForce:       640,    // units/sec^2 when braking
+  reverseMaxSpeed:   70,    // reverse is deliberately slow — recovery, not tactic
+  reverseForceMul:  0.4,    // reverse accelerates slower than braking
+  rollingFriction: 0.985,   // speed retained per tick when coasting.
+                            // Lower = car scrubs speed fast, feels heavy
+  dragCoefficient: 0.0016,  // quadratic drag, dominates near top speed
+  overspeedDecay:   400,    // units/sec^2 pulling back to max speed.
+                            // Soft, so boost ending doesn't snap
+
+  /* ── BOOST ───────────────────────────────────────────────────────────────  */
+  boostForce:        760,   // extra forward force while boosting
+  boostMaxSpeedMul: 1.28,   // raises the speed cap while boosting
+  boostDuration:     1.4,   // seconds per activation
+  boostDrainRate:   0.55,   // meter/sec while active.
+                            // A full meter is ~1.3 activations
+  boostMinToFire:   0.15,   // meter needed to trigger. Stops useless dribbles.
+                            // NOT in the bible — added in Phase 1
+
+  /* ── DRIFT CHARGE ────────────────────────────────────────────────────────
+     Continuous on slip angle — deliberately NOT tiered (no blue/orange
+     sparks). Tiers reward HOLDING a drift, which trains players to slide on
+     straights to farm boost. Continuous rewards drifting where corners are.
+     See 03_Driving_Physics.md "Drift model".                                */
+  driftChargeRate:    0.42,  // meter/sec while sliding. Higher = drift spam
+  driftMinAngle:      0.18,  // rad of slip before charge accrues.
+                             // Stops tiny wobbles paying out
+  driftMinSpeed:        40,  // below this, sliding earns nothing.
+                             // NOT in the bible — added in Phase 1
+  driftQualitySpan:    0.6,  // rad of slip above minimum for max charge rate
+  driftChargeFalloff:  1.2,  // display-only decay/sec after releasing drift
+
+  /* ── JUMPS ───────────────────────────────────────────────────────────────  */
+  gravity:            1400,  // units/sec^2. Higher = snappier, less floaty
+  landingGraceAngle:   0.5,  // rad of heading/velocity mismatch forgiven
+  cleanLandingBoost:  0.15,  // meter awarded for a clean landing
+  badLandingPenalty:  0.35,  // fraction of speed lost on the worst landing
+
+  /* ── COLLISIONS ──────────────────────────────────────────────────────────
+     Playful, not punishing. Control must return fast — frustration scales
+     non-linearly with time spent not driving.                               */
+  collisionRestitution: 0.45,  // bounce. Higher = pinball, lower = dead stop
+  collisionSpeedLoss:   0.35,  // max fraction of speed lost on a square hit.
+                               // Scaled by impact angle, so glancing blows
+                               // barely register
+  spinRecoveryTime:      0.6,  // HARD CAP on lost control, seconds
+  spinTriggerDot:       0.75,  // how square a hit must be to cause a spin
+};
+
+/* ── SURFACES ──────────────────────────────────────────────────────────────
+   Multiplicative modifiers. Phase 1 only uses rugRoad, but the lookup is
+   wired so surface zones drop straight in at Phase 3. See 05_Tracks.md.    */
+BR.SURFACES = {
+  rugRoad:   { grip: 1.00, maxSpeed: 1.00, accel: 1.00 },
+  rugGrass:  { grip: 0.95, maxSpeed: 0.82, accel: 0.90 },
+  hardwood:  { grip: 0.78, maxSpeed: 1.12, accel: 1.05 },
+  blanket:   { grip: 1.05, maxSpeed: 0.70, accel: 0.75 },
+  plastic:   { grip: 1.10, maxSpeed: 1.15, accel: 1.10 },
+  paper:     { grip: 0.60, maxSpeed: 1.00, accel: 0.85 },
+  bookCover: { grip: 0.90, maxSpeed: 1.05, accel: 1.00 },
+};
+
+/* Reference vehicle acceleration. A vehicle's `acceleration` stat is divided
+   by this to become a multiplier on engineForce, so Red Racer (160) = 1.0. */
+BR.ACCEL_REFERENCE = 160;
+
+/* ── CAMERA ────────────────────────────────────────────────────────────────
+   Render-side, but it changes the feel as much as any physics constant, so it
+   lives here with everything else that gets tuned.
+
+   03_Driving_Physics.md open question 4: pure follow, or look-ahead biased by
+   velocity? Look-ahead reads better at speed but can feel unstable mid-drift.
+   Both are implemented — set lookAhead to 0 to compare.                     */
+BR.CAMERA = {
+  zoom:         1.45,  // higher = closer, less track visible ahead
+  followRate:    7.0,  // units/sec of catch-up. Low = laggy and cinematic,
+                       // high = locked to the car and can feel jittery
+  lookAhead:    0.28,  // how far ahead of the car to bias, as a fraction of
+                       // velocity. 0 = pure follow
+  lookAheadMax:  190,  // cap, so top speed doesn't push the car off screen
+};

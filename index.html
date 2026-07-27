@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Bedroom Racers — Phase 1 Driving Test</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: #2b2622;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    color: #e8e2d8;
+  }
+  #game { display: block; width: 100%; height: 100%; touch-action: none; }
+
+  /* ── debug panel ──────────────────────────────────────────────────────── */
+  #debug {
+    position: fixed; top: 10px; right: 10px; width: 288px;
+    max-height: calc(100% - 20px); overflow-y: auto;
+    background: rgba(18,16,14,0.88);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 10px;
+    padding: 10px 12px 12px;
+    font-size: 11px; line-height: 1.5;
+    backdrop-filter: blur(6px);
+    user-select: none;
+  }
+  #debug::-webkit-scrollbar { width: 8px; }
+  #debug::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.16); border-radius: 4px;
+  }
+
+  .dbg-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding-bottom: 8px; margin-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.10);
+  }
+  .dbg-head strong { font-size: 11px; letter-spacing: 0.06em; color: #ffd34d; }
+  .dbg-head span { font-size: 10px; color: rgba(255,255,255,0.40); }
+
+  .dbg-readouts {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px;
+    margin-bottom: 10px; padding: 8px;
+    background: rgba(255,255,255,0.04); border-radius: 6px;
+    font-size: 11px;
+  }
+  .dbg-readouts span { display: flex; justify-content: space-between; }
+  .dbg-readouts i {
+    font-style: normal; color: rgba(255,255,255,0.42);
+  }
+
+  .dbg-section {
+    margin: 12px 0 5px; padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    font-size: 9.5px; letter-spacing: 0.10em;
+    color: rgba(255,255,255,0.45); text-transform: uppercase;
+  }
+  .dbg-section:first-of-type { border-top: none; margin-top: 4px; }
+
+  .dbg-row {
+    display: grid; grid-template-columns: 1fr auto; gap: 0 6px;
+    margin-bottom: 7px; cursor: help;
+  }
+  .dbg-row label { color: rgba(255,255,255,0.78); }
+  .dbg-val { color: #ffd34d; font-variant-numeric: tabular-nums; }
+  .dbg-row input[type=range] {
+    grid-column: 1 / -1; width: 100%; height: 14px; margin: 1px 0 0;
+    accent-color: #ffd34d; cursor: pointer;
+  }
+
+  .dbg-select { grid-template-columns: 1fr; }
+  .dbg-select select {
+    width: 100%; margin-top: 3px; padding: 4px 6px;
+    background: rgba(255,255,255,0.07); color: #e8e2d8;
+    border: 1px solid rgba(255,255,255,0.14); border-radius: 5px;
+    font-family: inherit; font-size: 11px;
+  }
+
+  .dbg-actions { display: flex; gap: 6px; margin-top: 12px; }
+  .dbg-actions button {
+    flex: 1; padding: 6px 4px;
+    background: rgba(255,255,255,0.08); color: #e8e2d8;
+    border: 1px solid rgba(255,255,255,0.16); border-radius: 5px;
+    font-family: inherit; font-size: 10.5px; cursor: pointer;
+  }
+  .dbg-actions button:hover { background: rgba(255,255,255,0.14); }
+
+  .dbg-help {
+    margin-top: 10px; padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    font-size: 10px; line-height: 1.7; color: rgba(255,255,255,0.50);
+  }
+  .dbg-help b { color: rgba(255,255,255,0.85); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<!--
+  Plain script tags, loaded in dependency order — NOT ES modules.
+  ES modules are blocked by CORS over file://, and this machine has no Node or
+  Python to serve from. Classic scripts mean the game runs by double-clicking
+  this file, with no toolchain at all.
+
+  Converting to ES modules is mechanical, and should happen alongside the build
+  step in 14_Technical_Architecture.md open question 1.
+-->
+<script src="src/config/tuning.js"></script>
+<script src="src/systems/MathUtil.js"></script>
+<script src="src/systems/Projection.js"></script>
+<script src="src/systems/Input.js"></script>
+<script src="src/data/vehicles.js"></script>
+<script src="src/data/arena.js"></script>
+<script src="src/entities/Vehicle.js"></script>
+<script src="src/systems/VehicleController.js"></script>
+<script src="src/systems/Collision.js"></script>
+<script src="src/render/Particles.js"></script>
+<script src="src/render/Renderer.js"></script>
+<script src="src/ui/HUD.js"></script>
+<script src="src/ui/Debug.js"></script>
+<script src="src/main.js"></script>
+
+</body>
+</html>
