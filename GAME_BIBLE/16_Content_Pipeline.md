@@ -1,0 +1,124 @@
+# 16 — Content Pipeline
+
+> **DRAFT.** Not covered by the source GDD. This document exists because the
+> "expandable structure" pillar (`00_Vision.md`) is a promise that only holds if
+> adding content is genuinely cheap. Right now, it isn't — there is no pipeline at all.
+>
+> Resolve before Phase 5, when track count grows past two.
+
+## The problem
+
+The GDD calls for six town-rug tracks, five-plus vehicles, and multiple future worlds.
+Hand-writing the track schema in `05_Tracks.md` as raw JavaScript is fine for one
+track, painful for three, and unworkable for six.
+
+Every track needs surface polygons, wall segments, checkpoint gates, spawn positions,
+racing-line waypoints, prop placements, hazard paths, ramp volumes, boost pads and
+collectibles. That is not hand-authorable at scale.
+
+## What "cheap to add" must mean
+
+| Content | Target cost |
+| --- | --- |
+| New vehicle (stat variant) | Add a data entry + sprite sheet. No code |
+| New cosmetic | Add a data entry + art. No code |
+| New track | Draw it in a tool, export, add an event entry. No code |
+| New event on an existing track | One config entry. No code |
+| New race mode | One mode handler + config entries. No system changes |
+| New world | New asset set + tracks. No engine changes |
+
+If any row requires editing a file in `src/systems/`, the pipeline has failed.
+
+## Track authoring options
+
+### 1. Hand-written JS/JSON
+*Now. Fine for the prototype, unworkable beyond ~2 tracks.*
+
+### 2. Tiled (tilemap editor)
+Mature, free, Phaser has first-class support. Object layers handle checkpoints,
+spawns, props and waypoints; tile layers handle surfaces.
+
+**Pros:** No tool to build. Well-documented. Artists can use it.
+**Cons:** Grid-oriented — organic rug roads and curved racing lines fight the grid.
+Custom properties get fiddly.
+
+### 3. SVG authored in a vector tool
+Draw the track in Illustrator/Inkscape/Figma. Paths become surface polygons and walls,
+named layers carry semantics. An import script converts SVG → track JSON.
+
+**Pros:** Natural for curved organic layouts. Artists work in a familiar tool. The
+visual and the collision come from the same source.
+**Cons:** Requires writing an importer. Naming conventions must be strict.
+
+### 4. Custom in-browser editor
+Build a track editor into the game itself.
+
+**Pros:** Exactly fits the schema. Live-testable — drive the track you're editing.
+**Cons:** Significant project in its own right. Classic scope trap.
+
+### Recommendation
+
+**Option 3 (SVG) for track geometry, with a small importer.** The rug roads are
+organic curves, which is where Tiled struggles most and vector tools excel. The
+importer is maybe a day's work and the tool is free and already familiar to whoever
+draws the rug.
+
+Racing-line waypoints can be authored as SVG paths too, sampled at intervals by the
+importer, with `targetSpeed` from a per-path attribute.
+
+**Do not build option 4** unless options 2 and 3 have both been tried and failed.
+
+Decide before authoring track 2. Track 1 can be hand-written.
+
+## Asset pipeline
+
+### Vehicles
+Per `12_Art_Guide.md`, vehicles need 16 heading frames at the camera tilt.
+
+Proposed: model simply in 3D → script an orthographic turntable render at
+`GROUND_TILT` → pack to a sprite atlas. Once that script exists, a new vehicle or
+cosmetic variant is minutes of work rather than hours of drawing.
+
+**This is why 3D-sourced vehicle art is recommended** despite the game being 2D — not
+for fidelity, but because 16 hand-drawn angles per vehicle per cosmetic variant does
+not scale.
+
+### Sprites and atlases
+Individual sources in `reference/`, packed atlases in `assets/sprites/`. Packing
+should be a repeatable scripted step, never manual.
+
+### Audio
+Source files in `reference/`, compressed exports in `assets/audio/`. Formats and
+fallback chain per `13_Audio.md`.
+
+## Validation
+
+Content bugs are the expensive kind — a broken checkpoint is invisible until someone
+exploits it. A validation script should check, before anything ships:
+
+- Every checkpoint is crossable and correctly ordered
+- No shortcut can skip a checkpoint
+- Racing lines stay within track bounds
+- All spawns are on drivable surface
+- No collectible is unreachable
+- Every referenced sprite and audio key exists
+- Track completes the `05_Tracks.md` authoring checklist
+
+An automated headless AI lap over each track would catch most of these. Worth building
+once there are three or more tracks.
+
+## Open questions
+
+1. Which authoring approach? (Recommend SVG. Decide before track 2.)
+2. JSON fetched at runtime, or JS modules bundled? JSON is tool-friendly; modules avoid
+   a fetch and work from `file://`.
+3. Who authors tracks — is this a solo project, or will there be an artist? Changes
+   the tooling calculus substantially.
+4. Is a build step acceptable? Atlas packing and SVG import both want one.
+   See `14_Technical_Architecture.md`, open question 1.
+
+## Related
+
+`05_Tracks.md` — the schema being authored.
+`12_Art_Guide.md` — asset requirements.
+`14_Technical_Architecture.md` — how data is loaded.
