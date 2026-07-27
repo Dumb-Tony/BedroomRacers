@@ -106,14 +106,14 @@ BR.Game = {
     BR.VehicleController.step(this.vehicle, input, dt);
 
     // Ramps before walls: a launched car should already be airborne when wall
-    // resolution runs, so it can clear ground-level geometry.
+    // resolution runs, so it can clear low geometry on the same tick.
     BR.Collision.checkRamps(this.vehicle, this.arena.ramps);
 
-    // Airborne vehicles ignore ground-level walls. That is what makes jumps
-    // into shortcuts work later (03_Driving_Physics.md "Jump model").
-    if (this.vehicle.grounded) {
-      BR.Collision.resolveWalls(this.vehicle, this.arena.walls);
-    }
+    // Walls are ALWAYS resolved. Height is handled per wall inside
+    // resolveWalls — a vehicle passes over anything lower than it is
+    // (03_Driving_Physics.md "Jump model"). Skipping walls wholesale while
+    // airborne made every barrier clearable by any jump, however small.
+    BR.Collision.resolveWalls(this.vehicle, this.arena.walls);
 
     BR.Particles.emitForVehicle(this.vehicle, dt);
   },

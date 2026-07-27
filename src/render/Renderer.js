@@ -24,19 +24,31 @@ BR.Renderer = {
   camX: 0, camY: 0, camYaw: 0,
   ready: false,
 
-  RAMP_HEIGHT: 22,
+  // Matches the hurdle height, so the ramp visibly lifts you exactly enough.
+  RAMP_HEIGHT: 20,
 
   init(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.resize();
     window.addEventListener('resize', () => this.resize());
+
+    // The game must not assume it owns the window — it may be embedded in a
+    // panel that resizes without the window doing so.
+    if (window.ResizeObserver && canvas.parentElement) {
+      new ResizeObserver(() => this.resize()).observe(canvas.parentElement);
+    }
   },
 
   resize() {
     const dpr = window.devicePixelRatio || 1;
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+
+    // Size to the containing element, falling back to the viewport.
+    const host = this.canvas.parentElement;
+    const box = host ? host.getBoundingClientRect() : null;
+    const w = Math.max(1, Math.round(box && box.width  ? box.width  : window.innerWidth));
+    const h = Math.max(1, Math.round(box && box.height ? box.height : window.innerHeight));
+
     this.dpr = dpr;
     this.w = w; this.h = h;
     this.canvas.width  = Math.round(w * dpr);
@@ -209,8 +221,14 @@ BR.Renderer = {
 
   // ── walls ────────────────────────────────────────────────────────────────
 
-  drawWall(ctx, w, H) {
+  drawWall(ctx, w, fallbackH) {
     const Pj = BR.Projection;
+    const H = w.h === undefined ? fallbackH : w.h;
+
+    // Jumpable barriers are drawn in a warning colour so a player can tell at
+    // a glance what they are meant to fly over rather than avoid.
+    const jumpable = isFinite(w.clearAt);
+
     const a0 = Pj.project(w.ax, w.ay, 0);
     const b0 = Pj.project(w.bx, w.by, 0);
     const a1 = Pj.project(w.ax, w.ay, H);
@@ -222,38 +240,55 @@ BR.Renderer = {
     ctx.lineTo(b1.sx, b1.sy);
     ctx.lineTo(a1.sx, a1.sy);
     ctx.closePath();
-    ctx.fillStyle = '#6b5f52';
+    ctx.fillStyle = jumpable ? '#9c5f2a' : '#6b5f52';
     ctx.fill();
 
     ctx.beginPath();
     ctx.moveTo(a1.sx, a1.sy);
     ctx.lineTo(b1.sx, b1.sy);
-    ctx.strokeStyle = '#a4907c';
+    ctx.strokeStyle = jumpable ? '#e0b46a' : '#a4907c';
     ctx.lineWidth = 2.5 / BR.CAMERA.zoom;
     ctx.stroke();
   },
 
   // ── ramp ─────────────────────────────────────────────────────────────────
 
+  /* The wedge must slope along the direction of travel, not across it, so the
+     ramp's `rise` vector decides which pair of edges is the high one. */
   drawRamps(ctx, arena) {
     const Pj = BR.Projection;
+
     for (let i = 0; i < arena.ramps.length; i++) {
       const r = arena.ramps[i];
-      const lo0 = Pj.project(r.x,       r.y + r.h, 0);
-      const lo1 = Pj.project(r.x + r.w, r.y + r.h, 0);
-      const hi0 = Pj.project(r.x,       r.y, this.RAMP_HEIGHT);
-      const hi1 = Pj.project(r.x + r.w, r.y, this.RAMP_HEIGHT);
+      const x0 = r.x, x1 = r.x + r.w, y0 = r.y, y1 = r.y + r.h;
+      const rise = r.rise || [0, -1];
+
+      let loA, loB, hiA, hiB;
+      if (rise[0] < 0)      { hiA = [x0, y0]; hiB = [x0, y1]; loA = [x1, y0]; loB = [x1, y1]; }
+      else if (rise[0] > 0) { hiA = [x1, y0]; hiB = [x1, y1]; loA = [x0, y0]; loB = [x0, y1]; }
+      else if (rise[1] < 0) { hiA = [x0, y0]; hiB = [x1, y0]; loA = [x0, y1]; loB = [x1, y1]; }
+      else                  { hiA = [x0, y1]; hiB = [x1, y1]; loA = [x0, y0]; loB = [x1, y0]; }
+
+      const p0 = Pj.project(loA[0], loA[1], 0);
+      const p1 = Pj.project(loB[0], loB[1], 0);
+      const p2 = Pj.project(hiB[0], hiB[1], this.RAMP_HEIGHT);
+      const p3 = Pj.project(hiA[0], hiA[1], this.RAMP_HEIGHT);
 
       ctx.beginPath();
-      ctx.moveTo(lo0.sx, lo0.sy);
-      ctx.lineTo(lo1.sx, lo1.sy);
-      ctx.lineTo(hi1.sx, hi1.sy);
-      ctx.lineTo(hi0.sx, hi0.sy);
+      ctx.moveTo(p0.sx, p0.sy);
+      ctx.lineTo(p1.sx, p1.sy);
+      ctx.lineTo(p2.sx, p2.sy);
+      ctx.lineTo(p3.sx, p3.sy);
       ctx.closePath();
       ctx.fillStyle = '#b8873f';
       ctx.fill();
-      ctx.strokeStyle = '#e0b46a';
-      ctx.lineWidth = 2 / BR.CAMERA.zoom;
+
+      // Lip along the top edge, so the launch point is unmistakable.
+      ctx.beginPath();
+      ctx.moveTo(p3.sx, p3.sy);
+      ctx.lineTo(p2.sx, p2.sy);
+      ctx.strokeStyle = '#ffd34d';
+      ctx.lineWidth = 3 / BR.CAMERA.zoom;
       ctx.stroke();
     }
   },

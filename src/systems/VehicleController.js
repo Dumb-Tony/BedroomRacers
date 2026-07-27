@@ -124,7 +124,11 @@ BR.VehicleController = {
     }
 
     // ── 5. friction and drag ───────────────────────────────────────────────
-    vF *= M.decay(P.rollingFriction, dt);
+    // Rolling friction is tyres against the floor, so it must NOT apply in
+    // mid-air. It used to, which scrubbed so much speed off a jump that the
+    // car landed far shorter than its launch velocity implied and every jump
+    // felt like being caught in a net. Air drag still applies.
+    if (v.grounded) vF *= M.decay(P.rollingFriction, dt);
     vF -= P.dragCoefficient * vF * Math.abs(vF) * dt;
 
     // ── 6. recompose in the OLD basis (see header) ─────────────────────────

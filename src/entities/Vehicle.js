@@ -40,6 +40,9 @@ BR.Vehicle = {
       // ── collision ───────────────────────────────────────────────────────
       spinTime: 0,
       spinVel: 0,
+      // Which ramp last launched us. Stops a ramp re-firing when the car lands
+      // back inside its trigger box.
+      rampIndex: -1,
 
       // ── feedback ────────────────────────────────────────────────────────
       lastLanding: null,
@@ -64,6 +67,7 @@ BR.Vehicle = {
     v.boostMeter = 0; v.boosting = false; v.boostTime = 0;
     v.driftCharge = 0; v.driftQuality = 0;
     v.spinTime = 0; v.spinVel = 0;
+    v.rampIndex = -1;
     v.lastLanding = null; v.landingFlash = 0;
   },
 

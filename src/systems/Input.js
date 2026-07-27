@@ -19,8 +19,17 @@ BR.Input = {
   /* Non-gameplay keys, consumed once then cleared. */
   pressed: {},
 
+  /* Typing into a field must not also drive the car — otherwise Space drifts
+     while you are selecting text, and arrows steer while a slider has focus. */
+  isTypingTarget(el) {
+    if (!el) return false;
+    const t = el.tagName;
+    return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || el.isContentEditable;
+  },
+
   init() {
     window.addEventListener('keydown', (e) => {
+      if (this.isTypingTarget(e.target)) return;
       if (!this.keys[e.code]) this.pressed[e.code] = true;
       this.keys[e.code] = true;
       // Stop the page scrolling out from under the game
@@ -28,6 +37,8 @@ BR.Input = {
         e.preventDefault();
       }
     });
+    // Always clear on keyup, even from a field — otherwise a key pressed while
+    // typing and released elsewhere stays stuck down.
     window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
     // Dropping focus mid-drift leaves keys stuck down otherwise
     window.addEventListener('blur', () => { this.keys = {}; });

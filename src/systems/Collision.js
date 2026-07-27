@@ -27,6 +27,13 @@ BR.Collision = {
     for (let i = 0; i < walls.length; i++) {
       const w = walls[i];
 
+      // A vehicle passes OVER anything lower than it is. Structural walls have
+      // clearAt = Infinity and are never jumpable; low hurdles are. This is
+      // what makes jumps into shortcuts work, and it is why height matters —
+      // previously airborne vehicles skipped walls entirely, so any jump
+      // cleared any barrier regardless of how high it went.
+      if (v.z >= w.clearAt) continue;
+
       // Closest point on the segment to the circle centre.
       const abx = w.bx - w.ax, aby = w.by - w.ay;
       const apx = v.x  - w.ax, apy = v.y  - w.ay;
@@ -90,21 +97,55 @@ BR.Collision = {
   /**
    * Ramp triggers. Axis-aligned boxes; launch scales with entry speed so a
    * crawling approach barely leaves the ground.
+   *
+   * EDGE TRIGGERED. A ramp fires once on entry and cannot fire again until the
+   * vehicle has left its box. Without this, a car that lands back inside the
+   * trigger relaunches immediately and the ramp behaves like a trampoline
+   * rather than a jump.
    */
   checkRamps(v, ramps) {
-    if (!v.grounded) return;
+    let inside = -1;
     for (let i = 0; i < ramps.length; i++) {
       const rp = ramps[i];
       if (v.x < rp.x || v.x > rp.x + rp.w) continue;
       if (v.y < rp.y || v.y > rp.y + rp.h) continue;
-
-      const speed = Math.hypot(v.vel.x, v.vel.y);
-      const frac  = Math.min(1, speed / v.spec.maxSpeed);
-      if (frac < 0.15) continue;
-
-      v.vz = rp.launch * frac;
-      v.grounded = false;
-      return;
+      inside = i;
+      break;
     }
+
+    // Left every ramp — arm them all again.
+    if (inside < 0) { v.rampIndex = -1; return; }
+
+    // Already flying over it, or landed back on the one that launched us.
+    if (!v.grounded) return;
+    if (v.rampIndex === inside) return;
+
+    const P = BR.PHYSICS;
+    const rp = ramps[inside];
+    const speed = Math.hypot(v.vel.x, v.vel.y);
+    const frac  = Math.min(1, speed / v.spec.maxSpeed);
+
+    // Too slow to get air — just drive over it.
+    if (frac < P.rampMinSpeedFrac) return;
+
+    // Must be heading UP the slope. Without this, bouncing back off whatever
+    // the ramp launches you over re-enters the box travelling the other way
+    // and fires it again, throwing the car backwards off the ramp's back face.
+    const rise = rp.rise || [0, -1];
+    const dot = (v.vel.x / speed) * rise[0] + (v.vel.y / speed) * rise[1];
+    if (dot < P.rampMinApproachDot) return;
+
+    // Launch from the LIP, not the foot of the wedge. How far along the ramp
+    // the car has travelled, 0 at the low edge and 1 at the high edge.
+    let progress;
+    if (rise[0] < 0)      progress = (rp.x + rp.w - v.x) / rp.w;
+    else if (rise[0] > 0) progress = (v.x - rp.x) / rp.w;
+    else if (rise[1] < 0) progress = (rp.y + rp.h - v.y) / rp.h;
+    else                  progress = (v.y - rp.y) / rp.h;
+    if (progress < P.rampLipFrac) return;
+
+    v.vz = rp.launch * frac;
+    v.grounded = false;
+    v.rampIndex = inside;
   },
 };

@@ -35,12 +35,17 @@ function roundedRect(x, y, w, h, r, steps) {
   return pts;
 }
 
-/* Closed polygon -> wall segments. */
-function polyToSegments(pts) {
+/* Closed polygon -> wall segments.
+   `h` is render height. `clearAt` is the height at which a vehicle passes
+   OVER the wall — Infinity for structural walls that can never be jumped. */
+function polyToSegments(pts, opts) {
+  opts = opts || {};
+  const h = opts.h === undefined ? 26 : opts.h;
+  const clearAt = opts.clearAt === undefined ? Infinity : opts.clearAt;
   const segs = [];
   for (let i = 0; i < pts.length; i++) {
     const a = pts[i], b = pts[(i + 1) % pts.length];
-    segs.push({ ax: a[0], ay: a[1], bx: b[0], by: b[1] });
+    segs.push({ ax: a[0], ay: a[1], bx: b[0], by: b[1], h: h, clearAt: clearAt });
   }
   return segs;
 }
@@ -61,6 +66,12 @@ const CHIC_B = box(1620, 1922, 280, 78);
 const BLOCK_1 = box(2790, 900,  130, 200);
 const BLOCK_2 = box(120,  1020, 130, 200);
 
+/* Low barrier on the top straight, just past the ramp. Travel here is -x, so
+   the ramp sits at HIGHER x and you fly over this. Clearable at z >= 22, which
+   a full-speed launch manages and a half-speed one does not — that gap is the
+   whole point of a jump. The lane at y 145..255 goes around it. */
+const HURDLE = box(1440, 30, 44, 115, 6);
+
 BR.ARENA = {
   bounds: { w: 3000, h: 2000 },
 
@@ -68,7 +79,7 @@ BR.ARENA = {
      facing +x, with room to build speed before the chicane. */
   spawn: { x: 620, y: 1870, heading: 0 },
 
-  polygons: [OUTER, ISLAND, CHIC_A, CHIC_B, BLOCK_1, BLOCK_2],
+  polygons: [OUTER, ISLAND, CHIC_A, CHIC_B, BLOCK_1, BLOCK_2, HURDLE],
 
   walls: [].concat(
     polyToSegments(OUTER),
@@ -76,17 +87,24 @@ BR.ARENA = {
     polyToSegments(CHIC_A),
     polyToSegments(CHIC_B),
     polyToSegments(BLOCK_1),
-    polyToSegments(BLOCK_2)
+    polyToSegments(BLOCK_2),
+    polyToSegments(HURDLE, { h: 20, clearAt: 20 })
   ),
 
   wallHeight: 26,
 
-  /* One ramp on the top straight.
-     Phase 1's build list does not include jumping, but shadow rendering IS
-     listed — and a shadow with z permanently 0 is untestable. This exists to
-     verify the height pipeline, not as a gameplay feature. ~15 lines.
-     Launch scales with entry speed, so a slow approach barely leaves the floor. */
+  /* One ramp on the top straight, where travel is -x.
+     A SHORT kicker, not a zone. It used to be 200 units long, which meant the
+     car launched, landed back inside the trigger, and launched again — the
+     straight read as a trampoline rather than a jump. 70 units is about two
+     and a half car lengths: you cross it once and you are gone.
+
+     Landing on a ramp cannot re-fire it either — see Collision.checkRamps.
+
+     `rise` is the up-slope direction, used to draw the wedge the right way
+     round. Launch scales with entry speed, so a crawl barely leaves the floor
+     and fails to clear the hurdle. */
   ramps: [
-    { x: 1360, y: 84, w: 200, h: 92, launch: 430 },
+    { x: 1500, y: 30, w: 70, h: 115, rise: [-1, 0], launch: 460 },
   ],
 };

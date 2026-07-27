@@ -97,6 +97,15 @@ BR.PHYSICS = {
 
   /* ── JUMPS ───────────────────────────────────────────────────────────────  */
   gravity:            1400,  // units/sec^2. Higher = snappier, less floaty
+  rampMinSpeedFrac:   0.35,  // fraction of max speed needed to get air at all.
+                             // Below this you just drive over the ramp — a
+                             // crawling car popping into the sky looks absurd
+  rampMinApproachDot: 0.35,  // how squarely you must be going UP the slope.
+                             // Stops a ramp firing when you reverse into it
+  rampLipFrac:         0.8,  // how far along the ramp you launch. Firing at the
+                             // BOTTOM of the wedge meant a short jump could land
+                             // back on the ramp it just left, which reads as
+                             // bouncing rather than jumping
   landingGraceAngle:   0.5,  // rad of heading/velocity mismatch forgiven
   cleanLandingBoost:  0.15,  // meter awarded for a clean landing
   badLandingPenalty:  0.35,  // fraction of speed lost on the worst landing
