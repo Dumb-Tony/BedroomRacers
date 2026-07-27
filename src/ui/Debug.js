@@ -33,13 +33,18 @@ BR.Debug = {
       ['Height scale',     Pj, 'heightScale', 0.30, 1.60, 0.01,
        'How far a jump lifts the car from its shadow.'],
 
-      ['CAMERA'],
+      ['CAMERA — chase'],
       ['Zoom',             C, 'zoom',          0.80, 2.60, 0.05,
        'Higher = closer, less track visible ahead.'],
+      ['Horizon bias',     C, 'horizonBias',   0.40, 0.85, 0.01,
+       'How far down the screen the car sits. Higher = more road ahead.'],
+      ['Yaw rate',         C, 'yawRate',       1.0, 15.0, 0.25,
+       'How fast the view swings to follow travel. LOW lets the world rotate '
+       + 'behind you through a drift.'],
       ['Follow rate',      C, 'followRate',    2.0, 20.0, 0.5,
-       'Low = laggy and cinematic, high = locked and jittery.'],
+       'Positional catch-up. Low = laggy and cinematic.'],
       ['Look ahead',       C, 'lookAhead',     0.00, 0.60, 0.01,
-       '0 = pure follow. Open question 4 in 03_Driving_Physics.md.'],
+       '0 = pure follow. horizonBias already looks ahead.'],
 
       ['GRIP — the drift lever'],
       ['Retention normal', P, 'lateralRetentionNormal', 0.70, 0.99, 0.005,

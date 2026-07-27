@@ -20,7 +20,8 @@ BR.Renderer = {
   canvas: null,
   ctx: null,
   w: 0, h: 0, dpr: 1,
-  cam: { x: 0, y: 0 },
+  // Camera focus in WORLD space, plus the yaw the view is rotated to.
+  camX: 0, camY: 0, camYaw: 0,
   ready: false,
 
   RAMP_HEIGHT: 22,
@@ -44,18 +45,39 @@ BR.Renderer = {
     this.canvas.style.height = h + 'px';
   },
 
-  snapCameraTo(x, y) {
-    const p = BR.Projection.project(x, y, 0);
-    this.cam.x = p.sx;
-    this.cam.y = p.sy;
+  /* Jump the camera straight to the car with no easing. Used on spawn and
+     reset, so the view doesn't sweep across the arena. */
+  snapCameraTo(x, y, yaw) {
+    this.camX = x;
+    this.camY = y;
+    this.camYaw = yaw || 0;
   },
 
   updateCamera(v, ix, iy, dt) {
     const C = BR.CAMERA;
     const M = BR.M;
 
-    // Bias ahead of the car along its velocity. Ground position only — a
-    // camera that follows z bounces during jumps.
+    // ── yaw: follow the DIRECTION OF TRAVEL, not the heading ───────────────
+    // Following the nose would swing the view sideways every time the car
+    // drifts. Following velocity keeps the view pointed where the car is
+    // actually going, and the car visibly yaws within the frame instead.
+    const speed = Math.hypot(v.vel.x, v.vel.y);
+    const forward = v.vel.x * Math.cos(v.heading) + v.vel.y * Math.sin(v.heading);
+
+    let targetYaw;
+    if (speed > C.yawMinSpeed && forward > 0) {
+      targetYaw = Math.atan2(v.vel.y, v.vel.x);
+    } else {
+      // Crawling, stopped, or reversing. Velocity direction is noise here, and
+      // reversing would otherwise whip the camera through 180 degrees.
+      targetYaw = v.heading;
+    }
+
+    const dYaw = M.wrapAngle(targetYaw - this.camYaw);
+    this.camYaw += dYaw * (1 - Math.exp(-C.yawRate * dt));
+
+    // ── position: world space, ground plane only ───────────────────────────
+    // Deliberately ignores z — a camera that tracks height bounces on jumps.
     let tx = ix, ty = iy;
     if (C.lookAhead > 0) {
       const ax = v.vel.x * C.lookAhead;
@@ -66,10 +88,9 @@ BR.Renderer = {
       ty += ay * scale;
     }
 
-    const target = BR.Projection.project(tx, ty, 0);
     const k = 1 - Math.exp(-C.followRate * dt);   // frame-rate independent lerp
-    this.cam.x = M.lerp(this.cam.x, target.sx, k);
-    this.cam.y = M.lerp(this.cam.y, target.sy, k);
+    this.camX = M.lerp(this.camX, tx, k);
+    this.camY = M.lerp(this.camY, ty, k);
   },
 
   /**
@@ -92,6 +113,11 @@ BR.Renderer = {
 
     this.updateCamera(v, ix, iy, dt);
 
+    // Hand the camera to the projection BEFORE anything projects. Everything
+    // downstream comes back already camera-relative, so the only transform
+    // left is centring.
+    Pj.setCamera(this.camX, this.camY, this.camYaw);
+
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.w, this.h);
 
@@ -100,22 +126,28 @@ BR.Renderer = {
     ctx.fillRect(0, 0, this.w, this.h);
 
     ctx.save();
-    ctx.translate(this.w / 2, this.h / 2);
+    // horizonBias pushes the car down the screen so more road is visible
+    // ahead of it. This is what makes the camera read as "behind" the car.
+    ctx.translate(this.w / 2, this.h * BR.CAMERA.horizonBias);
     ctx.scale(BR.CAMERA.zoom, BR.CAMERA.zoom);
-    ctx.translate(-this.cam.x, -this.cam.y);
 
     this.drawGround(ctx, arena);
     this.drawGrid(ctx, arena);
     this.drawMarks(ctx);
     this.drawRamps(ctx, arena);
 
-    // ── depth sort: walls and the vehicle interleave by world y ────────────
+    // ── depth sort: walls and the vehicle interleave ───────────────────────
+    // Sorted on CAMERA-space depth, not world y. With a rotating camera,
+    // "further away" depends on where the camera is looking.
     const drawables = [];
     for (let i = 0; i < arena.walls.length; i++) {
       const w = arena.walls[i];
-      drawables.push({ key: Pj.depthOf(Math.max(w.ay, w.by)), wall: w });
+      drawables.push({
+        key: Math.max(Pj.depthAt(w.ax, w.ay), Pj.depthAt(w.bx, w.by)),
+        wall: w,
+      });
     }
-    drawables.push({ key: Pj.depthOf(iy), car: true });
+    drawables.push({ key: Pj.depthAt(ix, iy), car: true });
     drawables.sort((a, b) => a.key - b.key);
 
     for (let i = 0; i < drawables.length; i++) {

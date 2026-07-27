@@ -6,31 +6,69 @@
 
 ## Perspective: the single most important rule
 
-The camera is **slightly angled 2.5D**, not pure top-down.
+The camera is **slightly angled 2.5D**, and it is a **chase camera** — it sits
+behind the car and **rotates** so the direction of travel always points up the
+screen.
 
-**The simulation is flat 2D. The tilt is a render-time projection only.**
+**The simulation is flat 2D. The camera is a render-time transform only.**
 
-Physics never knows about the camera angle. The vehicle exists on a flat XY plane
-with a separate scalar `z` for height. Nothing in the driving model reads the
-projection constants.
+Physics never knows where the camera is or which way it faces. The vehicle exists
+on a flat XY plane with a separate scalar `z` for height. Nothing in the driving
+model reads the projection.
+
+Three stages, strictly in this order:
 
 ```js
-const GROUND_TILT  = 0.62;  // vertical squash of the ground plane
-const HEIGHT_SCALE = 0.85;  // how much world z lifts a sprite on screen
+// 1. translate relative to the camera focus
+// 2. rotate by camera yaw, so travel direction becomes screen "up"
+// 3. squash the ground plane, and lift by height
+
+const a = -(camYaw + Math.PI / 2);
+const cos = Math.cos(a), sin = Math.sin(a);
 
 function project(x, y, z = 0) {
-  return { sx: x, sy: y * GROUND_TILT - z * HEIGHT_SCALE };
+  const dx = x - camX, dy = y - camY;
+  const rx = dx * cos - dy * sin;
+  const ry = dx * sin + dy * cos;
+  return {
+    sx: rx,
+    sy: ry * GROUND_TILT - z * HEIGHT_SCALE,
+    depth: ry,
+  };
 }
 ```
 
+**Rotation must happen before the squash.** Doing it the other way round shears
+the world. There is a regression test for this.
+
 Consequences:
 
-- **Depth sorting** uses world `y`. Higher `y` draws in front.
+- **Depth sorting uses camera-space `y`**, not world `y`. With a rotating camera,
+  "further away" depends on where the camera is looking.
 - **Shadows** are drawn at `project(x, y, 0)` — always on the ground, never lifted.
   The gap between vehicle and shadow *is* the height cue.
 - **Collision and steering maths are unchanged** from a top-down game. Do not
-  compensate for the tilt anywhere in the simulation.
-- **Rotating a single sprite no longer works.** See `12_Art_Guide.md`.
+  compensate for the camera anywhere in the simulation.
+- **Everything with height is now seen from all sides.** See `12_Art_Guide.md` —
+  this is the expensive consequence.
+
+### Camera yaw follows travel, not heading
+
+The camera tracks the **direction of travel**, not where the nose is pointing. If
+it followed the nose, drifting would swing the view sideways off the track.
+Following velocity keeps the view pointed where the car is actually going, and
+the car visibly yaws *within* the frame instead — which is the clearest possible
+read on how hard it is sliding.
+
+Below `yawMinSpeed` the camera falls back to heading, because velocity direction
+is noise at a crawl and reversing would otherwise whip the view through 180°.
+
+`yawRate` deliberately lags. Measured mid-drift at 4.5: true slip 43°, camera lag
+behind travel 22°, so the car reads as **64° sideways on screen** — noticeably
+more dramatic than it physically is. That stacking is a taste call, and a slider.
+
+`horizonBias` places the car low on screen so more road is visible ahead. That,
+not a literal camera offset, is what makes it read as being behind the car.
 
 Tuning `GROUND_TILT` toward 1.0 approaches top-down; toward 0.4 approaches a low
 chase view. 0.62 is a starting guess. Expect to tune this **early**, because it
@@ -307,8 +345,11 @@ props only. Do not migrate the vehicle model.
    positions over 300 ticks including wall collisions.
 3. **Does drift need a visible charge tier** for readability, given we rejected
    discrete tiers? Playtest with children specifically.
-4. **Camera behaviour** — pure follow, or look-ahead biased by velocity? Both are
-   implemented; set `CAMERA.lookAhead` to 0 to compare.
+4. ~~**Camera behaviour** — pure follow, or look-ahead biased by velocity?~~
+   **Superseded.** The camera is now a rotating chase camera following travel
+   direction. `lookAhead` survives as a small extra bias, but `horizonBias` does
+   most of the work. Open sub-question: is `yawRate 4.5` too much lag? It makes
+   the car read 64° sideways in a 43° drift.
 5. **Air control amount.** 0.35 is arbitrary. Too much trivialises jump shortcuts;
    too little makes landings feel arbitrary.
 6. **Wall riding.** *(New, found in Phase 1.)* A car that deflects off a wall

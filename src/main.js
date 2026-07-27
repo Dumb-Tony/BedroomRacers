@@ -34,7 +34,6 @@ BR.Game = {
     BR.Renderer.init(document.getElementById('game'));
 
     this.setVehicle('red-racer');
-    BR.Renderer.snapCameraTo(this.vehicle.x, this.vehicle.y);
 
     BR.Debug.init(this);
 
@@ -45,12 +44,15 @@ BR.Game = {
   setVehicle(id) {
     const sp = this.arena.spawn;
     this.vehicle = BR.Vehicle.create(id, sp.x, sp.y, sp.heading);
+    // Snap rather than ease — otherwise swapping vehicles sweeps the camera
+    // across the arena.
+    BR.Renderer.snapCameraTo(sp.x, sp.y, sp.heading);
   },
 
   reset() {
     const sp = this.arena.spawn;
     BR.Vehicle.reset(this.vehicle, sp.x, sp.y, sp.heading);
-    BR.Renderer.snapCameraTo(sp.x, sp.y);
+    BR.Renderer.snapCameraTo(sp.x, sp.y, sp.heading);
   },
 
   frame(now) {

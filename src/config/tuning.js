@@ -129,18 +129,30 @@ BR.SURFACES = {
    by this to become a multiplier on engineForce, so Red Racer (160) = 1.0. */
 BR.ACCEL_REFERENCE = 160;
 
-/* ── CAMERA ────────────────────────────────────────────────────────────────
+/* ── CAMERA — chase camera, behind the car ─────────────────────────────────
    Render-side, but it changes the feel as much as any physics constant, so it
    lives here with everything else that gets tuned.
 
-   03_Driving_Physics.md open question 4: pure follow, or look-ahead biased by
-   velocity? Look-ahead reads better at speed but can feel unstable mid-drift.
-   Both are implemented — set lookAhead to 0 to compare.                     */
+   The camera yaw follows the DIRECTION OF TRAVEL, not the car's heading. If it
+   followed the nose, drifting would swing the view sideways off the track.
+   Following velocity means the car visibly slides sideways in frame while the
+   view stays pointed where you're actually going — which is both what arcade
+   racers do and the clearest possible read on how hard you're drifting.     */
 BR.CAMERA = {
-  zoom:         1.45,  // higher = closer, less track visible ahead
-  followRate:    7.0,  // units/sec of catch-up. Low = laggy and cinematic,
-                       // high = locked to the car and can feel jittery
-  lookAhead:    0.28,  // how far ahead of the car to bias, as a fraction of
-                       // velocity. 0 = pure follow
-  lookAheadMax:  190,  // cap, so top speed doesn't push the car off screen
+  zoom:          1.45,  // higher = closer, less track visible ahead
+  followRate:     7.0,  // positional catch-up. Low = laggy and cinematic,
+                        // high = locked to the car and can feel jittery
+  yawRate:        4.5,  // how fast the view swings round to follow travel.
+                        // LOW is good: a lagging yaw means the world rotates
+                        // behind you through a drift, which looks great.
+                        // Too high and the view snaps about mid-corner
+  yawMinSpeed:     25,  // below this, follow HEADING instead — velocity
+                        // direction is noise at a crawl, and reversing would
+                        // otherwise flip the camera 180 degrees
+  horizonBias:   0.62,  // where the car sits vertically. 0.5 = centred,
+                        // higher = car lower on screen, more road visible.
+                        // This is what makes it read as "behind" the car
+  lookAhead:     0.10,  // extra bias along velocity. Lower than a fixed camera
+                        // needs, because horizonBias already looks ahead
+  lookAheadMax:   120,  // cap, so top speed doesn't push the car off screen
 };

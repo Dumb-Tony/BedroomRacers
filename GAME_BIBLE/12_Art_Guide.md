@@ -10,18 +10,50 @@ photographed in someone's bedroom on a Saturday afternoon.
 
 ## The perspective constraint
 
-The camera is **slightly angled 2.5D**, not top-down. This is an art constraint before
-it is a technical one.
+The camera is **slightly angled 2.5D**, and it is a **rotating chase camera** — it
+sits behind the car and turns so the direction of travel points up the screen.
+This is an art constraint before it is a technical one.
 
 ```
 GROUND_TILT = 0.62   // ground plane is vertically squashed
 ```
 
+### The rotating camera makes this harder, not easier
+
+It is tempting to think a chase camera reduces vehicle art, since the player's car
+is nearly always seen from behind. **It does not.** Opponents can be at any angle
+relative to the camera — through hairpins, when being lapped, when spun out — and
+they must use the same asset as the player. Full 360° coverage still stands.
+
+What the rotating camera *adds* is a cost that a fixed camera did not have:
+
+**Every prop with height is now seen from all sides.** With a fixed camera, a
+crayon, a block or a shoe could be one sprite drawn at one angle forever. With the
+camera rotating around them, a fixed sprite visibly "turns to follow you", which
+reads as badly wrong.
+
+Affected and unaffected:
+
+| Asset | Impact |
+| --- | --- |
+| Flat ground decals — road print, rug pattern, markings, tyre marks | **None.** They live on the plane and rotate with it correctly |
+| Vehicles | Unchanged — already needed 360° coverage |
+| Props with height — blocks, crayons, furniture, toys | **New cost.** Need multi-angle frames, or geometry, or to be restyled as flat |
+| Walls and barriers | Fine if drawn as extruded geometry, as the prototype does |
+
+Cheapest mitigations, in order: keep small props flat where the fiction allows
+(a fallen crayon is nearly flat anyway); build tall props as simple extruded
+geometry rather than sprites; reserve multi-angle sprite sheets for the few hero
+props that genuinely need them.
+
+**This needs deciding before prop art starts**, and it is a stronger argument for
+3D-sourced assets than the vehicle pipeline was.
+
 ### The rotation problem
 
 **A single overhead sprite rotated 360° does not work at an angle.** It reads as
-correct top-down and pancaked at a tilt. This is the biggest art-pipeline consequence
-of the perspective decision.
+correct top-down and pancaked at a tilt. This applies to vehicles and to every
+prop with height.
 
 Options:
 
