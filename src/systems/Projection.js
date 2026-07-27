@@ -30,9 +30,16 @@ BR.Projection = {
        0.62 = current guess
        0.4  = low, close to the ground
 
-     LOCKING THIS IS A PHASE 1 EXIT CRITERION. It blocks vehicle art, because
-     sprites must be pre-rendered at this exact angle (12_Art_Guide.md).      */
-  groundTilt: 0.62,
+     DIALLED IN, PHASE 1: 0.30, down from the guessed 0.62. That is a much
+     lower, more behind-the-car view than "slightly angled 2.5D" implied, and
+     it changes the art direction — vehicles are seen far more from behind and
+     far less from above. See 12_Art_Guide.md.
+
+     NOTE: 0.30 is the debug slider's minimum. If it wanted to go lower, the
+     range needs widening rather than the value being treated as settled.
+
+     Blocks vehicle art: sprites must be pre-rendered at this exact angle.    */
+  groundTilt: 0.30,
 
   /* How much one world unit of height lifts a sprite up the screen. The gap
      between a car and its shadow is the only height cue there is.           */

@@ -35,13 +35,13 @@ BR.PHYSICS = {
        retention   slip   ticks   speed kept      (steering only: 55 ticks,
          0.90       27°     40       85%           94% kept, 14 deg slip)
          0.92       33°     40       84%
-         0.94       40°     40       84%   <- default: dramatic, still readable
+         0.94       40°     40       84%
          0.96       50°     41       88%
-         0.97       56°     42       91%   <- near-sideways, looks comical
+         0.97       56°     42       91%   <- DIALLED IN: big, sideways slides
      Every value beats steering through the corner, so this is a look choice
      rather than a balance one. Drag the slider and pick.                    */
   lateralRetentionNormal: 0.86,  // driving normally — grippy
-  lateralRetentionDrift:  0.94,  // drift held — slidey
+  lateralRetentionDrift:  0.97,  // drift held — slidey
   retentionBlendRate:      6.0,  // units/sec moving between the two.
                                  // Low = floaty vague transition,
                                  // high = snappy bite on press and release
@@ -50,7 +50,10 @@ BR.PHYSICS = {
      Turn rate is a CURVE over speed, not a constant. See turnRateFor().
      Sluggish when crawling, tightest mid-range, slightly reduced at top speed
      so fast straights feel committed instead of twitchy.                    */
-  turnRateBase:   2.6,   // rad/sec at optimal speed. Higher = darty
+  turnRateBase:   1.7,   // rad/sec at optimal speed. Higher = darty.
+                         // Dialled well down from 2.6 — with the loose drift
+                         // retention below, sharp steering made the car
+                         // twitchy rather than committed
   turnSpeedFloor:  40,   // below this, steering authority ramps in
   turnSpeedPeak:  180,   // speed of maximum turn rate
   turnRateAtMax:  0.75,  // turn rate multiplier at top speed
@@ -63,20 +66,24 @@ BR.PHYSICS = {
   /* ── LONGITUDINAL ────────────────────────────────────────────────────────
      engineForce is the BASE. A vehicle's `acceleration` stat is normalised
      against the reference vehicle (Red Racer, 160) to become a multiplier.  */
-  engineForce:      420,    // units/sec^2. Higher = snappier off the line
+  engineForce:      900,    // units/sec^2. Higher = snappier off the line.
+                            // NOTE: this is the debug slider's MAXIMUM. If it
+                            // wanted more, widen the range rather than treating
+                            // 900 as settled
   brakeForce:       640,    // units/sec^2 when braking
   reverseMaxSpeed:   70,    // reverse is deliberately slow — recovery, not tactic
   reverseForceMul:  0.4,    // reverse accelerates slower than braking
-  rollingFriction: 0.985,   // speed retained per tick when coasting.
-                            // Lower = car scrubs speed fast, feels heavy
+  rollingFriction: 0.986,   // speed retained per tick when coasting.
+                            // Lower = car scrubs speed fast, feels heavy.
+                            // Grounded only — see VehicleController step 5
   dragCoefficient: 0.0016,  // quadratic drag, dominates near top speed
   overspeedDecay:   400,    // units/sec^2 pulling back to max speed.
                             // Soft, so boost ending doesn't snap
 
   /* ── BOOST ───────────────────────────────────────────────────────────────  */
-  boostForce:        760,   // extra forward force while boosting
+  boostForce:        800,   // extra forward force while boosting
   boostMaxSpeedMul: 1.28,   // raises the speed cap while boosting
-  boostDuration:     1.4,   // seconds per activation
+  boostDuration:     1.2,   // seconds per activation
   boostDrainRate:   0.55,   // meter/sec while active.
                             // A full meter is ~1.3 activations
   boostMinToFire:   0.15,   // meter needed to trigger. Stops useless dribbles.
@@ -87,7 +94,9 @@ BR.PHYSICS = {
      sparks). Tiers reward HOLDING a drift, which trains players to slide on
      straights to farm boost. Continuous rewards drifting where corners are.
      See 03_Driving_Physics.md "Drift model".                                */
-  driftChargeRate:    0.42,  // meter/sec while sliding. Higher = drift spam
+  driftChargeRate:    0.32,  // meter/sec while sliding. Higher = drift spam.
+                             // Dialled down from 0.42 — boost was accruing
+                             // faster than it could sensibly be spent
   driftMinAngle:      0.18,  // rad of slip before charge accrues.
                              // Stops tiny wobbles paying out
   driftMinSpeed:        40,  // below this, sliding earns nothing.
@@ -113,8 +122,8 @@ BR.PHYSICS = {
   /* ── COLLISIONS ──────────────────────────────────────────────────────────
      Playful, not punishing. Control must return fast — frustration scales
      non-linearly with time spent not driving.                               */
-  collisionRestitution: 0.45,  // bounce. Higher = pinball, lower = dead stop
-  collisionSpeedLoss:   0.35,  // max fraction of speed lost on a square hit.
+  collisionRestitution: 0.30,  // bounce. Higher = pinball, lower = dead stop
+  collisionSpeedLoss:   0.30,  // max fraction of speed lost on a square hit.
                                // Scaled by impact angle, so glancing blows
                                // barely register
   spinRecoveryTime:      0.6,  // HARD CAP on lost control, seconds
@@ -148,7 +157,10 @@ BR.ACCEL_REFERENCE = 160;
    view stays pointed where you're actually going — which is both what arcade
    racers do and the clearest possible read on how hard you're drifting.     */
 BR.CAMERA = {
-  zoom:          1.45,  // higher = closer, less track visible ahead
+  zoom:          1.15,  // higher = closer, less track visible ahead.
+                        // Pulled back from 1.45 to compensate for the low
+                        // groundTilt, which compresses how much ground fits
+                        // on screen
   followRate:     7.0,  // positional catch-up. Low = laggy and cinematic,
                         // high = locked to the car and can feel jittery
   yawRate:        4.5,  // how fast the view swings round to follow travel.

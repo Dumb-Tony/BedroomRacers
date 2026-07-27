@@ -88,7 +88,25 @@ BR.VehicleController = {
     // ── 4. engine, brake, boost ────────────────────────────────────────────
     const accelMul = spec.acceleration / BR.ACCEL_REFERENCE;
 
-    if (input.throttle > 0 && v.grounded) {
+    // Effective ceiling, raised while boosting.
+    const boostMul = v.boosting ? 1 + (P.boostMaxSpeedMul - 1) * spec.boostPower : 1;
+    const maxForward = spec.maxSpeed * S.maxSpeed * boostMul;
+
+    // The engine does not push at or above the ceiling. Without this gate a
+    // strong engine simply overruns the cap: the cap only decayed overspeed at
+    // overspeedDecay per second, so any engineForce above that won outright and
+    // the vehicle's maxSpeed stat became decorative — measured 350 against a
+    // stat of 280, which would have flattened the whole roster's top-speed
+    // spread. Gating keeps the punchy launch a high engineForce buys while
+    // letting maxSpeed mean exactly what it says.
+    // Gated on TOTAL speed, not just the forward component. Gating on forward
+    // alone let a sustained drift pump energy in: lateral velocity is
+    // unbounded, so the engine kept refilling forward speed to the ceiling
+    // while the slide persisted, and two seconds of full-lock drift ACCELERATED
+    // the car from 350 to 449. Using total speed means you cannot accelerate
+    // while sliding sideways, which is both correct and what makes
+    // overcommitting to a drift cost you.
+    if (input.throttle > 0 && v.grounded && speed < maxForward && vF < maxForward) {
       vF += P.engineForce * accelMul * S.accel * input.throttle * dt;
     }
 
@@ -115,10 +133,8 @@ BR.VehicleController = {
       }
     }
 
-    // Soft speed cap. Decaying rather than clamping means boost ending is a
-    // fade, not a snap.
-    const boostMul = v.boosting ? 1 + (P.boostMaxSpeedMul - 1) * spec.boostPower : 1;
-    const maxForward = spec.maxSpeed * S.maxSpeed * boostMul;
+    // Soft speed cap, for the overshoot left when boost ends. Decaying rather
+    // than clamping means boost ending is a fade, not a snap.
     if (vF > maxForward) {
       vF = Math.max(maxForward, vF - P.overspeedDecay * dt);
     }

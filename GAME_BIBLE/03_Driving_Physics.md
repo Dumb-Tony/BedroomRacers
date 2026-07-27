@@ -170,6 +170,68 @@ const PHYSICS = {
 };
 ```
 
+### Dialled in — Phase 1
+
+These supersede the starting guesses above. Tuned by driving, 27 July 2026.
+
+```
+Projection: groundTilt = 0.30   heightScale = 0.85
+
+CAMERA:   zoom 1.15 · followRate 7 · yawRate 4.5 · yawMinSpeed 25
+          horizonBias 0.62 · lookAhead 0.1 · lookAheadMax 120
+
+PHYSICS:  lateralRetentionNormal 0.86 · lateralRetentionDrift 0.97
+          retentionBlendRate 6 · turnRateBase 1.7 · driftTurnBonus 1.35
+          airControl 0.35 · engineForce 900 · brakeForce 640
+          rollingFriction 0.986 · dragCoefficient 0.0016
+          boostForce 800 · boostDuration 1.2 · boostMaxSpeedMul 1.28
+          driftChargeRate 0.32 · driftMinAngle 0.18
+          collisionRestitution 0.30 · collisionSpeedLoss 0.30
+          gravity 1400 · rampMinSpeedFrac 0.35 · rampLipFrac 0.8
+```
+
+Vehicle top speeds were scaled **x1.25** at the same time — see below.
+
+**`groundTilt` moved from 0.62 to 0.30**, which is a much lower, more
+behind-the-car view than "slightly angled 2.5D" originally implied. This changes
+the art direction materially: vehicles are seen far more from behind and far
+less from above. `12_Art_Guide.md` needs revisiting before any sprite work.
+
+Two values sit exactly on a debug slider limit — `groundTilt` at its minimum and
+`engineForce` at its maximum — so neither should be treated as settled until the
+ranges are widened and re-driven.
+
+### Two speed-cap bugs found while applying these
+
+**The engine overran the cap.** Overspeed decayed at `overspeedDecay` (400/sec)
+while the engine pushed 900/sec, so the cap could never hold. Measured top speed
+was 350 against a `maxSpeed` stat of 280 — the stat was decorative, and the whole
+roster's top-speed spread would have flattened to nothing. The engine is now
+gated off at the ceiling instead.
+
+Because the tuning above was dialled in against that real 350, fixing the cap
+would have made every car abruptly slower than the build that was signed off. All
+five vehicles' `maxSpeed` were scaled x1.25 to preserve the felt speed and keep
+the relative spread.
+
+**The cap only covered forward velocity.** Lateral velocity is unbounded, so a
+sustained drift let the engine keep refilling forward speed while the slide
+persisted — two seconds of full-lock drift *accelerated* the car from 350 to 449.
+The engine is now gated on total speed, so you cannot accelerate while sliding
+sideways. That is both correct and what makes overcommitting cost you.
+
+### Measured after tuning
+
+| | Steering | Drifting |
+| --- | --- | --- |
+| Ticks through 90° | 87 | **65** |
+| Speed kept | 345 / 350 | 349 / 350 |
+| Max slip | 9° | 41° |
+
+Drift still beats steering by **25%**. Overcommitting now costs speed, but only
+mildly (350 → 343 over two seconds) — expected, since 0.97 retention is the
+speed-preserving end of the range. Lower it toward 0.92 if the penalty should bite.
+
 ### Steering curve
 
 Turn rate is a function of speed, not a constant:

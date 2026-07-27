@@ -10,6 +10,13 @@
 
    Dimensions are world units. A car is ~28 long; keep that in mind when
    reading distances elsewhere (the test arena is ~100 car lengths wide).
+
+   TOP SPEEDS SCALED x1.25 IN PHASE 1. The speed cap was being overrun by a
+   strong engineForce, so the car actually ran at ~350 while its stat said 280.
+   Tuning was dialled in against that real 350. Fixing the cap would otherwise
+   have made every car abruptly slower than the version that was signed off, so
+   the whole roster was scaled to preserve the felt speed and keep the relative
+   spread intact.
    ========================================================================== */
 
 window.BR = window.BR || {};
@@ -20,7 +27,7 @@ BR.VEHICLES = {
     id: 'red-racer',
     name: 'Red Racer',
     description: 'Steady, dependable, a little scratched. Been here the longest.',
-    maxSpeed: 280,
+    maxSpeed: 350,
     acceleration: 160,   // reference value — see BR.ACCEL_REFERENCE
     handling: 0.85,
     weight: 1.0,
@@ -35,7 +42,7 @@ BR.VEHICLES = {
     id: 'blue-buggy',
     name: 'Blue Buggy',
     description: 'Fat tyres, no fear. Happiest where the carpet gets rough.',
-    maxSpeed: 250,
+    maxSpeed: 313,
     acceleration: 160,
     handling: 1.00,
     weight: 1.0,
@@ -48,7 +55,7 @@ BR.VEHICLES = {
     id: 'yellow-rocket',
     name: 'Yellow Rocket',
     description: 'Fastest thing on the rug. Corners like a thrown brick.',
-    maxSpeed: 330,
+    maxSpeed: 413,
     acceleration: 165,
     handling: 0.62,
     weight: 0.8,
@@ -61,7 +68,7 @@ BR.VEHICLES = {
     id: 'green-pickup',
     name: 'Green Pickup',
     description: 'Wins every argument. Loses every corner.',
-    maxSpeed: 245,
+    maxSpeed: 306,
     acceleration: 158,
     handling: 0.74,
     weight: 1.45,
@@ -74,7 +81,7 @@ BR.VEHICLES = {
     id: 'purple-micro',
     name: 'Purple Micro',
     description: 'Tiny, eager, always first out of a corner. Do not get hit.',
-    maxSpeed: 275,
+    maxSpeed: 344,
     acceleration: 200,
     handling: 0.98,
     weight: 0.75,
