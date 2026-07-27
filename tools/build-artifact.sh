@@ -30,6 +30,8 @@ FILES=(
   "src/entities/Vehicle.js"
   "src/systems/VehicleController.js"
   "src/systems/Collision.js"
+  "src/systems/AIDriver.js"
+  "src/systems/RaceManager.js"
   "src/render/Particles.js"
   "src/render/Renderer.js"
   "src/ui/HUD.js"

@@ -111,16 +111,20 @@ BR.Renderer = {
    * @param {number} alpha  0..1 interpolation between the last two sim states
    * @param {number} dt     real frame delta, for camera smoothing only
    */
-  render(v, arena, alpha, dt) {
+  /**
+   * @param {Array}  racers  every vehicle in the race
+   * @param {object} player  the vehicle the camera follows
+   */
+  render(racers, player, arena, alpha, dt) {
     const ctx = this.ctx;
     const M = BR.M;
     const Pj = BR.Projection;
+    const v = player;
 
     // Interpolate between simulation states so a 144Hz display is smooth on a
     // 60Hz sim.
     const ix = M.lerp(v.prevX, v.x, alpha);
     const iy = M.lerp(v.prevY, v.y, alpha);
-    const iz = M.lerp(v.prevZ, v.z, alpha);
     const ih = v.prevHeading + M.wrapAngle(v.heading - v.prevHeading) * alpha;
 
     this.updateCamera(v, ix, iy, dt);
@@ -145,6 +149,7 @@ BR.Renderer = {
 
     this.drawGround(ctx, arena);
     this.drawGrid(ctx, arena);
+    this.drawFinishLine(ctx, arena);
     this.drawMarks(ctx);
     this.drawRamps(ctx, arena);
 
@@ -159,13 +164,20 @@ BR.Renderer = {
         wall: w,
       });
     }
-    drawables.push({ key: Pj.depthAt(ix, iy), car: true });
+    for (let i = 0; i < racers.length; i++) {
+      const c = racers[i];
+      const cx = M.lerp(c.prevX, c.x, alpha);
+      const cy = M.lerp(c.prevY, c.y, alpha);
+      const cz = M.lerp(c.prevZ, c.z, alpha);
+      const ch = c.prevHeading + M.wrapAngle(c.heading - c.prevHeading) * alpha;
+      drawables.push({ key: Pj.depthAt(cx, cy), car: c, cx: cx, cy: cy, cz: cz, ch: ch });
+    }
     drawables.sort((a, b) => a.key - b.key);
 
     for (let i = 0; i < drawables.length; i++) {
       const d = drawables[i];
       if (d.wall) this.drawWall(ctx, d.wall, arena.wallHeight);
-      else        this.drawVehicle(ctx, v, ix, iy, iz, ih);
+      else        this.drawVehicle(ctx, d.car, d.cx, d.cy, d.cz, d.ch, d.car === v);
     }
 
     this.drawDust(ctx);
@@ -173,6 +185,41 @@ BR.Renderer = {
     ctx.restore();
 
     BR.HUD.draw(ctx, v, this.w, this.h);
+  },
+
+  /* Chequered finish line, painted on the ground plane. */
+  drawFinishLine(ctx, arena) {
+    const Pj = BR.Projection;
+    const cps = arena.checkpoints;
+    if (!cps || !cps.length) return;
+
+    const f = cps[0];
+    const ax = f.a[0], ay = f.a[1], bx = f.b[0], by = f.b[1];
+    const dx = bx - ax, dy = by - ay;
+    const len = Math.hypot(dx, dy);
+    const nx = -dy / len, ny = dx / len;   // along the direction of travel
+    const depth = 34;
+    const squares = 12;
+
+    for (let i = 0; i < squares; i++) {
+      for (let row = 0; row < 2; row++) {
+        if ((i + row) % 2 === 0) continue;
+        const t0 = i / squares, t1 = (i + 1) / squares;
+        const o0 = (row - 1) * depth, o1 = row * depth;
+        const p = [
+          Pj.project(ax + dx * t0 + nx * o0, ay + dy * t0 + ny * o0, 0),
+          Pj.project(ax + dx * t1 + nx * o0, ay + dy * t1 + ny * o0, 0),
+          Pj.project(ax + dx * t1 + nx * o1, ay + dy * t1 + ny * o1, 0),
+          Pj.project(ax + dx * t0 + nx * o1, ay + dy * t0 + ny * o1, 0),
+        ];
+        ctx.beginPath();
+        ctx.moveTo(p[0].sx, p[0].sy);
+        for (let k = 1; k < 4; k++) ctx.lineTo(p[k].sx, p[k].sy);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(240,236,228,0.85)';
+        ctx.fill();
+      }
+    }
   },
 
   // ── ground ───────────────────────────────────────────────────────────────
@@ -333,7 +380,7 @@ BR.Renderer = {
 
   // ── vehicle ──────────────────────────────────────────────────────────────
 
-  drawVehicle(ctx, v, x, y, z, heading) {
+  drawVehicle(ctx, v, x, y, z, heading, isPlayer) {
     const Pj = BR.Projection;
     const spec = v.spec;
     const L = spec.length / 2, W = spec.width / 2, H = spec.height;
@@ -360,7 +407,8 @@ BR.Renderer = {
 
     // ── boost ring, on the ground around the car (vehicle-attached meter).
     //    Drawn as an ellipse squashed by groundTilt so it sits ON the plane.
-    if (v.boostMeter > 0.001) {
+    //    Player only — a ring under every opponent is noise, not information.
+    if (isPlayer && v.boostMeter > 0.001) {
       const g = Pj.project(x, y, 0);
       const rr = spec.length * 0.86;
       ctx.beginPath();
