@@ -37,6 +37,7 @@ FILES=(
   "src/render/Particles.js"
   "src/render/Renderer.js"
   "src/ui/HUD.js"
+  "src/ui/MiniMap.js"
   "src/ui/Debug.js"
   "src/main.js"
 )

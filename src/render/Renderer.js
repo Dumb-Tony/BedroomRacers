@@ -197,6 +197,9 @@ BR.Renderer = {
     ctx.restore();
 
     BR.HUD.draw(ctx, v, this.w, this.h);
+    // Screen space, after the camera transform is unwound — the map is a plan
+    // view and must not inherit the tilt or the rotation.
+    BR.MiniMap.draw(ctx, BR.Game, this.w, this.h);
   },
 
   /* Chequered finish line, painted on the ground plane. */

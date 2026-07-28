@@ -128,6 +128,11 @@ BR.Debug = {
     const P = BR.PHYSICS, Pj = BR.Projection, C = BR.CAMERA;
 
     this.sliders = [
+      ['HUD'],
+      ['Map size',     BR.MiniMap, 'size', 0.0, 1.4, 0.05,
+       '0 hides it. 11_UI.md asks whether a mini-map earns its screen space or '
+       + 'a next-corner indicator would serve better — switch it off and see.'],
+
       ['AUDIO'],
       ['SFX volume',   BR.Audio, 'sfxVolume',   0.0, 1.0, 0.05,
        'Every gameplay-critical sound also has a visual equivalent, so this is '
