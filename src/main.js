@@ -55,6 +55,13 @@ BR.Game = {
     BR.Particles.init();
     BR.Renderer.init(document.getElementById('game'));
 
+    // Browsers block audio until the user interacts, and 13_Audio.md is
+    // explicit that this must be handled at first contact rather than
+    // mid-race. Any click or key does it.
+    const wake = function () { BR.Audio.resume(); };
+    window.addEventListener('pointerdown', wake);
+    window.addEventListener('keydown', wake);
+
     this.buildRace();
     BR.Debug.init(this);
 
@@ -153,6 +160,10 @@ BR.Game = {
     BR.Particles.update(this.paused ? 0 : dt);
 
     BR.Renderer.render(this.vehicles, this.vehicle, this.arena, alpha, dt);
+
+    // Once per RENDERED frame, never from inside the fixed step — see Audio.js.
+    BR.Audio.update(this, dt);
+
     BR.Debug.update(this, dt);
     BR.Input.clearTaps();
   },

@@ -81,6 +81,13 @@ BR.Collision = {
       v.vel.x *= loss;
       v.vel.y *= loss;
 
+      // Notable hits only. Counting every grazing contact would machine-gun
+      // the collision sound while sliding along a kerb.
+      if (squareness * speedBefore > 55) {
+        v.impacts++;
+        v.lastImpact = squareness;
+      }
+
       // Square, fast hits spin the car. HARD capped — see below.
       if (squareness > P.spinTriggerDot && speedBefore > 80 && v.spinTime <= 0) {
         const dir = Math.sign(v.vel.x * ny - v.vel.y * nx) || 1;

@@ -128,6 +128,13 @@ BR.Debug = {
     const P = BR.PHYSICS, Pj = BR.Projection, C = BR.CAMERA;
 
     this.sliders = [
+      ['AUDIO'],
+      ['SFX volume',   BR.Audio, 'sfxVolume',   0.0, 1.0, 0.05,
+       'Every gameplay-critical sound also has a visual equivalent, so this is '
+       + 'safe to turn off (11_UI.md accessibility).'],
+      ['Music volume', BR.Audio, 'musicVolume', 0.0, 1.0, 0.05,
+       'Sparse procedural toy percussion. Lifts on the final lap.'],
+
       ['PERSPECTIVE'],
       ['Ground tilt',      Pj, 'groundTilt',  0.30, 1.00, 0.01,
        'BLOCKS ALL ART. 1.0 = pure top-down, 0.4 = low chase view.'],
@@ -278,6 +285,8 @@ BR.Debug = {
       input.addEventListener('input', function () {
         obj[key] = parseFloat(input.value);
         val.textContent = self.fmt(obj[key]);
+        // Volume changes have to reach the audio graph, not just the object.
+        if (obj === BR.Audio) BR.Audio.setVolumes(BR.Audio.sfxVolume, BR.Audio.musicVolume);
       });
       // On release, hand the keyboard back so steering works again.
       input.addEventListener('change', function () { self.releaseFocus(input); });

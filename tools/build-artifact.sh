@@ -33,6 +33,7 @@ FILES=(
   "src/systems/TrackManager.js"
   "src/systems/AIDriver.js"
   "src/systems/RaceManager.js"
+  "src/systems/Audio.js"
   "src/render/Particles.js"
   "src/render/Renderer.js"
   "src/ui/HUD.js"

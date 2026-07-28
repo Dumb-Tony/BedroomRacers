@@ -235,7 +235,7 @@
     <div class="focus" id="focus">
       <div>
         <b>Click to drive</b>
-        <span>The game needs keyboard focus</span>
+        <span>Turn sound on &mdash; the game needs focus and audio permission</span>
       </div>
     </div>
   </div>
@@ -330,6 +330,8 @@
     function take() {
       window.focus();
       veil.hidden = true;
+      // Browsers block audio until a gesture. This click is it.
+      if (window.BR && BR.Audio) BR.Audio.resume();
     }
     veil.addEventListener('click', take);
     document.getElementById('game').addEventListener('click', take);

@@ -44,6 +44,12 @@ BR.Vehicle = {
       // back inside its trigger box.
       rampIndex: -1,
 
+      // Impact counter and severity. Audio edge-detects the counter once per
+      // rendered frame rather than being called from inside the fixed step —
+      // see Audio.js.
+      impacts: 0,
+      lastImpact: 0,
+
       // ── feedback ────────────────────────────────────────────────────────
       lastLanding: null,
       landingFlash: 0,
@@ -68,6 +74,7 @@ BR.Vehicle = {
     v.driftCharge = 0; v.driftQuality = 0;
     v.spinTime = 0; v.spinVel = 0;
     v.rampIndex = -1;
+    v.impacts = 0; v.lastImpact = 0;
     v.lastLanding = null; v.landingFlash = 0;
   },
 

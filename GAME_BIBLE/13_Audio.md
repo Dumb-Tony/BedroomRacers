@@ -102,10 +102,52 @@ disableable.
 - Subtitle support for any voiced content
 - Avoid sudden loud stingers; the audience includes noise-sensitive players
 
+## Built in Phase 3 — everything is synthesised
+
+There are **no sample files**. A published build runs under a strict CSP with no
+external requests, so there is nothing to load and nothing to fall back to. Every
+sound is generated with Web Audio at runtime.
+
+That constraint turned out to suit the priority order above: synthesis is good at
+exactly the gameplay-feedback layer this document ranks first, and weakest at
+recorded texture, which is mood.
+
+| Sound | How |
+| --- | --- |
+| Engine | Two detuned oscillators through a lowpass; pitch and cutoff track speed. Small and buzzy, not throaty — a three-inch car |
+| Surface | Filtered noise. Rug drops the cutoff and raises the level, so leaving the road is audible before it is visible |
+| Drift | Bandpassed noise, centre frequency tracking **slip angle**, so how hard you are sliding is heard |
+| Boost ready / full | Two clearly different cues. Full is a rising two-note chime — the most important sound in the game |
+| Collision | Noise burst through a sweeping bandpass. Severity picks pitch and length, so a graze ticks and a square hit clunks |
+| Landing | Bright tick plus chime when clean, dull thud when not |
+| Checkpoint / lap / countdown | Short tones, with a second note on the final lap |
+| Opponents | **One shared proximity layer**, never a voice each |
+| Music | Sparse procedural toy percussion over a pulse, scheduled against the audio clock. Lifts slightly on the final lap |
+
+### Two rules the implementation obeys
+
+**Audio never runs inside the fixed simulation step.** It observes state and
+detects edges once per rendered frame. Firing from inside the step would trigger
+sounds several times per frame and couple audio to physics, breaking the
+determinism that Time Trial ghosts depend on (`15_Save_System.md`).
+
+**The player is always louder than the field.** Six cars each with a full engine,
+drift and collision voice would overwhelm the mix and the CPU, so opponents
+collapse into a single layer whose level tracks the nearest car.
+
+Measured over a full race: 121 oscillators created in ~93 seconds, about 1.3 per
+second. One-shots are not leaking voices.
+
+### Still missing
+
+Environmental sound, per-vehicle material character, and the announcer. Music is
+procedural rather than composed — it works, but a real soundtrack is a different
+job.
+
 ## Technical
 
-- Web Audio via Phaser's sound manager
-- Compressed formats with a fallback chain for browser compatibility
+- Web Audio directly. No engine sound manager, because there is no engine
+- Nothing to download, so no format fallback chain is needed
 - **Cap simultaneous sounds** — six drifting cars plus hazards plus music will
   overwhelm the mix and the CPU. Prioritise player-vehicle sounds over opponents'
 - Mobile browsers require a user gesture before audio starts. Handle this at the first
