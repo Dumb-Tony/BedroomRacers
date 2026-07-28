@@ -44,8 +44,12 @@ BR.Game = {
   lastTime: 0,
   paused: false,
 
+  TRACK_ID: 'town-rug-loop',
+
   start() {
-    this.arena = BR.ARENA;
+    // Content is data: the track is built from a definition, never hard-coded.
+    this.arena = BR.TrackManager.build(BR.TRACKS[this.TRACK_ID]);
+    this.LAPS = this.arena.laps;
 
     BR.Input.init();
     BR.Particles.init();
@@ -179,6 +183,11 @@ BR.Game = {
         input = { steer: 0, throttle: 0, brake: 0, drift: false, boost: false };
       }
 
+      // Surface under the wheels, read BEFORE stepping so grip, top speed and
+      // acceleration all reflect where the car actually is. This is what makes
+      // cutting a corner across the rug cost something.
+      v.surface = BR.TrackManager.surfaceAt(this.arena, v.x, v.y);
+
       BR.VehicleController.step(v, input, dt);
 
       // Ramps before walls: a launched car should already be airborne when wall
@@ -188,8 +197,12 @@ BR.Game = {
       // Walls are ALWAYS resolved. Height is handled per wall inside
       // resolveWalls — a vehicle passes over anything lower than it is.
       BR.Collision.resolveWalls(v, this.arena.walls);
+
+      BR.TrackManager.resolveHazards(this.arena, v);
+      BR.TrackManager.checkBoostPads(this.arena, v);
     }
 
+    BR.TrackManager.updateHazards(this.arena, dt);
     this.resolveCarContacts();
     RM.update(dt);
 

@@ -148,7 +148,9 @@ BR.Renderer = {
     ctx.scale(BR.CAMERA.zoom, BR.CAMERA.zoom);
 
     this.drawGround(ctx, arena);
-    this.drawGrid(ctx, arena);
+    this.drawRoad(ctx, arena);
+    this.drawDecoration(ctx, arena);
+    this.drawBoostPads(ctx, arena);
     this.drawFinishLine(ctx, arena);
     this.drawMarks(ctx);
     this.drawRamps(ctx, arena);
@@ -164,6 +166,14 @@ BR.Renderer = {
         wall: w,
       });
     }
+    for (let i = 0; i < arena.props.length; i++) {
+      const p = arena.props[i];
+      drawables.push({ key: Pj.depthAt(p.x, p.y), prop: p });
+    }
+    for (let i = 0; i < arena.hazards.length; i++) {
+      const hz = arena.hazards[i];
+      drawables.push({ key: Pj.depthAt(hz.x, hz.y), hazard: hz });
+    }
     for (let i = 0; i < racers.length; i++) {
       const c = racers[i];
       const cx = M.lerp(c.prevX, c.x, alpha);
@@ -176,8 +186,10 @@ BR.Renderer = {
 
     for (let i = 0; i < drawables.length; i++) {
       const d = drawables[i];
-      if (d.wall) this.drawWall(ctx, d.wall, arena.wallHeight);
-      else        this.drawVehicle(ctx, d.car, d.cx, d.cy, d.cz, d.ch, d.car === v);
+      if (d.wall)        this.drawWall(ctx, d.wall, arena.wallHeight);
+      else if (d.prop)   this.drawProp(ctx, d.prop);
+      else if (d.hazard) this.drawHazard(ctx, d.hazard);
+      else               this.drawVehicle(ctx, d.car, d.cx, d.cy, d.cz, d.ch, d.car === v);
     }
 
     this.drawDust(ctx);
@@ -224,46 +236,222 @@ BR.Renderer = {
 
   // ── ground ───────────────────────────────────────────────────────────────
 
+  /* The rug itself: printed green, with a faint weave so the scale of the cars
+     against the fibres reads (12_Art_Guide.md). */
   drawGround(ctx, arena) {
-    const outer = arena.polygons[0];
+    const Pj = BR.Projection;
+    const b = arena.bounds;
+
     ctx.beginPath();
-    for (let i = 0; i < outer.length; i++) {
-      const p = BR.Projection.project(outer[i][0], outer[i][1], 0);
-      if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
-    }
+    const c = [
+      Pj.project(b.minX, b.minY, 0), Pj.project(b.maxX, b.minY, 0),
+      Pj.project(b.maxX, b.maxY, 0), Pj.project(b.minX, b.maxY, 0),
+    ];
+    ctx.moveTo(c[0].sx, c[0].sy);
+    for (let i = 1; i < 4; i++) ctx.lineTo(c[i].sx, c[i].sy);
     ctx.closePath();
-    ctx.fillStyle = '#4e7d43';        // placeholder rug green
+    ctx.fillStyle = '#5c8a4a';       // rug green
     ctx.fill();
 
-    // The island reads as a hole in the drivable area.
-    const island = arena.polygons[1];
+    // Weave. Also the clearest read on how far the plane is tilted.
+    const step = 180;
+    ctx.strokeStyle = 'rgba(0,0,0,0.055)';
+    ctx.lineWidth = 1.5 / BR.CAMERA.zoom;
     ctx.beginPath();
-    for (let i = 0; i < island.length; i++) {
-      const p = BR.Projection.project(island[i][0], island[i][1], 0);
-      if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+    for (let x = b.minX; x <= b.maxX; x += step) {
+      const p0 = Pj.project(x, b.minY, 0), p1 = Pj.project(x, b.maxY, 0);
+      ctx.moveTo(p0.sx, p0.sy); ctx.lineTo(p1.sx, p1.sy);
+    }
+    for (let y = b.minY; y <= b.maxY; y += step) {
+      const p0 = Pj.project(b.minX, y, 0), p1 = Pj.project(b.maxX, y, 0);
+      ctx.moveTo(p0.sx, p0.sy); ctx.lineTo(p1.sx, p1.sy);
+    }
+    ctx.stroke();
+  },
+
+  /* Printed road: a filled ring between the kerbs, with a dashed centre line.
+     Road edges must be unmistakable — "never rely on surface texture alone"
+     (05_Tracks.md readability rules). */
+  drawRoad(ctx, arena) {
+    const Pj = BR.Projection;
+
+    function trace(pts) {
+      for (let i = 0; i < pts.length; i++) {
+        const p = Pj.project(pts[i][0], pts[i][1], 0);
+        if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+      }
+      ctx.closePath();
+    }
+
+    ctx.beginPath();
+    trace(arena.outer);
+    trace(arena.inner);
+    ctx.fillStyle = '#403c39';       // printed tarmac
+    ctx.fill('evenodd');
+
+    // Kerbs, drawn light so the road reads as the brightest path.
+    ctx.lineWidth = 3 / BR.CAMERA.zoom;
+    ctx.strokeStyle = 'rgba(236,230,218,0.55)';
+    ctx.beginPath(); trace(arena.outer); ctx.stroke();
+    ctx.beginPath(); trace(arena.inner); ctx.stroke();
+
+    // The shortcut chord gets its own marking so the alternate route is
+    // visible but not shouted about — findable on lap two (05_Tracks.md).
+    if (arena.shortcutChord) {
+      const a = Pj.project(arena.shortcutChord[0][0], arena.shortcutChord[0][1], 0);
+      const z = Pj.project(arena.shortcutChord[1][0], arena.shortcutChord[1][1], 0);
+      ctx.setLineDash([14 / BR.CAMERA.zoom, 12 / BR.CAMERA.zoom]);
+      ctx.strokeStyle = 'rgba(255,211,77,0.7)';
+      ctx.lineWidth = 4 / BR.CAMERA.zoom;
+      ctx.beginPath();
+      ctx.moveTo(a.sx, a.sy); ctx.lineTo(z.sx, z.sy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Centre line, dashed, following the road.
+    const line = arena.centreline;
+    ctx.strokeStyle = 'rgba(236,230,218,0.30)';
+    ctx.lineWidth = 4 / BR.CAMERA.zoom;
+    ctx.beginPath();
+    for (let i = 0; i < line.length; i += 4) {
+      const a = Pj.project(line[i][0], line[i][1], 0);
+      const j = (i + 2) % line.length;
+      const b2 = Pj.project(line[j][0], line[j][1], 0);
+      ctx.moveTo(a.sx, a.sy); ctx.lineTo(b2.sx, b2.sy);
+    }
+    ctx.stroke();
+  },
+
+  /* Printed buildings and a pond inside the loop, so the circuit reads as a
+     town rather than a ring of tarmac. No collision — it is rug print. */
+  drawDecoration(ctx, arena) {
+    const Pj = BR.Projection;
+    for (let i = 0; i < arena.decoration.length; i++) {
+      const d = arena.decoration[i];
+      const pts = [
+        [d.x, d.y], [d.x + d.w, d.y], [d.x + d.w, d.y + d.h], [d.x, d.y + d.h],
+      ];
+      ctx.beginPath();
+      for (let k = 0; k < 4; k++) {
+        const p = Pj.project(pts[k][0], pts[k][1], 0);
+        if (k === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+      }
+      ctx.closePath();
+      ctx.fillStyle = d.colour;
+      ctx.globalAlpha = 0.85;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  },
+
+  /* Boost pads: chevrons pointing the way you are meant to be going. */
+  drawBoostPads(ctx, arena) {
+    const Pj = BR.Projection;
+    for (let i = 0; i < arena.boostPads.length; i++) {
+      const p = arena.boostPads[i];
+      ctx.beginPath();
+      const pts = [
+        [p.x, p.y], [p.x + p.w, p.y], [p.x + p.w, p.y + p.h], [p.x, p.y + p.h],
+      ];
+      for (let k = 0; k < 4; k++) {
+        const q = Pj.project(pts[k][0], pts[k][1], 0);
+        if (k === 0) ctx.moveTo(q.sx, q.sy); else ctx.lineTo(q.sx, q.sy);
+      }
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(79,216,168,0.42)';
+      ctx.fill();
+      ctx.strokeStyle = '#4fd8a8';
+      ctx.lineWidth = 2.5 / BR.CAMERA.zoom;
+      ctx.stroke();
+    }
+  },
+
+  /* Extruded octagon. Crayons and blocks are the scale cue — a crayon the size
+     of a fallen tree. */
+  drawProp(ctx, p) {
+    const Pj = BR.Projection;
+    const sides = 8;
+    const base = [], top = [];
+    for (let s = 0; s < sides; s++) {
+      const a = (s / sides) * Math.PI * 2 + p.rot;
+      const wx = p.x + Math.cos(a) * p.r, wy = p.y + Math.sin(a) * p.r;
+      base.push(Pj.project(wx, wy, 0));
+      top.push(Pj.project(wx, wy, p.h));
+    }
+
+    ctx.beginPath();
+    for (let s = 0; s < sides; s++) {
+      if (s === 0) ctx.moveTo(base[s].sx, base[s].sy);
+      else ctx.lineTo(base[s].sx, base[s].sy);
     }
     ctx.closePath();
-    ctx.fillStyle = '#3c3a35';
+    ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    ctx.fill();
+
+    const body = p.type === 'crayon' ? '#c8452f' : '#2f6fd8';
+    const lid  = p.type === 'crayon' ? '#e869522' : '#4f8ef2';
+    ctx.fillStyle = body;
+    for (let s = 0; s < sides; s++) {
+      const t = (s + 1) % sides;
+      ctx.beginPath();
+      ctx.moveTo(base[s].sx, base[s].sy);
+      ctx.lineTo(base[t].sx, base[t].sy);
+      ctx.lineTo(top[t].sx, top[t].sy);
+      ctx.lineTo(top[s].sx, top[s].sy);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.beginPath();
+    for (let s = 0; s < sides; s++) {
+      if (s === 0) ctx.moveTo(top[s].sx, top[s].sy);
+      else ctx.lineTo(top[s].sx, top[s].sy);
+    }
+    ctx.closePath();
+    ctx.fillStyle = p.type === 'crayon' ? '#e86952' : '#4f8ef2';
     ctx.fill();
   },
 
-  /* Grid lines are the clearest read on how much the plane is tilted — the
-     main visual aid for locking groundTilt. */
-  drawGrid(ctx, arena) {
+  /* Toy train. Runs on a strict period so it can be timed. */
+  drawHazard(ctx, hz) {
     const Pj = BR.Projection;
-    const step = 150;
-    ctx.strokeStyle = 'rgba(255,255,255,0.055)';
-    ctx.lineWidth = 1 / BR.CAMERA.zoom;
+    const L = hz.r, W = hz.r * 0.62, H = hz.h;
+    const c = Math.cos(hz.heading), s = Math.sin(hz.heading);
+    const local = [[L, -W], [L, W], [-L, W], [-L, -W]];
+    const world = local.map(function (p) {
+      return [hz.x + p[0] * c - p[1] * s, hz.y + p[0] * s + p[1] * c];
+    });
+
     ctx.beginPath();
-    for (let x = 0; x <= arena.bounds.w; x += step) {
-      const a = Pj.project(x, 0, 0), b = Pj.project(x, arena.bounds.h, 0);
-      ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
+    for (let i = 0; i < 4; i++) {
+      const p = Pj.project(world[i][0], world[i][1], 0);
+      if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
     }
-    for (let y = 0; y <= arena.bounds.h; y += step) {
-      const a = Pj.project(0, y, 0), b = Pj.project(arena.bounds.w, y, 0);
-      ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0,0,0,0.34)';
+    ctx.fill();
+
+    const base = world.map(function (p) { return Pj.project(p[0], p[1], 0); });
+    const top  = world.map(function (p) { return Pj.project(p[0], p[1], H); });
+    ctx.fillStyle = '#8c4a2f';
+    for (let i = 0; i < 4; i++) {
+      const j = (i + 1) % 4;
+      ctx.beginPath();
+      ctx.moveTo(base[i].sx, base[i].sy);
+      ctx.lineTo(base[j].sx, base[j].sy);
+      ctx.lineTo(top[j].sx, top[j].sy);
+      ctx.lineTo(top[i].sx, top[i].sy);
+      ctx.closePath();
+      ctx.fill();
     }
-    ctx.stroke();
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) {
+      if (i === 0) ctx.moveTo(top[i].sx, top[i].sy);
+      else ctx.lineTo(top[i].sx, top[i].sy);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#c46a44';
+    ctx.fill();
   },
 
   // ── walls ────────────────────────────────────────────────────────────────

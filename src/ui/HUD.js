@@ -183,7 +183,11 @@ BR.HUD = {
       ctx.fillText(r.position + '.', x + 26, ry);
       ctx.fillText(r.name, x + 56, ry);
       ctx.textAlign = 'right';
-      ctx.fillText(r.finished ? RM.formatTime(r.finishTime) : 'DNF', x + cardW - 26, ry);
+      // Racers still circulating show their live position and a dash, not DNF —
+      // they have not failed, the race simply ended for the player first.
+      ctx.fillText(r.finished ? RM.formatTime(r.finishTime)
+                              : 'lap ' + (r.lap + 1) + '/' + RM.laps,
+                   x + cardW - 26, ry);
       ctx.textAlign = 'left';
       ry += 30;
     }

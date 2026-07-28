@@ -20,9 +20,14 @@ BR.RaceManager = {
 
   COUNTDOWN_SECONDS: 3,
 
+  /* Beat between crossing the line and the results card, so the finish lands
+     and the car is seen to coast past rather than the screen snapping. */
+  FINISH_DELAY: 1.4,
+
   state: 'countdown',
   clock: 0,          // seconds since GO
   countdown: 3,
+  finishTimer: 0,
   laps: 3,
   racers: null,      // [{ vehicle, isPlayer, name, progress... }]
   arena: null,
@@ -39,6 +44,7 @@ BR.RaceManager = {
     this.state = this.STATE.COUNTDOWN;
     this.countdown = this.COUNTDOWN_SECONDS;
     this.clock = 0;
+    this.finishTimer = 0;
     this.finishOrder = [];
 
     const cps = this.arena.checkpoints.length;
@@ -80,8 +86,14 @@ BR.RaceManager = {
     }
     this.sortPositions();
 
-    if (this.finishOrder.length >= this.racers.length) {
-      this.state = this.STATE.FINISHED;
+    // The race is over for the PLAYER when the player crosses the line. It
+    // used to wait for every AI, which meant sitting and coasting for another
+    // minute with no results while the back of the field trailed in.
+    if (this.player().finished && this.state === this.STATE.RACING) {
+      this.finishTimer += dt;
+      if (this.finishTimer >= this.FINISH_DELAY) {
+        this.state = this.STATE.FINISHED;
+      }
     }
   },
 
