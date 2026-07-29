@@ -109,7 +109,23 @@ once there are three or more tracks.
 
 ## Open questions
 
-1. Which authoring approach? (Recommend SVG. Decide before track 2.)
+1. ~~Which authoring approach?~~ **Resolved in Phase 5: control points, not
+   SVG.** A track is authored as a handful of control points plus a road width
+   and a feature list. `TrackManager` generates everything else — the smoothed
+   centreline, both kerbs, the collision walls, the racing line, the checkpoint
+   gates and the starting grid.
+
+   This beat the SVG recommendation on the thing that actually mattered: there
+   is no importer to write and no tool to leave the editor for. A track is about
+   a hundred lines of readable data.
+
+   **Proven, not assumed.** Bedside Boulevard was authored entirely as data with
+   **zero changes to anything in `src/systems/`** — the test this document set.
+   It also introduced surface zones, a second hazard and a different shortcut
+   without touching a system.
+
+   Still true that hand-placing props is tedious, and a visual editor would help
+   once there are six tracks. But it is no longer blocking.
 2. JSON fetched at runtime, or JS modules bundled? JSON is tool-friendly; modules avoid
    a fetch and work from `file://`.
 3. Who authors tracks — is this a solo project, or will there be an artist? Changes

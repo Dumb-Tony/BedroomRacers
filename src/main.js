@@ -90,34 +90,71 @@ BR.Game = {
     requestAnimationFrame(function (t) { self.frame(t); });
   },
 
+  trackCache: {},
+
+  /* Tracks are built once and reused. Rebuilding on every retry would rerun the
+     spline, the kerbs and 300-odd wall segments for nothing. */
+  getTrack(id) {
+    if (!this.trackCache[id]) {
+      this.trackCache[id] = BR.TrackManager.build(BR.TRACKS[id]);
+    }
+    return this.trackCache[id];
+  },
+
   buildRace() {
     const grid = this.arena.grid;
+    const timeTrial = this.event && this.event.mode === 'time-trial';
+
     this.racers = [];
     this.vehicles = [];
+    this.actors = [];
 
     const player = BR.Vehicle.create(this.playerVehicleId,
                                      grid[0].x, grid[0].y, grid[0].heading);
     this.vehicle = player;
     this.vehicles.push(player);
-    this.racers.push({
+    const playerRacer = {
       vehicle: player, isPlayer: true, ai: null,
       name: BR.VEHICLES[this.playerVehicleId].name,
-    });
+    };
+    this.racers.push(playerRacer);
+    this.actors.push({ v: player, kind: 'player', racer: playerRacer });
 
-    const n = Math.min(this.OPPONENTS, grid.length - 1);
-    for (let i = 0; i < n; i++) {
-      const spec = this.FIELD[i % this.FIELD.length];
-      const g = grid[i + 1];
-      const car = BR.Vehicle.create(spec.vehicle, g.x, g.y, g.heading);
-      this.vehicles.push(car);
-      this.racers.push({
-        vehicle: car, isPlayer: false, name: spec.name,
-        ai: BR.AIDriver.create(spec.personality, this.difficulty),
-      });
+    if (timeTrial) {
+      // Your best run, replayed from its recorded inputs through the same
+      // controller. Not a competitor — it has no position and cannot be hit.
+      BR.Ghost.startRecording();
+      const g = BR.Ghost.load(this.arena.id, this.playerVehicleId);
+      if (g) {
+        const gv = BR.Vehicle.create(this.playerVehicleId,
+                                     grid[0].x, grid[0].y, grid[0].heading);
+        gv.isGhost = true;
+        this.vehicles.push(gv);
+        this.actors.push({ v: gv, kind: 'ghost', racer: null });
+      }
+    } else {
+      BR.Ghost.recording = null;
+      BR.Ghost.playback = null;
+      const n = Math.min(this.OPPONENTS, grid.length - 1);
+      for (let i = 0; i < n; i++) {
+        const spec = this.FIELD[i % this.FIELD.length];
+        const g = grid[i + 1];
+        const car = BR.Vehicle.create(spec.vehicle, g.x, g.y, g.heading);
+        this.vehicles.push(car);
+        const racer = {
+          vehicle: car, isPlayer: false, name: spec.name,
+          ai: BR.AIDriver.create(spec.personality, this.difficulty),
+        };
+        this.racers.push(racer);
+        this.actors.push({ v: car, kind: 'ai', racer: racer });
+      }
     }
 
     BR.RaceManager.init(this.arena, this.racers, this.LAPS);
     BR.Renderer.snapCameraTo(grid[0].x, grid[0].y, grid[0].heading);
+
+    // Cached tracks keep hazard state between races — put it back.
+    BR.TrackManager.resetHazards(this.arena);
 
     this.stats = { driftSeconds: 0 };
     this.recorded = false;
@@ -133,6 +170,7 @@ BR.Game = {
   startEvent(event) {
     if (!event) return;
     this.event = event;
+    this.arena = this.getTrack(event.trackId);
     this.LAPS = event.laps;
     this.OPPONENTS = event.opponents;
     this.difficulty = event.difficulty;
@@ -158,6 +196,15 @@ BR.Game = {
 
     const RM = BR.RaceManager;
     const me = RM.player();
+
+    // Keep the ghost only if it is faster. store() re-checks, so a slower run
+    // cannot overwrite a good one even if this is called twice.
+    if (this.event.mode === 'time-trial' && me.finished) {
+      const rec = BR.Ghost.stopRecording();
+      BR.Screens.ghostSaved =
+        BR.Ghost.store(this.arena.id, this.playerVehicleId, rec, me.finishTime);
+    }
+
     BR.Screens.lastResult = BR.ProgressionManager.record(this.event, {
       position: me.position,
       total: RM.racers.length,
@@ -184,6 +231,9 @@ BR.Game = {
     BR.RaceManager.reset();
     BR.Particles.init();
     BR.Renderer.snapCameraTo(grid[0].x, grid[0].y, grid[0].heading);
+
+    // Cached tracks keep hazard state between races — put it back.
+    BR.TrackManager.resetHazards(this.arena);
 
     this.stats = { driftSeconds: 0 };
     this.recorded = false;
@@ -255,16 +305,26 @@ BR.Game = {
     const RM = BR.RaceManager;
     const locked = RM.isLocked();
 
-    for (let i = 0; i < this.racers.length; i++) {
-      const r = this.racers[i];
-      const v = r.vehicle;
+    for (let i = 0; i < this.actors.length; i++) {
+      const act = this.actors[i];
+      const r = act.racer;
+      const v = act.v;
 
-      // AI produces the same input struct a keyboard does, and it goes through
-      // the same controller. No special physics — that is what stops it
-      // cheating (04_AI.md).
-      let input = r.isPlayer
-        ? BR.Input.sample()
-        : BR.AIDriver.drive(r.ai, v, this.arena, dt);
+      // Player, AI and ghost all produce the SAME input struct and all go
+      // through the same controller. No special physics anywhere — that is what
+      // stops AI cheating (04_AI.md), and it is what lets a ghost be replayed
+      // from inputs alone rather than from recorded positions.
+      // A ghost is an animation, not a car. It is positioned from its recording
+      // after the sim runs, never driven through the controller — see Ghost.js.
+      if (act.kind === 'ghost') continue;
+
+      let input;
+      if (act.kind === 'player') {
+        input = BR.Input.sample();
+        if (!locked) BR.Ghost.capture(v, dt);
+      } else {
+        input = BR.AIDriver.drive(r.ai, v, this.arena, dt);
+      }
 
       // Nobody drives until the lights go out. The sim still runs so the scene
       // is live behind the countdown.
@@ -272,7 +332,7 @@ BR.Game = {
         input = { steer: 0, throttle: 0, brake: 0, drift: false, boost: false };
       }
       // A finished car coasts to a stop rather than parking dead on the line.
-      if (r.finished) {
+      if (r && r.finished) {
         input = { steer: 0, throttle: 0, brake: 0, drift: false, boost: false };
       }
 
@@ -297,7 +357,7 @@ BR.Game = {
       // Objective tracking. Accumulated in the fixed step so it is frame-rate
       // independent — a player on a 144Hz monitor must not earn drift stars
       // faster than one on 60Hz.
-      if (r.isPlayer && v.grounded && v.slip > BR.PHYSICS.driftMinAngle &&
+      if (act.kind === 'player' && v.grounded && v.slip > BR.PHYSICS.driftMinAngle &&
           Math.hypot(v.vel.x, v.vel.y) > BR.PHYSICS.driftMinSpeed) {
         this.stats.driftSeconds += dt;
       }
@@ -306,6 +366,15 @@ BR.Game = {
     BR.TrackManager.updateHazards(this.arena, dt);
     this.resolveCarContacts();
     RM.update(dt);
+
+    // Ghost is placed from the race clock, so it lines up with the run it was
+    // recorded from regardless of frame rate.
+    if (BR.Ghost.hasGhost()) {
+      for (let i = 0; i < this.actors.length; i++) {
+        if (this.actors[i].kind !== 'ghost') continue;
+        BR.Ghost.apply(this.actors[i].v, locked ? 0 : RM.clock);
+      }
+    }
 
     BR.Particles.emitForVehicle(this.vehicle, dt);
   },
@@ -317,6 +386,9 @@ BR.Game = {
     for (let i = 0; i < list.length; i++) {
       for (let j = i + 1; j < list.length; j++) {
         const a = list[i], b = list[j];
+        // A ghost is a replay, not a rival. Letting it push the player would
+        // also break its own determinism.
+        if (a.isGhost || b.isGhost) continue;
         if (Math.abs(a.z - b.z) > 14) continue;   // one is airborne over the other
 
         const dx = b.x - a.x, dy = b.y - a.y;

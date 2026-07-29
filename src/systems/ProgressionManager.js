@@ -63,6 +63,15 @@ BR.ProgressionManager = {
   /* ── recording a result ────────────────────────────────────────────────── */
 
   medalForPosition(position, total, time, event) {
+    // Time trials have no position to earn, so the clock is the whole contest.
+    if (event.mode === 'time-trial') {
+      if (time === null) return 'none';
+      if (event.platinumTime && time <= event.platinumTime) return 'platinum';
+      if (time <= event.times.gold) return 'gold';
+      if (time <= event.times.silver) return 'silver';
+      if (time <= event.times.bronze) return 'bronze';
+      return 'none';
+    }
     if (event.platinumTime && time !== null && time <= event.platinumTime && position === 1) {
       return 'platinum';
     }
@@ -147,6 +156,10 @@ BR.ProgressionManager = {
         case 'drifter':  ok = r.driftSeconds >= 6; break;
         case 'lap':      ok = r.bestLap !== null &&
                               r.bestLap < (event.id === 'rug-route-03' ? 27 : 29); break;
+        case 'ttGold':   ok = r.time !== null && event.times &&
+                              r.time <= event.times.gold; break;
+        case 'ttPlat':   ok = r.time !== null && event.platinumTime &&
+                              r.time <= event.platinumTime; break;
       }
       if (ok) done.push(o.id);
     }

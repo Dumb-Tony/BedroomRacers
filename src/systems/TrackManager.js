@@ -342,6 +342,26 @@ BR.TrackManager = {
     return Math.sqrt(best) <= track.halfWidth ? 'rugRoad' : 'rugGrass';
   },
 
+  /**
+   * Put every hazard back to its authored phase.
+   *
+   * MUST be called when a race starts. Tracks are cached and reused, so
+   * without this the train carries its position over from the previous
+   * attempt and sits somewhere different on every retry — which breaks the
+   * learnability 05_Tracks.md requires, and breaks ghost replay outright,
+   * since the ghost would meet the train at a different moment than the run
+   * it was recorded from.
+   */
+  resetHazards(track) {
+    for (let i = 0; i < track.hazards.length; i++) {
+      const h = track.hazards[i];
+      h.t = h.phase || 0;
+      h.x = h.path[0][0];
+      h.y = h.path[0][1];
+      h.heading = 0;
+    }
+  },
+
   /* Moving hazards run on a fixed period so they are LEARNABLE. Randomness
      here reads as unfair — a player on lap three should be able to time the
      train (05_Tracks.md). */

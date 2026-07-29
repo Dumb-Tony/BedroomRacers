@@ -574,6 +574,13 @@ BR.Renderer = {
   drawVehicle(ctx, v, x, y, z, heading, isPlayer) {
     const Pj = BR.Projection;
     const spec = v.spec;
+
+    // A ghost is your own best run replayed. Translucent so it reads as a
+    // reference rather than a car you might hit.
+    if (v.isGhost) {
+      ctx.save();
+      ctx.globalAlpha = 0.38;
+    }
     const L = spec.length / 2, W = spec.width / 2, H = spec.height;
     const c = Math.cos(heading), s = Math.sin(heading);
 
@@ -657,5 +664,7 @@ BR.Renderer = {
     ctx.closePath();
     ctx.fillStyle = spec.colorTrim;
     ctx.fill();
+
+    if (v.isGhost) ctx.restore();
   },
 };

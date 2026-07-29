@@ -69,6 +69,69 @@ BR.EVENTS = [
   },
 ];
 
+/* ── Time trials ───────────────────────────────────────────────────────────
+   No opponents, no contact, nothing to hide behind. Medals come from TIME here
+   rather than position, because there is no position to earn.
+
+   Your best run is saved as a ghost and replays alongside you. It records
+   inputs rather than positions (Ghost.js), which only works because the
+   simulation is deterministic — the reason the fixed timestep exists. */
+BR.EVENTS.push(
+  {
+    id: 'tt-rug-route',
+    name: 'Rug Route Time Trial',
+    blurb: 'Alone against the clock. Your best run races you.',
+    trackId: 'town-rug-loop',
+    mode: 'time-trial',
+    laps: 3,
+    opponents: 0,
+    difficulty: 'normal',
+    times: { gold: 86, silver: 94, bronze: 105 },
+    platinumTime: 80,
+    unlockStars: 3,
+    objectives: [
+      { id: 'finish',  label: 'Set a time' },
+      { id: 'ttGold',  label: 'Beat the gold time' },
+      { id: 'lap',     label: 'Set a lap under 29 seconds' },
+    ],
+  },
+  {
+    id: 'bb-01',
+    name: 'Under the Bed',
+    blurb: 'Longer, faster, and half of it is bare floorboards.',
+    trackId: 'bedside-boulevard',
+    mode: 'standard-race',
+    laps: 3,
+    opponents: 4,
+    difficulty: 'normal',
+    platinumTime: 128,
+    unlockStars: 6,
+    objectives: [
+      { id: 'finish',  label: 'Finish the race' },
+      { id: 'win',     label: 'Win the race' },
+      { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+    ],
+  },
+  {
+    id: 'tt-bedside',
+    name: 'Boulevard Time Trial',
+    blurb: 'Hardwood rewards smooth hands. Nothing else will save you.',
+    trackId: 'bedside-boulevard',
+    mode: 'time-trial',
+    laps: 3,
+    opponents: 0,
+    difficulty: 'normal',
+    times: { gold: 126, silver: 138, bronze: 152 },
+    platinumTime: 118,
+    unlockStars: 9,
+    objectives: [
+      { id: 'finish',  label: 'Set a time' },
+      { id: 'ttGold',  label: 'Beat the gold time' },
+      { id: 'ttPlat',  label: 'Beat the platinum time' },
+    ],
+  }
+);
+
 /* Vehicles are earned with stars. 09_Vehicles.md left open whether the starter
    roster should all be available immediately; two to start and three to earn
    gives progression something to hand out early, which is the whole point of a

@@ -166,7 +166,31 @@ independently.
    multiplies storage and UI complexity.
 2. Should there be an explicit export/import (a save code) so players can move
    progress between browsers? Cheap, and a real answer to "no cloud saves".
-3. Ghost storage format — inputs or positions? Depends on determinism holding.
+3. ~~Ghost storage format — inputs or positions?~~ **Resolved in Phase 5:
+   POSITIONS.** This document argued for inputs, on the grounds that they are
+   smaller and the simulation is deterministic. Both halves were wrong, and it
+   was built the input way first before being measured.
+
+   **Input replay diverges.** Determinism holds for bit-identical inputs, but a
+   stored ghost must quantise steer to keep the file small. At 1/100 the error
+   is invisible for a few seconds and catastrophic over ninety — measured
+   worst-case deviation was 3514 units, most of the width of the rug. Steering
+   is chaotically sensitive; two cars a hundredth of a degree apart take
+   different lines, and it compounds every corner.
+
+   **Inputs are not smaller.** They must be captured every tick: 2 bytes at
+   60Hz is 120 bytes/sec. Positions can be sampled at 10Hz and interpolated —
+   5 bytes at 10Hz is 50 bytes/sec. Measured at **58 bytes/sec**, about 5KB for
+   a 90-second run.
+
+   So a ghost is an animation, not a re-simulation, and is never driven through
+   the vehicle controller. Verified: the replayed line matches the recorded run
+   to within **1 unit**.
+
+   One trap worth recording. Sampling used a float accumulator against 0.1s,
+   which silently recorded at 8.7Hz instead of 10 because `6 * (1/60)` is
+   `0.09999999999999999` — just under the threshold, so every sample waited an
+   extra tick. The ghost drifted steadily out of sync. Count ticks, not seconds.
 4. Does the game need a manual "reset progress" option? Probably yes, in settings,
    with confirmation.
 
