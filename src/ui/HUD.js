@@ -18,6 +18,10 @@ window.BR = window.BR || {};
 BR.HUD = {
 
   draw(ctx, v, w, h) {
+    // Menus render over a live view of the track, so the race HUD must not
+    // come with it.
+    if (BR.Screens && BR.Screens.state !== BR.Screens.RACE) return;
+
     const RM = BR.RaceManager;
     const racing = RM && RM.racers;
 
@@ -192,11 +196,51 @@ BR.HUD = {
       ry += 30;
     }
 
-    ctx.textAlign = 'center';
-    ctx.font = '700 13px ui-monospace, Consolas, monospace';
-    ctx.fillStyle = '#4fd8a8';
-    ctx.fillText('PRESS  R  TO RACE AGAIN', w / 2, y + cardH - 26);
-    ctx.textAlign = 'left';
+    // ── medal, stars and unlocks ─────────────────────────────────────────
+    const res = BR.Screens && BR.Screens.lastResult;
+    if (res) {
+      const P = BR.ProgressionManager;
+      ctx.textAlign = 'center';
+
+      ctx.beginPath();
+      ctx.arc(w / 2 - 96, y + 34, 15, 0, Math.PI * 2);
+      ctx.fillStyle = P.medalColour(res.medal);
+      ctx.fill();
+      ctx.font = '700 10px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.fillText(res.medal === 'none' ? '' : res.medal.charAt(0).toUpperCase(),
+                   w / 2 - 96, y + 29);
+
+      if (res.starsGained > 0) {
+        ctx.font = '700 13px ui-monospace, Consolas, monospace';
+        ctx.fillStyle = '#ffd34d';
+        ctx.fillText('★ +' + res.starsGained + ' STAR' +
+                     (res.starsGained > 1 ? 'S' : ''), w / 2 + 110, y + 26);
+      }
+      if (res.personalBest) {
+        ctx.font = '700 11px ui-monospace, Consolas, monospace';
+        ctx.fillStyle = '#4fd8a8';
+        ctx.fillText('NEW BEST TIME', w / 2 + 110, y + 44);
+      }
+      if (res.unlocked && res.unlocked.length) {
+        ctx.font = '700 12px ui-monospace, Consolas, monospace';
+        ctx.fillStyle = '#4fd8a8';
+        ctx.fillText('UNLOCKED: ' +
+          res.unlocked.map(function (id) { return BR.VEHICLES[id].name; }).join(', '),
+          w / 2, y + cardH - 62);
+      }
+      ctx.textAlign = 'left';
+    }
+
+    // Buttons register hit regions with Screens, which owns click routing.
+    const S = BR.Screens;
+    if (S) {
+      const bw = 150, gap = 12;
+      const bx = w / 2 - bw - gap / 2;
+      const by2 = y + cardH - 44;
+      S.button(ctx, bx, by2, bw, 34, 'RACE AGAIN  (R)', 'retry', null, { primary: true });
+      S.button(ctx, w / 2 + gap / 2, by2, bw, 34, 'EVENTS  (ESC)', 'quit', null);
+    }
   },
 
   drawCallouts(ctx, v, w, h) {

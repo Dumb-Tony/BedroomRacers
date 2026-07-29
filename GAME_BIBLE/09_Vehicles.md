@@ -135,9 +135,12 @@ moving.
 
 ## Open questions
 
-1. Should the starter roster all be unlocked from the start, or should some be
-   unlocks? Five available immediately is a strong opening; three plus two unlocks
-   gives progression something to grant early.
+1. ~~Should the starter roster all be unlocked from the start?~~ **Resolved in
+   Phase 4: two to start, three to earn.** Red Racer and Blue Buggy are owned
+   from the beginning; Purple Micro at 3 stars, Green Pickup at 6, Yellow Rocket
+   at 9. Handing out a vehicle early is the clearest possible demonstration that
+   progression does something, and Yellow Rocket last means the fastest car is
+   the reward rather than the trap a new player falls into.
 2. Is `boostPower` a real fifth stat or noise? It may be more legible folded into
    acceleration.
 3. Do vehicles have per-surface modifiers (Blue Buggy's off-road strength), or is that

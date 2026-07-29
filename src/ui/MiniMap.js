@@ -52,6 +52,7 @@ BR.MiniMap = {
     const track = game.arena;
     if (!track || !track.centreline) return;
 
+    if (BR.Screens && BR.Screens.state !== BR.Screens.RACE) return;
     const RM = BR.RaceManager;
     // The results card owns the screen; a map behind it is noise.
     if (RM && RM.state === RM.STATE.FINISHED) return;

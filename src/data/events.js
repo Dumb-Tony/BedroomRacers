@@ -1,0 +1,87 @@
+/* =============================================================================
+   EVENTS — content, not code.
+   =============================================================================
+   An event is a track plus a set of rules plus what it takes to do well. Adding
+   one is a config entry (16_Content_Pipeline.md).
+
+   Medals come from FINISHING POSITION, not time, because position is what the
+   player is actually racing for and it reads instantly. Target times exist as a
+   fourth, harder tier so there is something left once gold is routine.
+
+   Objectives are visible BEFORE the race so players can choose to chase them,
+   and re-checkable after. Never hide an objective behind a surprise
+   (01_Game_Loop.md).
+   ========================================================================== */
+
+window.BR = window.BR || {};
+
+BR.EVENTS = [
+  {
+    id: 'rug-route-01',
+    name: 'Rookie Shakedown',
+    blurb: 'Three laps of the town rug. Learn where the corners are.',
+    trackId: 'town-rug-loop',
+    mode: 'standard-race',
+    laps: 3,
+    opponents: 3,
+    difficulty: 'easy',
+    platinumTime: 88,
+    unlockStars: 0,
+    objectives: [
+      { id: 'finish',   label: 'Finish the race' },
+      { id: 'podium',   label: 'Finish on the podium' },
+      { id: 'clean',    label: 'Finish with fewer than 4 collisions' },
+    ],
+  },
+  {
+    id: 'rug-route-02',
+    name: 'Rug Route Circuit',
+    blurb: 'The full field, racing properly. Boost pads matter now.',
+    trackId: 'town-rug-loop',
+    mode: 'standard-race',
+    laps: 3,
+    opponents: 4,
+    difficulty: 'normal',
+    platinumTime: 84,
+    unlockStars: 2,
+    objectives: [
+      { id: 'win',      label: 'Win the race' },
+      { id: 'drifter',  label: 'Spend 6 seconds drifting' },
+      { id: 'lap',      label: 'Set a lap under 29 seconds' },
+    ],
+  },
+  {
+    id: 'rug-route-03',
+    name: 'Bedroom Grand Prix',
+    blurb: 'Five laps, full grid, no mistakes. The rug does not forgive.',
+    trackId: 'town-rug-loop',
+    mode: 'standard-race',
+    laps: 5,
+    opponents: 5,
+    difficulty: 'hard',
+    platinumTime: 138,
+    unlockStars: 5,
+    objectives: [
+      { id: 'win',      label: 'Win the race' },
+      { id: 'spotless', label: 'Win without a single collision' },
+      { id: 'lap',      label: 'Set a lap under 27 seconds' },
+    ],
+  },
+];
+
+/* Vehicles are earned with stars. 09_Vehicles.md left open whether the starter
+   roster should all be available immediately; two to start and three to earn
+   gives progression something to hand out early, which is the whole point of a
+   first unlock. */
+BR.UNLOCKS = [
+  { vehicle: 'purple-micro',  stars: 3 },
+  { vehicle: 'green-pickup',  stars: 6 },
+  { vehicle: 'yellow-rocket', stars: 9 },
+];
+
+BR.eventById = function (id) {
+  for (let i = 0; i < BR.EVENTS.length; i++) {
+    if (BR.EVENTS[i].id === id) return BR.EVENTS[i];
+  }
+  return null;
+};

@@ -1,7 +1,17 @@
 # 15 — Save System
 
-> **DRAFT.** The GDD specifies only "use LocalStorage". The schema below is a proposal.
-> It will need revision once progression is actually built (Phase 4).
+> **BUILT — Phase 4.** The schema below is implemented in
+> `src/systems/SaveManager.js`, minus the cosmetics and collection sections,
+> which have no content behind them yet.
+>
+> Every failure mode in the table further down is covered and tested:
+> corrupt JSON is backed up and replaced without throwing, a save from a newer
+> build is backed up rather than guessed at, missing fields merge from defaults,
+> the migration chain runs, and with storage unavailable the game loads
+> in-memory and stays fully playable — writes simply return false.
+>
+> Writes are debounced at 400ms because LocalStorage is synchronous and writing
+> per lap caused visible hitches.
 
 ## Constraints
 

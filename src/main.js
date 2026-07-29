@@ -46,7 +46,22 @@ BR.Game = {
 
   TRACK_ID: 'town-rug-loop',
 
+  event: null,          // the event being raced
+  stats: null,          // per-race accumulators for objectives
+  recorded: false,      // progression is banked exactly once per race
+
   start() {
+    // Save first: settings and the chosen vehicle come from it.
+    const save = BR.SaveManager.load();
+    BR.ProgressionManager.applyUnlocks();   // repairs a save from an older build
+
+    BR.Audio.sfxVolume = save.settings.sfxVolume;
+    BR.Audio.musicVolume = save.settings.musicVolume;
+    BR.Input.autoAccelerate = save.settings.autoAccelerate;
+    if (BR.MiniMap) BR.MiniMap.size = save.settings.mapSize;
+    this.difficulty = save.settings.difficulty;
+    this.playerVehicleId = BR.ProgressionManager.selectedVehicle();
+
     // Content is data: the track is built from a definition, never hard-coded.
     this.arena = BR.TrackManager.build(BR.TRACKS[this.TRACK_ID]);
     this.LAPS = this.arena.laps;
@@ -62,7 +77,13 @@ BR.Game = {
     window.addEventListener('pointerdown', wake);
     window.addEventListener('keydown', wake);
 
+    // A race is always built, even in the menus — the track renders behind
+    // them, so the game is visible rather than hidden behind a flat colour.
+    this.event = BR.EVENTS[0];
     this.buildRace();
+    BR.Screens.init(document.getElementById('game'));
+    BR.Screens.set(BR.Screens.MENU);
+
     BR.Debug.init(this);
 
     const self = this;
@@ -97,6 +118,9 @@ BR.Game = {
 
     BR.RaceManager.init(this.arena, this.racers, this.LAPS);
     BR.Renderer.snapCameraTo(grid[0].x, grid[0].y, grid[0].heading);
+
+    this.stats = { driftSeconds: 0 };
+    this.recorded = false;
   },
 
   /* Swap the player's car and restart. The grid slot stays the same so the
@@ -104,6 +128,46 @@ BR.Game = {
   setVehicle(id) {
     this.playerVehicleId = id;
     this.buildRace();
+  },
+
+  startEvent(event) {
+    if (!event) return;
+    this.event = event;
+    this.LAPS = event.laps;
+    this.OPPONENTS = event.opponents;
+    this.difficulty = event.difficulty;
+    this.playerVehicleId = BR.ProgressionManager.selectedVehicle();
+    BR.SaveManager.get().state.lastEvent = event.id;
+
+    this.buildRace();
+    BR.Screens.activeEvent = event;
+    BR.Screens.lastResult = null;
+    BR.Screens.set(BR.Screens.RACE);
+  },
+
+  abandonRace() {
+    BR.Screens.lastResult = null;
+    this.buildRace();
+  },
+
+  /* Banked exactly once, the moment the results card appears. Doing it per
+     frame would multiply stars. */
+  bankResult() {
+    if (this.recorded || !this.event) return;
+    this.recorded = true;
+
+    const RM = BR.RaceManager;
+    const me = RM.player();
+    BR.Screens.lastResult = BR.ProgressionManager.record(this.event, {
+      position: me.position,
+      total: RM.racers.length,
+      finished: me.finished,
+      time: me.finishTime,
+      bestLap: me.bestLap,
+      collisions: this.vehicle.impacts,
+      driftSeconds: this.stats.driftSeconds,
+      trackId: this.arena.id,
+    });
   },
 
   reset() {
@@ -120,6 +184,10 @@ BR.Game = {
     BR.RaceManager.reset();
     BR.Particles.init();
     BR.Renderer.snapCameraTo(grid[0].x, grid[0].y, grid[0].heading);
+
+    this.stats = { driftSeconds: 0 };
+    this.recorded = false;
+    BR.Screens.lastResult = null;
   },
 
   frame(now) {
@@ -134,12 +202,21 @@ BR.Game = {
     // teleporting through a wall on return.
     if (dt > 0.25) dt = 0.25;
 
-    if (BR.Input.tapped('KeyR')) this.reset();
-    if (BR.Input.tapped('KeyP') || BR.Input.tapped('Escape')) this.paused = !this.paused;
+    const racing = BR.Screens.state === BR.Screens.RACE;
+
     if (BR.Input.tapped('KeyH')) BR.Debug.toggle();
     if (BR.Input.tapped('KeyT')) BR.Input.autoAccelerate = !BR.Input.autoAccelerate;
+    if (racing) {
+      if (BR.Input.tapped('KeyR')) this.reset();
+      if (BR.Input.tapped('KeyP')) this.paused = !this.paused;
+      if (BR.Input.tapped('Escape')) { this.abandonRace(); BR.Screens.set(BR.Screens.EVENTS); }
+    }
 
-    if (!this.paused) {
+    // Hit regions are rebuilt every frame by whatever draws them, so they are
+    // cleared here rather than inside any one drawer.
+    BR.Screens.regions = [];
+
+    if (racing && !this.paused) {
       this.accumulator += dt;
       let steps = 0;
       while (this.accumulator >= this.FIXED_DT && steps < this.MAX_STEPS) {
@@ -160,9 +237,14 @@ BR.Game = {
     BR.Particles.update(this.paused ? 0 : dt);
 
     BR.Renderer.render(this.vehicles, this.vehicle, this.arena, alpha, dt);
+    BR.Screens.draw(BR.Renderer.ctx, BR.Renderer.w, BR.Renderer.h, dt);
 
     // Once per RENDERED frame, never from inside the fixed step — see Audio.js.
     BR.Audio.update(this, dt);
+
+    if (racing && BR.RaceManager.state === BR.RaceManager.STATE.FINISHED) {
+      this.bankResult();
+    }
 
     BR.Debug.update(this, dt);
     BR.Input.clearTaps();
@@ -211,6 +293,14 @@ BR.Game = {
 
       BR.TrackManager.resolveHazards(this.arena, v);
       BR.TrackManager.checkBoostPads(this.arena, v);
+
+      // Objective tracking. Accumulated in the fixed step so it is frame-rate
+      // independent — a player on a 144Hz monitor must not earn drift stars
+      // faster than one on 60Hz.
+      if (r.isPlayer && v.grounded && v.slip > BR.PHYSICS.driftMinAngle &&
+          Math.hypot(v.vel.x, v.vel.y) > BR.PHYSICS.driftMinSpeed) {
+        this.stats.driftSeconds += dt;
+      }
     }
 
     BR.TrackManager.updateHazards(this.arena, dt);
