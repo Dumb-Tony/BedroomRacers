@@ -133,6 +133,23 @@ the light framing story from `00_Vision.md` surfaces.
 **Do not balance before Phase 3.** Stats are meaningless until the physics stops
 moving.
 
+### Overdue as of Phase 5
+
+Yellow Rocket's top speed is **18% above Red Racer's** (413 against 350), which is
+enough that it wins regardless of difficulty. Measured across all three settings
+with an identical player pace, the finishing position did not change: Easy slows
+the field, but not below a car that is nearly a fifth faster in a straight line.
+
+That ratio comes from this document's original roster, not from tuning. Two ways
+out, both design decisions rather than fixes:
+
+- Compress the top-speed spread so handling and weight decide races.
+- Give the fastest car to the weakest driver — pairing Yellow Rocket with the
+  Rookie personality rather than the Speedster would let its raw pace be
+  something the player can exploit by out-driving it.
+
+Until one is chosen, "Easy" changes how close the racing is, not who wins.
+
 ## Open questions
 
 1. ~~Should the starter roster all be unlocked from the start?~~ **Resolved in

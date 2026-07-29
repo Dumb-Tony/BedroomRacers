@@ -19,6 +19,13 @@ BR.Screens = {
 
   MENU: 'menu', EVENTS: 'events', GARAGE: 'garage', RACE: 'race',
 
+  /* Say what changes, not how hard it is. "Medium" tells a player nothing. */
+  DIFF_BLURB: {
+    easy:   'Slower rivals, gentler crashes, more forgiving',
+    normal: 'The race as intended',
+    hard:   'Faster lines, better boost use, few mistakes',
+  },
+
   state: 'menu',
   regions: [],
   hover: -1,
@@ -77,6 +84,12 @@ BR.Screens = {
       case 'retry':   G.startEvent(this.activeEvent); break;
       case 'quit':    G.abandonRace(); this.set(this.EVENTS); break;
       case 'locked':  this.say('Locked — needs ' + r.value + ' stars'); break;
+      case 'difficulty':
+        BR.SaveManager.get().settings.difficulty = r.value;
+        BR.SaveManager.save();
+        BR.Game.difficulty = r.value;
+        BR.Audio.checkpoint();
+        break;
     }
   },
 
@@ -185,10 +198,51 @@ BR.Screens = {
     ctx.textAlign = 'left';
 
     const bw = 240, bx = cx - bw / 2;
-    let by = h * 0.48;
+    let by = h * 0.44;
     this.button(ctx, bx, by, bw, 46, 'RACE', 'goto', this.EVENTS, { primary: true });
     by += 58;
     this.button(ctx, bx, by, bw, 42, 'GARAGE', 'goto', this.GARAGE);
+
+    // ── difficulty ────────────────────────────────────────────────────────
+    // 11_UI.md lists this under accessibility, not options, so it lives where
+    // it can be found rather than buried behind a settings screen.
+    by += 62;
+    ctx.textAlign = 'center';
+    ctx.font = '600 10px ui-monospace, Consolas, monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.42)';
+    ctx.fillText('DIFFICULTY', cx, by - 16);
+    ctx.textAlign = 'left';
+
+    const cur = BR.SaveManager.get().settings.difficulty;
+    const opts = ['easy', 'normal', 'hard'];
+    const dw = 78, gap = 5;
+    const totalW = dw * 3 + gap * 2;
+    for (let i = 0; i < 3; i++) {
+      const x = cx - totalW / 2 + i * (dw + gap);
+      const on = opts[i] === cur;
+      const idx = this.regions.length;
+      this.regions.push({ x: x, y: by, w: dw, h: 34,
+                          action: 'difficulty', value: opts[i] });
+      const hot = this.hover === idx;
+      ctx.fillStyle = on ? 'rgba(255,211,77,0.22)'
+                         : (hot ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.06)');
+      this.round(ctx, x, by, dw, 34, 7);
+      ctx.fill();
+      ctx.strokeStyle = on ? '#ffd34d' : 'rgba(255,255,255,0.16)';
+      ctx.lineWidth = on ? 2 : 1;
+      ctx.stroke();
+      ctx.textAlign = 'center';
+      ctx.font = '700 11px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = on ? '#ffd34d' : 'rgba(255,255,255,0.65)';
+      ctx.fillText(opts[i].toUpperCase(), x + dw / 2, by + 13);
+      ctx.textAlign = 'left';
+    }
+
+    ctx.textAlign = 'center';
+    ctx.font = '600 10px ui-monospace, Consolas, monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.34)';
+    ctx.fillText(this.DIFF_BLURB[cur] || '', cx, by + 44);
+    ctx.textAlign = 'left';
 
     if (!BR.SaveManager.storageOk) {
       ctx.textAlign = 'center';
@@ -208,6 +262,21 @@ BR.Screens = {
     let y = Math.max(24, h * 0.10);
 
     this.title(ctx, 'CHOOSE AN EVENT', x, y);
+
+    // Difficulty is shown here too — it changes what a medal is worth, so it
+    // should not be something you have to go back to the menu to remember.
+    const diff = BR.SaveManager.get().settings.difficulty;
+    ctx.textAlign = 'right';
+    ctx.font = '700 11px ui-monospace, Consolas, monospace';
+    ctx.fillStyle = diff === 'hard' ? '#ff9d6b'
+                  : (diff === 'easy' ? '#4fd8a8' : 'rgba(255,255,255,0.55)');
+    ctx.fillText(diff.toUpperCase(), x + cardW, y + 9);
+    if (diff === 'easy') {
+      ctx.font = '600 9px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.fillText('no platinum on easy', x + cardW, y + 24);
+    }
+    ctx.textAlign = 'left';
     y += 46;
 
     for (let i = 0; i < BR.EVENTS.length; i++) {

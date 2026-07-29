@@ -62,17 +62,25 @@ BR.ProgressionManager = {
 
   /* ── recording a result ────────────────────────────────────────────────── */
 
-  medalForPosition(position, total, time, event) {
+  /* Platinum is the mastery tier, so it is not available on Easy — where
+     opponents are slower and the player's own crashes are softened, a platinum
+     would not mean the same thing as anyone else's. Gold and below are
+     unaffected: the point of an easier setting is to be able to finish and
+     progress. */
+  medalForPosition(position, total, time, event, difficulty) {
+    const platAllowed = difficulty !== 'easy';
+
     // Time trials have no position to earn, so the clock is the whole contest.
     if (event.mode === 'time-trial') {
       if (time === null) return 'none';
-      if (event.platinumTime && time <= event.platinumTime) return 'platinum';
+      if (platAllowed && event.platinumTime && time <= event.platinumTime) return 'platinum';
       if (time <= event.times.gold) return 'gold';
       if (time <= event.times.silver) return 'silver';
       if (time <= event.times.bronze) return 'bronze';
       return 'none';
     }
-    if (event.platinumTime && time !== null && time <= event.platinumTime && position === 1) {
+    if (platAllowed && event.platinumTime && time !== null &&
+        time <= event.platinumTime && position === 1) {
       return 'platinum';
     }
     if (position === 1) return 'gold';
@@ -102,7 +110,8 @@ BR.ProgressionManager = {
     }
 
     // ── medal ──────────────────────────────────────────────────────────────
-    const medal = this.medalForPosition(r.position, r.total, r.time, event);
+    const medal = this.medalForPosition(r.position, r.total, r.time, event,
+                                        r.difficulty || 'normal');
     out.medal = medal;
     if (this.MEDAL_ORDER.indexOf(medal) > this.MEDAL_ORDER.indexOf(rec.medal)) {
       rec.medal = medal;

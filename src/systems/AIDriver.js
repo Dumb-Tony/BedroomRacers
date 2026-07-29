@@ -42,10 +42,14 @@ BR.AIDriver = {
   },
 
   DIFFICULTY: {
-    easy:   { speed: 0.86, mistake: 1.8, boost: 0.6 },
-    normal: { speed: 1.00, mistake: 1.0, boost: 1.0 },
-    hard:   { speed: 1.06, mistake: 0.45, boost: 1.2 },
+    easy:   { speed: 0.86, mistake: 1.8,  boost: 0.6, forgiveness: 0.55 },
+    normal: { speed: 1.00, mistake: 1.0,  boost: 1.0, forgiveness: 1.0 },
+    hard:   { speed: 1.06, mistake: 0.45, boost: 1.2, forgiveness: 1.0 },
   },
+
+  /* Ceiling on dynamic assistance. 04_AI.md: it compresses the field, it does
+     not decide the race. */
+  MAX_CATCHUP: 0.06,
 
   create(personalityId, difficultyId) {
     const p = this.PERSONALITIES[personalityId] || this.PERSONALITIES.technician;
@@ -131,7 +135,11 @@ BR.AIDriver = {
       const w = line[(ai.wp + k) % n];
       if (w.targetSpeed < limit) limit = w.targetSpeed;
     }
-    const wantSpeed = v.spec.maxSpeed * limit * ai.p.targetSpeedMul * ai.d.speed;
+    // catchUp is >= 1 always. Trailing cars get a nudge; a leading car is never
+    // slowed down, because holding a winning player back is the single most
+    // resented mechanic in arcade racing (04_AI.md).
+    const wantSpeed = v.spec.maxSpeed * limit * ai.p.targetSpeedMul *
+                      ai.d.speed * (ai.catchUp || 1);
 
     if (speed > wantSpeed * 1.06) {
       input.brake = 1;

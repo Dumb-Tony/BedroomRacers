@@ -76,8 +76,9 @@ BR.Collision = {
       v.vel.y -= bounce * vn * ny;
 
       // Heavier vehicles shrug off impacts (09_Vehicles.md: weight affects
-      // collision outcomes).
-      const loss = 1 - (P.collisionSpeedLoss * squareness) / v.spec.weight;
+      // collision outcomes). `forgiveness` layers difficulty on top.
+      const forgive = v.forgiveness === undefined ? 1 : v.forgiveness;
+      const loss = 1 - (P.collisionSpeedLoss * squareness * forgive) / v.spec.weight;
       v.vel.x *= loss;
       v.vel.y *= loss;
 
@@ -91,8 +92,8 @@ BR.Collision = {
       // Square, fast hits spin the car. HARD capped — see below.
       if (squareness > P.spinTriggerDot && speedBefore > 80 && v.spinTime <= 0) {
         const dir = Math.sign(v.vel.x * ny - v.vel.y * nx) || 1;
-        v.spinTime = P.spinRecoveryTime * squareness;
-        v.spinVel  = 7 * squareness * dir;
+        v.spinTime = P.spinRecoveryTime * squareness * forgive;
+        v.spinVel  = 7 * squareness * dir * forgive;
       }
 
       contacts++;

@@ -50,6 +50,11 @@ BR.Vehicle = {
       impacts: 0,
       lastImpact: 0,
 
+      /* How hard collisions hit THIS vehicle. 04_AI.md promises "more forgiving
+         collision handling" and "stronger player recovery" on Easy; this is
+         where that lands. 1 is normal, lower is gentler. */
+      forgiveness: 1,
+
       // ── feedback ────────────────────────────────────────────────────────
       lastLanding: null,
       landingFlash: 0,

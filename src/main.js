@@ -112,6 +112,11 @@ BR.Game = {
     const player = BR.Vehicle.create(this.playerVehicleId,
                                      grid[0].x, grid[0].y, grid[0].heading);
     this.vehicle = player;
+    // Easy softens collisions for the PLAYER only — opponents keep normal
+    // physics, so it reads as being tougher rather than as rivals being limp.
+    const diff = BR.AIDriver.DIFFICULTY[this.difficulty] ||
+                 BR.AIDriver.DIFFICULTY.normal;
+    player.forgiveness = diff.forgiveness;
     this.vehicles.push(player);
     const playerRacer = {
       vehicle: player, isPlayer: true, ai: null,
@@ -173,7 +178,10 @@ BR.Game = {
     this.arena = this.getTrack(event.trackId);
     this.LAPS = event.laps;
     this.OPPONENTS = event.opponents;
-    this.difficulty = event.difficulty;
+    // The PLAYER'S setting wins. An event's `difficulty` now records the
+    // challenge it was designed around; the pacing across the roster is carried
+    // by lap count and grid size, which a difficulty setting does not touch.
+    this.difficulty = BR.SaveManager.get().settings.difficulty || 'normal';
     this.playerVehicleId = BR.ProgressionManager.selectedVehicle();
     BR.SaveManager.get().state.lastEvent = event.id;
 
@@ -214,6 +222,7 @@ BR.Game = {
       collisions: this.vehicle.impacts,
       driftSeconds: this.stats.driftSeconds,
       trackId: this.arena.id,
+      difficulty: this.difficulty,
     });
   },
 
@@ -365,6 +374,7 @@ BR.Game = {
 
     BR.TrackManager.updateHazards(this.arena, dt);
     this.resolveCarContacts();
+    this.applyAssistance(dt);
     RM.update(dt);
 
     // Ghost is placed from the race clock, so it lines up with the run it was
@@ -377,6 +387,40 @@ BR.Game = {
     }
 
     BR.Particles.emitForVehicle(this.vehicle, dt);
+  },
+
+  /* Dynamic assistance, per 04_AI.md. Two rules make it fair:
+
+       - It only ever HELPS whoever is behind. A leading car is never slowed
+         down. Holding a winning player back is the most resented mechanic in
+         arcade racing, and it is what makes rubber-banding feel like a lie.
+       - It is capped hard enough to compress the field without deciding the
+         race.
+
+     Disabled entirely in Time Trial, where a time has to mean something. */
+  applyAssistance(dt) {
+    if (!this.event || this.event.mode === 'time-trial') return;
+    const RM = BR.RaceManager;
+    if (RM.state !== RM.STATE.RACING) return;
+
+    let lead = 0;
+    for (let i = 0; i < this.racers.length; i++) {
+      if (this.racers[i].cpsPassed > lead) lead = this.racers[i].cpsPassed;
+    }
+
+    for (let i = 0; i < this.racers.length; i++) {
+      const r = this.racers[i];
+      const behind = BR.M.clamp((lead - r.cpsPassed) / 8, 0, 1);
+
+      if (r.ai) {
+        r.ai.catchUp = 1 + behind * BR.AIDriver.MAX_CATCHUP;
+      } else if (behind > 0.2 && !r.finished) {
+        // A trailing player earns boost slightly faster. Small enough to be
+        // invisible, and it gives them something to fight back with.
+        r.vehicle.boostMeter = Math.min(1,
+          r.vehicle.boostMeter + behind * 0.05 * dt);
+      }
+    }
   },
 
   /* Car-vs-car: exchange momentum weighted by mass, so the lighter car moves
