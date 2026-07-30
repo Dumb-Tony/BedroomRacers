@@ -398,9 +398,12 @@ props only. Do not migrate the vehicle model.
 
 ## Open questions
 
-1. **`GROUND_TILT` value.** 0.62 is still a guess. Affects visibility distance and
-   therefore track design. **Blocks all vehicle art and track authoring.** Live
-   slider exists in the Phase 1 debug panel — drag it and decide.
+1. ~~**`GROUND_TILT` value.**~~ **Locked at 0.30**, which implies a camera 17.5°
+   above the floor. `12_Art_Guide.md` has been rewritten around that measurement,
+   so vehicle art is no longer blocked. Two follow-ons live there, both feel
+   decisions rather than design ones: `heightScale` is 0.85 where geometric
+   consistency wants 0.954, and the projection has no perspective at all — which
+   at this angle makes a car 2000 units away draw the same size as one alongside.
 2. ~~**Fixed vs variable timestep.**~~ **Resolved in Phase 1.** Fixed 60Hz
    accumulator with render interpolation, capped at 6 steps per frame.
    Determinism verified: identical input sequences produce bit-identical

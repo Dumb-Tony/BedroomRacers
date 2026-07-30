@@ -8,101 +8,170 @@ recognisable at a glance with exaggerated proportions.
 The reference point is not a modern mobile game. It is a 1990s toy catalogue
 photographed in someone's bedroom on a Saturday afternoon.
 
-## The perspective constraint
+---
 
-The camera is **slightly angled 2.5D**, and it is a **rotating chase camera** — it
-sits behind the car and turns so the direction of travel points up the screen.
-This is an art constraint before it is a technical one.
+## The camera, measured
 
-```
-GROUND_TILT = 0.62   // ground plane is vertically squashed
-```
+Rewritten after `groundTilt` was tuned from the guessed 0.62 down to **0.30**.
+That is not a small adjustment, and most of what this document originally said
+about drawing for it was wrong.
 
-### The rotating camera makes this harder, not easier
-
-It is tempting to think a chase camera reduces vehicle art, since the player's car
-is nearly always seen from behind. **It does not.** Opponents can be at any angle
-relative to the camera — through hairpins, when being lapped, when spun out — and
-they must use the same asset as the player. Full 360° coverage still stands.
-
-What the rotating camera *adds* is a cost that a fixed camera did not have:
-
-**Every prop with height is now seen from all sides.** With a fixed camera, a
-crayon, a block or a shoe could be one sprite drawn at one angle forever. With the
-camera rotating around them, a fixed sprite visibly "turns to follow you", which
-reads as badly wrong.
-
-Affected and unaffected:
-
-| Asset | Impact |
+| | Value |
 | --- | --- |
-| Flat ground decals — road print, rug pattern, markings, tyre marks | **None.** They live on the plane and rotate with it correctly |
-| Vehicles | Unchanged — already needed 360° coverage |
-| Props with height — blocks, crayons, furniture, toys | **New cost.** Need multi-angle frames, or geometry, or to be restyled as flat |
-| Walls and barriers | Fine if drawn as extruded geometry, as the prototype does |
+| `groundTilt` | 0.30 |
+| `heightScale` | 0.85 |
+| Implied camera elevation | **17.5° above the floor** |
+| Vertical exaggeration | 2.83× |
+| Visible world at 1280×800 | 1113 wide × **2319 deep** |
+| Depth visible ahead | ~83 car lengths |
 
-Cheapest mitigations, in order: keep small props flat where the fiction allows
-(a fallen crayon is nearly flat anyway); build tall props as simple extruded
-geometry rather than sprites; reserve multi-angle sprite sheets for the few hero
-props that genuinely need them.
+**This is not "slightly angled 2.5D".** At 17.5° the camera is barely above the
+rug — a low chase view. You see the backs and flanks of things, and almost never
+their tops.
 
-**This needs deciding before prop art starts**, and it is a stronger argument for
-3D-sourced assets than the vehicle pipeline was.
+### heightScale is not geometrically consistent
 
-### The rotation problem
+An axonometric camera at elevation *e* compresses ground depth by sin(*e*) and
+lifts height by cos(*e*). With `groundTilt` at 0.30, consistency would need
+`heightScale` of **0.954**. It is 0.85, so verticals sit about **11% shorter**
+than the ground plane implies.
 
-**A single overhead sprite rotated 360° does not work at an angle.** It reads as
-correct top-down and pancaked at a tilt. This applies to vehicles and to every
-prop with height.
+That is small enough to read as a deliberate flattening rather than an error, and
+it has never actually been chosen — 0.85 was a guess from before the tilt moved,
+and it was slightly *too tall* for 0.62 as well. Worth a decision:
 
-Options:
+- **0.95** — geometrically honest, everything gets visibly taller, and every jump
+  reads higher.
+- **0.85** — keep, and treat the squash as style.
 
-| Approach | Cost | Result |
+Changing it alters how every jump reads, so it belongs to whoever is tuning feel,
+not to this document.
+
+---
+
+## What the low angle means for vehicles
+
+### Frame count: 16 is not enough
+
+The original recommendation of 16 heading frames was written for a much higher
+camera. Measured worst-case corner error when the drawn frame is half a step off
+the true heading, against a sprite ~32px wide on screen:
+
+| Frames | Error | As % of sprite |
 | --- | --- | --- |
-| **Pre-rendered heading frames** | 16–32 frames per vehicle | Correct. The standard solution |
-| Rotate a flat sprite | Free | Wrong. Cars appear to lie flat and spin |
-| Non-rotating billboard | Free | Unusable — no facing information |
-| Real 3D models | High | Correct, but abandons the 2D pipeline |
+| 8 | 7.2px | 22% |
+| 16 | 3.6px | **11%** |
+| 24 | 2.4px | 8% |
+| **32** | **1.8px** | **6%** |
+| 48 | 1.2px | 4% |
+| 64 | 0.9px | 3% |
 
-**Decision: pre-rendered heading frames.** 16 frames (22.5° increments) is the
-starting target; go to 32 if rotation reads as steppy at speed.
+At a low angle a rotating car changes silhouette fast — front, flank and rear are
+genuinely different shapes rather than one shape rotated. **32 frames is the
+floor**, 48 for anything the player stares at.
 
-Practical pipeline: build vehicles as simple 3D models, render 16 orthographic views
-at the camera tilt, export as a sprite sheet. This keeps the 2D runtime while making
-new vehicles and cosmetic variants cheap.
+That is two to three times the art the guide originally budgeted, and it settles
+the open question below: **render vehicles from 3D**. Hand-drawing 48 angles per
+vehicle per cosmetic variant is not a pipeline, it is a punishment.
 
-**For the prototype, draw vehicles procedurally** with Phaser Graphics — a rotated
-body shape with a shadow and a squash factor. Ugly, instantly tunable, and it lets
-`GROUND_TILT` change without re-rendering anything. Do not commission vehicle art
-until the tilt value is locked (`03_Driving_Physics.md`, open question 1).
+### Cars read squat
 
-### Depth sorting
+A car's on-screen depth is 9.7px against 18.4px of width — its footprint reads at
+**0.53 of its true proportion**. Vehicle art has to be drawn knowing it will be
+squashed along the travel axis, and detail on the roof is nearly wasted.
 
-Objects sort by world `y`. Shadows are drawn at ground level, always separate from the
-sprite. **The gap between a vehicle and its shadow is the only height cue** — it must
-be clearly visible on every surface, including dark ones.
+---
 
-### Props at an angle
+## The flatness problem
 
-Tall objects (block towers, furniture, crayons on their side) need a visible vertical
-face, not just a top. Anything drawn purely as a top-down footprint will look painted
-onto the floor.
+**The projection has no perspective.** It is axonometric: a car 2000 units away
+is drawn exactly the same size as one alongside you. Only its row on screen
+differs.
 
-## Toy vehicle style
+At `groundTilt 0.30` that is a real readability risk. 2319 units of depth are
+compressed into 800px, so a rival 1000 units ahead sits only 345px up the screen
+at identical size. The scene can read as a flat stack of same-sized cars rather
+than a road going away from you.
 
-Vehicles look **manufactured**, from materials such as painted die-cast metal, glossy
-plastic, wood, rubber, and clear plastic, with stickers.
+Three ways to give depth back, none yet built:
 
-Character comes from wear: minor scratches, chipped paint, worn wheels, a peeling
-sticker, a slightly bent axle. A brand-new toy car is boring; a loved one has history.
+1. **Scale with depth.** A little fake perspective — shrink things slightly as
+   camera-space *y* decreases. Cheap, effective, and it does not touch the
+   simulation because scaling is a render concern.
+2. **Fade with depth.** Warm haze toward the far edge. Suits the bedroom lighting
+   and hides pop-in at the draw limit.
+3. **Shadow size.** Already have shadows; making them tighten with distance is a
+   strong depth cue for free.
 
-Material should be visible at gameplay zoom — the wooden car reads as wood from across
-the room, not just in the garage.
+**Decide before final art.** Adding fake perspective later changes how every
+asset reads.
+
+---
+
+## What the low angle means for props
+
+### Sides matter, tops do not
+
+Measured on a typical prop: the visible **side face is 1.62× the area of the
+top**. At 17.5° you are looking at the flank of everything.
+
+So: detail the sides, and do not spend effort on top surfaces. This is the exact
+opposite of the instinct a top-down game trains.
+
+### Tall props hide the track
+
+A prop of height *h* hides ground behind it out to *h* × 2.83:
+
+| | Hides behind it |
+| --- | --- |
+| 22-unit kerb | 62 units — **2.2 car lengths** |
+| 36-unit block | 102 units |
+| 60-unit building | 170 units |
+
+That is a genuine readability hazard and it interacts with the rules in
+`05_Tracks.md`. Practical consequences:
+
+- **Keep tall props off the inside of corners**, where they hide the apex.
+- Buildings and furniture belong in the infield or beyond the outer kerb, not
+  beside the racing line.
+- A kerb hiding two car lengths of road is acceptable; a block tower hiding four
+  is not.
+
+### The rotating camera is still the expensive part
+
+The camera rotates with travel direction, so **every prop with height is seen
+from all sides**. A fixed-angle sprite visibly turns to follow the player. Flat
+ground decals — road print, rug pattern, tyre marks — are unaffected, because
+they live on the plane and rotate with it correctly.
+
+Cheapest mitigations, in order: keep small props flat where the fiction allows (a
+fallen crayon is nearly flat anyway); build tall props as simple extruded
+geometry, as the prototype does; reserve multi-angle sprite sheets for the few
+hero props that need them.
+
+---
+
+## What the low angle means for ground art
+
+Everything printed on the rug is compressed to **30% vertically**. Consequences:
+
+- **Detail perpendicular to travel is lost.** A pattern that reads beautifully in
+  plan turns to mush at 17.5°.
+- **Elongate markings along the travel axis.** Road dashes, arrows and lettering
+  need stretching to read as intended — the same trick real road paint uses, and
+  for exactly the same reason.
+- **Contrast beats detail.** Fine texture disappears; value changes survive.
+- Kerbs and road edges do a disproportionate amount of the work, because they run
+  *along* the view rather than across it. Keep them bright and unambiguous
+  (`05_Tracks.md` readability rules).
+
+---
 
 ## Scale cues
 
-The player must be **constantly** reminded these are toys. Scale is the whole
-conceit, and it is lost the moment the frame could be any racing game.
+The player must be **constantly** reminded these are toys. The low camera helps
+here more than the old one did: at 17.5° a crayon on the floor rises into the
+frame like a fallen tree, which is exactly the intended read.
 
 - Visible rug fibres
 - Large dust particles
@@ -113,77 +182,111 @@ conceit, and it is lost the moment the frame could be any racing game.
 - Stickers used as road signs
 
 Rule of thumb: **every frame should contain at least one object of unmistakable
-real-world scale.** If a screenshot could be a normal racing game, the shot has failed.
+real-world scale.** If a screenshot could be a normal racing game, the shot has
+failed.
+
+---
+
+## Toy vehicle style
+
+Vehicles look **manufactured**: painted die-cast metal, glossy plastic, wood,
+rubber, clear plastic, stickers.
+
+Character comes from wear — scratches, chipped paint, worn wheels, a peeling
+sticker. A brand-new toy car is boring; a loved one has history.
+
+Material must read at gameplay zoom, which at 18px of car width means **material
+is colour and value, not texture**. The wooden car reads as wood because it is
+warm brown with a matte value, not because anyone can see grain.
+
+---
 
 ## Lighting
 
-Warm afternoon or evening bedroom light as the default. Variations are listed in
-`06_World_Town_Rug.md` and reuse the same geometry.
+Warm afternoon or evening bedroom light as the default. Variations in
+`06_World_Town_Rug.md` reuse the same geometry.
 
-Lighting is a mood tool and a cheap content multiplier. It is also a readability
-risk — the night-light and under-bed states must never make the track unreadable.
-Test both against the readability rules in `05_Tracks.md`.
+The low camera makes **long shadows** far more valuable than they were — they run
+toward the viewer and describe the ground plane, which is otherwise compressed
+almost flat. Shadow direction should be consistent per lighting state.
+
+Lighting is also a readability risk: the night-light and under-bed states must
+never make the track unreadable. Test both against `05_Tracks.md`.
+
+---
 
 ## Colour
 
-- **Track surfaces stay readable.** Roads are the darkest value; drivable areas are
+- **Track surfaces stay readable.** Roads are the darkest value; drivable areas
   clearly distinct from non-drivable.
-- **Vehicles are saturated and distinct** — they must pop against every surface.
-- **Decoration is desaturated relative to gameplay elements.** The rug print is
-  colourful but must never compete with a car for attention.
-- **Hazards use a consistent warning language** across all worlds.
+- **Vehicles are saturated and distinct** — they must pop against every surface,
+  and at 18px wide, hue and value are all you get.
+- **Decoration is desaturated relative to gameplay elements.**
+- **Hazards use a consistent warning language** across all worlds. The prototype
+  already draws jumpable barriers in a warning colour; keep that convention.
 
 Verify with a colourblind simulation and a greyscale pass. If the track reads in
 greyscale, it reads for everyone.
 
-## UI art
-
-Covered in `11_UI.md`. Stickers, notebook labels, cardboard signs, crayon lettering.
-Hand-cut, hand-lettered, slightly wonky, nothing perfectly aligned.
+---
 
 ## Effects
 
-Particle effects vary by surface — dust from rug, scuffs from hardwood, sand spray,
-water splash. This is a **gameplay signal**, not decoration: it is how a player knows
-what they are driving on without looking at the ground.
+Particle effects vary by surface — dust from rug, scuffs from hardwood, sand
+spray, water splash. This is a **gameplay signal**, not decoration: it is how a
+player knows what they are driving on without looking at the ground.
 
-Effects must be poolable and capped. Browser performance is a listed risk; a drifting
-pack of six cars is the worst case and needs a hard particle budget.
+Effects must be poolable and capped. Browser performance is a listed risk; a
+drifting pack of six cars is the worst case and needs a hard particle budget.
+
+---
 
 ## Legal constraint
 
-Every world in this game is inspired by heavily-branded real products — town-map play
+Every world here is inspired by heavily-branded real products — town-map play
 rugs, plastic stunt track systems, die-cast car lines.
 
-**All layouts, object designs, colour schemes, connector geometry, printed iconography
-and logos must be original.** Reference the *category*, never the product. When in
-doubt, change it.
+**All layouts, object designs, colour schemes, connector geometry, printed
+iconography and logos must be original.** Reference the *category*, never the
+product. When in doubt, change it.
 
-This applies to the reference material in `reference/` too — collect it for mood, do
-not trace it.
+This applies to the reference material in `reference/` too — collect it for mood,
+do not trace it.
+
+---
 
 ## Asset conventions
 
-To be finalised with the pipeline (`16_Content_Pipeline.md`). Starting position:
-
 - Sprite sheets, power-of-two where practical
-- Vehicles: 16 heading frames, consistent pivot at the vehicle centre
+- **Vehicles: 32 heading frames minimum**, 48 for hero vehicles, consistent pivot
+  at the vehicle centre
+- Rendered from 3D at the locked camera elevation of **17.5°**, not drawn by hand
 - Shadows as separate sprites, never baked in
+- Prop art prioritises side faces; top faces are nearly invisible
+- Ground decals authored stretched along the travel axis
 - Naming: `world_category_name_variant` (e.g. `rug_prop_crayon_red`)
 - Source files in `reference/`, exported assets in `assets/`
 
+---
+
 ## Open questions
 
-1. Final `GROUND_TILT` — blocks all vehicle art. Phase 1.
-2. 16 or 32 heading frames?
-3. Are vehicles rendered from 3D or drawn by hand? 3D is cheaper for 16 angles plus
-   cosmetic variants; hand-drawn has more character.
-4. Does the rug get a full illustrated texture, or is it composed from tiles? Tiles
-   are cheaper and support procedural layout variants; a single illustration looks
-   better.
+1. ~~Final `groundTilt`~~ **Locked at 0.30.** Vehicle art can begin.
+2. ~~16 or 32 heading frames?~~ **32 minimum, 48 for hero vehicles**, measured
+   above.
+3. ~~Are vehicles rendered from 3D or drawn by hand?~~ **3D.** At 32–48 angles
+   per vehicle per cosmetic variant, hand-drawing is not viable.
+4. **`heightScale`: 0.85 or the geometrically consistent 0.954?** A feel decision,
+   because it changes how every jump reads.
+5. **Fake perspective — yes or no?** The flatness problem above. Must be settled
+   before final art, since it changes how every asset reads.
+6. Does the rug get a full illustrated texture, or is it composed from tiles?
+   Tiles are cheaper and support layout variants; a single illustration looks
+   better. The 30% vertical compression argues for tiles, since fine detail is
+   lost anyway.
 
 ## Related
 
 `03_Driving_Physics.md` — the projection this guide serves.
-`06_World_Town_Rug.md` — the flagship world's visual identity.
+`05_Tracks.md` — readability rules the occlusion figures feed into.
 `11_UI.md` — interface art.

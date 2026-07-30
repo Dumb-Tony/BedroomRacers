@@ -165,6 +165,9 @@ not optional:
   game-wide.
 - The **critical path must be the widest, brightest path.**
 - Any blind corner needs either a camera pull-back or a landmark visible before it.
+- **Keep tall props off the inside of corners.** At the locked 17.5° camera a
+  prop hides ground behind it out to 2.83 times its height — a kerb hides 2.2 car
+  lengths, a building hides 170 units. Measured in `12_Art_Guide.md`.
 - Test every track at mobile screen size before considering it finished.
 
 ## Authoring collectibles
