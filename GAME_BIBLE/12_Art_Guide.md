@@ -93,15 +93,48 @@ compressed into 800px, so a rival 1000 units ahead sits only 345px up the screen
 at identical size. The scene can read as a flat stack of same-sized cars rather
 than a road going away from you.
 
-Three ways to give depth back. **Option 2 is built**; the others remain open.
+Three ways to give depth back. **Two are built.**
 
-1. **Scale with depth.** A little fake perspective — shrink things slightly as
-   camera-space *y* decreases. Cheap, and it does not touch the simulation
-   because scaling is a render concern. **Still open**, and the one that would
-   change how every asset reads, so decide before final art.
+1. ~~**Scale with depth.**~~ **Built.** A little fake perspective — see below.
 2. ~~**Fade with depth.**~~ **Built.** Warm haze toward the far edge.
-3. **Shadow size.** Already have shadows; tightening them with distance is a
-   strong depth cue for free. **Still open.**
+3. **Shadow size.** Tightening shadows with distance is a strong depth cue for
+   free. **Still open**, though depth scaling now shrinks a vehicle's shadow with
+   the rest of it, so this would only add contrast falloff.
+
+### Depth scaling
+
+**This scales OBJECTS, not the ground.** Discrete things with a single ground
+anchor — cars, props, hazards, toy pieces, wall extrusions — shrink about that
+anchor. The road, the rug, the markings and the finish line do not: they *are*
+the plane, and scaling them would mean true perspective, which is a different and
+much larger change.
+
+That trade is deliberate and worth stating plainly: a distant car on a road that
+has not narrowed is geometrically inconsistent. It reads fine because the eye
+keys on objects rather than absolute road width, and it buys depth for almost
+nothing. `Projection.depthScale = 0` turns it off for comparison.
+
+Linear falloff, clamped at `depthRange`. At the default 0.30 over 2400 units:
+
+| Distance ahead | Scale |
+| --- | --- |
+| At the camera | 1.00 |
+| 600 units | 0.93 |
+| 1200 units | 0.85 |
+| 2400 units and beyond | 0.70 |
+
+Measured: a car draws 16px wide alongside and **12px at 2000 units — a 25%
+shrink** — against a flat 16px either way with scaling off.
+
+Two details that matter:
+
+- **Objects shrink about their ground anchor**, so they stay planted rather than
+  sliding as they scale. Verified: the anchor point does not move.
+- **Wall height is scaled per ENDPOINT, not per segment.** Scaling a segment as a
+  whole would step the top edge between neighbours; per endpoint it varies
+  continuously along the wall. Verified: **zero pixels of gap** at a shared join.
+
+Nothing behind the camera is ever enlarged — distance only shrinks.
 
 ### The depth fade
 
@@ -303,8 +336,10 @@ do not trace it.
    per vehicle per cosmetic variant, hand-drawing is not viable.
 4. **`heightScale`: 0.85 or the geometrically consistent 0.954?** A feel decision,
    because it changes how every jump reads.
-5. **Fake perspective — yes or no?** The flatness problem above. Must be settled
-   before final art, since it changes how every asset reads.
+5. ~~**Fake perspective — yes or no?**~~ **Yes, as object scaling.** Built and
+   tunable. The remaining sub-question is whether the ground plane should narrow
+   too, which would be true perspective and a much larger change — currently it
+   does not.
 6. Does the rug get a full illustrated texture, or is it composed from tiles?
    Tiles are cheaper and support layout variants; a single illustration looks
    better. The 30% vertical compression argues for tiles, since fine detail is

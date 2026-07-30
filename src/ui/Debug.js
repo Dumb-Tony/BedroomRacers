@@ -144,7 +144,13 @@ BR.Debug = {
       ['Ground tilt',      Pj, 'groundTilt',  0.30, 1.00, 0.01,
        'BLOCKS ALL ART. 1.0 = pure top-down, 0.4 = low chase view.'],
       ['Height scale',     Pj, 'heightScale', 0.30, 1.60, 0.01,
-       'How far a jump lifts the car from its shadow.'],
+       'How far a jump lifts the car from its shadow. 0.954 is geometrically '
+       + 'consistent with a 17.5 degree camera — see 12_Art_Guide.md.'],
+      ['Depth scaling',    Pj, 'depthScale',  0.00, 0.70, 0.02,
+       'Fake perspective: how much smaller distant OBJECTS draw. The ground '
+       + 'plane does not narrow. 0 = off.'],
+      ['Scaling range',    Pj, 'depthRange',  600, 4000, 100,
+       'World units over which the shrink is spread.'],
 
       ['CAMERA — chase'],
       ['Zoom',             C, 'zoom',          0.80, 2.60, 0.05,

@@ -84,6 +84,41 @@ BR.Projection = {
     };
   },
 
+  /* ── depth scaling — a touch of fake perspective ─────────────────────────
+     The projection is axonometric, so a car 2000 units away is drawn exactly
+     the same size as one alongside. Shrinking distant objects gives depth back
+     (12_Art_Guide.md, "The flatness problem").
+
+     THIS SCALES OBJECTS, NOT THE GROUND. Discrete things with a single ground
+     anchor — cars, props, hazards, toy pieces, wall extrusions — shrink about
+     that anchor. The road, the rug, the markings and the finish line do not:
+     they are the plane itself, and scaling them would mean true perspective,
+     which is a different and much larger change.
+
+     The trade is deliberate. A distant car on a road that has not narrowed is
+     geometrically inconsistent, but the eye keys on objects rather than on
+     absolute road width, and it buys depth for almost nothing. Set to 0 to
+     compare.                                                                */
+  depthScale: 0.30,    // how much smaller at the far edge. 0 = off
+  depthRange: 2400,    // world units over which that shrink is spread
+
+  /**
+   * Scale factor for something at camera-space depth `ry`.
+   * Things behind the focus are never enlarged — only distance shrinks.
+   */
+  scaleAt(ry) {
+    if (this.depthScale <= 0) return 1;
+    const ahead = ry < 0 ? -ry : 0;
+    const t = ahead > this.depthRange ? 1 : ahead / this.depthRange;
+    return 1 - t * this.depthScale;
+  },
+
+  /** Shrink a projected point toward an anchor. */
+  shrink(p, anchor, s) {
+    return { sx: anchor.sx + (p.sx - anchor.sx) * s,
+             sy: anchor.sy + (p.sy - anchor.sy) * s };
+  },
+
   /**
    * Draw order. Must be CAMERA-space y, not world y — with a rotating camera,
    * "further away" depends on where the camera is looking. Sort ascending and

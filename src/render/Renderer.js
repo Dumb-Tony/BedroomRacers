@@ -437,8 +437,9 @@ BR.Renderer = {
 
       // Shadow keeps it anchored to the floor.
       const g = Pj.project(c.x, c.y, 0);
+      const k2 = Pj.scaleAt(g.depth);
       ctx.beginPath();
-      ctx.ellipse(g.sx, g.sy, 11, 11 * Pj.groundTilt, 0, 0, Math.PI * 2);
+      ctx.ellipse(g.sx, g.sy, 11 * k2, 11 * k2 * Pj.groundTilt, 0, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.fill();
 
@@ -448,7 +449,8 @@ BR.Renderer = {
       for (let k = 0; k < 8; k++) {
         const a = spin + (k * Math.PI) / 4;
         const r = k % 2 === 0 ? 21 : 8;
-        const p = Pj.project(c.x + Math.cos(a) * r, c.y + Math.sin(a) * r, bob);
+        const p = Pj.shrink(
+          Pj.project(c.x + Math.cos(a) * r, c.y + Math.sin(a) * r, bob), g, k2);
         if (k === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
       }
       ctx.closePath();
@@ -465,12 +467,14 @@ BR.Renderer = {
   drawProp(ctx, p) {
     const Pj = BR.Projection;
     const sides = 8;
+    const anchor = Pj.project(p.x, p.y, 0);
+    const k = Pj.scaleAt(anchor.depth);
     const base = [], top = [];
     for (let s = 0; s < sides; s++) {
       const a = (s / sides) * Math.PI * 2 + p.rot;
       const wx = p.x + Math.cos(a) * p.r, wy = p.y + Math.sin(a) * p.r;
-      base.push(Pj.project(wx, wy, 0));
-      top.push(Pj.project(wx, wy, p.h));
+      base.push(Pj.shrink(Pj.project(wx, wy, 0), anchor, k));
+      top.push(Pj.shrink(Pj.project(wx, wy, p.h), anchor, k));
     }
 
     ctx.beginPath();
@@ -515,17 +519,23 @@ BR.Renderer = {
       return [hz.x + p[0] * c - p[1] * s, hz.y + p[0] * s + p[1] * c];
     });
 
+    const anchor = Pj.project(hz.x, hz.y, 0);
+    const k = Pj.scaleAt(anchor.depth);
+    const PT = function (wx, wy, wz) {
+      return Pj.shrink(Pj.project(wx, wy, wz), anchor, k);
+    };
+
     ctx.beginPath();
     for (let i = 0; i < 4; i++) {
-      const p = Pj.project(world[i][0], world[i][1], 0);
+      const p = PT(world[i][0], world[i][1], 0);
       if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
     }
     ctx.closePath();
     ctx.fillStyle = 'rgba(0,0,0,0.34)';
     ctx.fill();
 
-    const base = world.map(function (p) { return Pj.project(p[0], p[1], 0); });
-    const top  = world.map(function (p) { return Pj.project(p[0], p[1], H); });
+    const base = world.map(function (p) { return PT(p[0], p[1], 0); });
+    const top  = world.map(function (p) { return PT(p[0], p[1], H); });
     ctx.fillStyle = '#8c4a2f';
     for (let i = 0; i < 4; i++) {
       const j = (i + 1) % 4;
@@ -559,8 +569,16 @@ BR.Renderer = {
 
     const a0 = Pj.project(w.ax, w.ay, 0);
     const b0 = Pj.project(w.bx, w.by, 0);
-    const a1 = Pj.project(w.ax, w.ay, H);
-    const b1 = Pj.project(w.bx, w.by, H);
+    let a1 = Pj.project(w.ax, w.ay, H);
+    let b1 = Pj.project(w.bx, w.by, H);
+
+    // Height shrinks with depth, computed PER ENDPOINT. Scaling the segment as
+    // a whole would step the top edge between neighbouring segments; per
+    // endpoint it varies continuously along the wall, with no seam.
+    if (Pj.depthScale > 0) {
+      a1 = Pj.shrink(a1, a0, Pj.scaleAt(a0.depth));
+      b1 = Pj.shrink(b1, b0, Pj.scaleAt(b0.depth));
+    }
 
     ctx.beginPath();
     ctx.moveTo(a0.sx, a0.sy);
@@ -681,12 +699,20 @@ BR.Renderer = {
       return [x + p[0] * c - p[1] * s, y + p[0] * s + p[1] * c];
     });
 
+    // Everything about this car shrinks with distance, about the point where
+    // it meets the floor — so it stays planted while getting smaller.
+    const anchor = Pj.project(x, y, 0);
+    const shrinkK = Pj.scaleAt(anchor.depth);
+    const PT = function (wx, wy, wz) {
+      return Pj.shrink(Pj.project(wx, wy, wz), anchor, shrinkK);
+    };
+
     // ── shadow: always at z=0. The GAP between car and shadow is the only
     //    height cue there is (03_Driving_Physics.md).
     const lift = BR.M.clamp(z / 90, 0, 1);
     ctx.beginPath();
     for (let i = 0; i < 4; i++) {
-      const p = Pj.project(world[i][0], world[i][1], 0);
+      const p = PT(world[i][0], world[i][1], 0);
       if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
     }
     ctx.closePath();
@@ -697,8 +723,8 @@ BR.Renderer = {
     //    Drawn as an ellipse squashed by groundTilt so it sits ON the plane.
     //    Player only — a ring under every opponent is noise, not information.
     if (isPlayer && v.boostMeter > 0.001) {
-      const g = Pj.project(x, y, 0);
-      const rr = spec.length * 0.86;
+      const g = anchor;
+      const rr = spec.length * 0.86 * shrinkK;
       ctx.beginPath();
       ctx.ellipse(g.sx, g.sy, rr, rr * Pj.groundTilt, 0,
                   -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * v.boostMeter);
@@ -708,8 +734,8 @@ BR.Renderer = {
       ctx.stroke();
     }
 
-    const base = world.map(function (p) { return Pj.project(p[0], p[1], z); });
-    const top  = world.map(function (p) { return Pj.project(p[0], p[1], z + H); });
+    const base = world.map(function (p) { return PT(p[0], p[1], z); });
+    const top  = world.map(function (p) { return PT(p[0], p[1], z + H); });
 
     // ── sides, nearer edges last so they overdraw correctly ────────────────
     const edges = [];
@@ -743,9 +769,7 @@ BR.Renderer = {
 
     // ── nose wedge, so heading is never ambiguous ──────────────────────────
     const nose = [[L, -W * 0.55], [L, W * 0.55], [L * 0.34, 0]].map(function (p) {
-      const wx = x + p[0] * c - p[1] * s;
-      const wy = y + p[0] * s + p[1] * c;
-      return Pj.project(wx, wy, z + H);
+      return PT(x + p[0] * c - p[1] * s, y + p[0] * s + p[1] * c, z + H);
     });
     ctx.beginPath();
     ctx.moveTo(nose[0].sx, nose[0].sy);
