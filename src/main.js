@@ -24,12 +24,25 @@ BR.Game = {
   OPPONENTS: 3,
 
   /* Grid order after the player. Personalities are parameter bundles over one
-     driver, not separate code paths (04_AI.md). */
+     driver, not separate code paths (04_AI.md).
+
+     YELLOW ROCKET DRIVES LIKE A ROOKIE, deliberately. Its top speed is 18% above
+     the player's starter, which with the Speedster bundle meant it won every
+     race on every difficulty — measured, the finishing position did not change
+     between Easy and Hard. Pairing the fastest car with the most timid driver
+     turns that raw pace into something the player can out-drive instead of
+     something they cannot answer.
+
+     Purple Micro takes the Speedster bundle in exchange, and starts further back
+     so the quickest driver in the field has to come through it rather than
+     leading from the lights. It is also only in the field from four opponents
+     up, which makes the rookie event winnable and later events genuinely harder
+     — escalation from the roster rather than from the difficulty slider. */
   FIELD: [
-    { vehicle: 'yellow-rocket', personality: 'speedster',  name: 'Yellow Rocket' },
-    { vehicle: 'blue-buggy',    personality: 'technician', name: 'Blue Buggy' },
+    { vehicle: 'yellow-rocket', personality: 'rookie',     name: 'Yellow Rocket' },
     { vehicle: 'green-pickup',  personality: 'bully',      name: 'Green Pickup' },
-    { vehicle: 'purple-micro',  personality: 'rookie',     name: 'Purple Micro' },
+    { vehicle: 'blue-buggy',    personality: 'technician', name: 'Blue Buggy' },
+    { vehicle: 'purple-micro',  personality: 'speedster',  name: 'Purple Micro' },
     { vehicle: 'red-racer',     personality: 'technician', name: 'Red Racer II' },
   ],
 

@@ -133,22 +133,43 @@ the light framing story from `00_Vision.md` surfaces.
 **Do not balance before Phase 3.** Stats are meaningless until the physics stops
 moving.
 
-### Overdue as of Phase 5
+### Car and driver pairing — resolved in Phase 5
 
-Yellow Rocket's top speed is **18% above Red Racer's** (413 against 350), which is
-enough that it wins regardless of difficulty. Measured across all three settings
-with an identical player pace, the finishing position did not change: Easy slows
-the field, but not below a car that is nearly a fifth faster in a straight line.
+**Yellow Rocket drives like a Rookie.** Its top speed is 18% above the player's
+starter, and paired with the Speedster bundle that made it win every race on
+every difficulty — measured, the finishing position did not change between Easy
+and Hard. Easy slowed the field but not below a car nearly a fifth faster in a
+straight line.
 
-That ratio comes from this document's original roster, not from tuning. Two ways
-out, both design decisions rather than fixes:
+The fix was pairing, not statistics. The fastest car now has the most timid
+driver, which turns raw pace into something a player can out-drive rather than
+something they cannot answer. Purple Micro takes the Speedster bundle and starts
+further back, so the quickest driver has to come through the field.
 
-- Compress the top-speed spread so handling and weight decide races.
-- Give the fastest car to the weakest driver — pairing Yellow Rocket with the
-  Rookie personality rather than the Speedster would let its raw pace be
-  something the player can exploit by out-driving it.
+Effective straight-line pace at Normal, against the player's 350:
 
-Until one is chosen, "Easy" changes how close the racing is, not who wins.
+| | Pace | vs player |
+| --- | --- | --- |
+| Purple Micro (Speedster) | 372 | **+6.3%** |
+| Red Racer II (Technician) | 347 | −1% |
+| Yellow Rocket (Rookie) | 330 | −6% |
+| Blue Buggy (Technician) | 310 | −11% |
+| Green Pickup (Bully) | 288 | −18% |
+
+The fastest rival's advantage dropped from **+17.9% to +6.3%** — a gap good
+driving can close.
+
+It also gives escalation from the roster rather than the difficulty slider:
+Purple Micro only appears from four opponents up, so the rookie event stays
+winnable and later events add a genuine rival.
+
+Measured over three runs per setting with an identical player pace: the player
+wins all three on Easy and Normal, and takes 1st, 3rd, 3rd on Hard with Purple
+Micro winning two. Difficulty now changes outcomes, which it previously did not.
+
+**Caveat on that measurement.** The stand-in player is a consistent AI; real
+players vary far more. And margins to the nearest rival could not be measured,
+because when the player wins the race ends before the rest of the field finishes.
 
 ## Open questions
 
