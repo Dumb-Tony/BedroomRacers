@@ -59,7 +59,7 @@ BR.Screens = {
     canvas.addEventListener('click', function (e) {
       const p = self.local(e);
       const i = self.hit(p.x, p.y);
-      if (i >= 0) self.dispatch(self.regions[i]);
+      if (i >= 0) self.dispatch(self.regions[i], p);
     });
   },
 
@@ -80,11 +80,37 @@ BR.Screens = {
 
   say(msg) { this.toast = msg; this.toastTime = 2.6; },
 
-  dispatch(r) {
+  dispatch(r, p) {
     const G = BR.Game, P = BR.ProgressionManager;
     BR.Audio.resume();
 
     switch (r.action) {
+      case 'resume':  G.paused = false; break;
+      case 'restart': G.paused = false; G.reset(); break;
+      case 'quitToEvents':
+        G.paused = false;
+        G.abandonRace();
+        this.set(this.EVENTS);
+        break;
+      case 'setvol': {
+        // Click position IS the value — a one-click slider needs no drag
+        // handling and no second interaction model on the canvas.
+        const frac = BR.M.clamp(((p ? p.x : r.x) - r.x) / r.w, 0, 1);
+        if (r.value === 'sfx') BR.Audio.sfxVolume = frac;
+        else BR.Audio.musicVolume = frac;
+        BR.Audio.setVolumes(BR.Audio.sfxVolume, BR.Audio.musicVolume);
+        const st = BR.SaveManager.get().settings;
+        st.sfxVolume = BR.Audio.sfxVolume;
+        st.musicVolume = BR.Audio.musicVolume;
+        BR.SaveManager.save();
+        break;
+      }
+      case 'autoAccel':
+        BR.Input.autoAccelerate = !BR.Input.autoAccelerate;
+        BR.SaveManager.get().settings.autoAccelerate = BR.Input.autoAccelerate;
+        BR.SaveManager.save();
+        BR.Audio.checkpoint();
+        break;
       case 'goto':    this.set(r.value); break;
       case 'start':   G.startEvent(BR.eventById(r.value)); break;
       case 'slot':
@@ -120,7 +146,13 @@ BR.Screens = {
 
   draw(ctx, w, h, dt) {
     if (this.pieceToastTime > 0) this.pieceToastTime -= dt;
-    if (this.state === this.RACE) return;
+
+    if (this.state === this.RACE) {
+      // Drawn full-screen rather than per viewport: pause is one global state,
+      // and in split screen any player can call it.
+      if (BR.Game.paused) this.drawPause(ctx, w, h);
+      return;
+    }
     this.regions = [];
 
     // Dim the live track behind the UI.
@@ -200,6 +232,93 @@ BR.Screens = {
       ctx.fillStyle = i < got ? '#ffd34d' : 'rgba(255,255,255,0.14)';
       ctx.fill();
     }
+  },
+
+  // ── pause ────────────────────────────────────────────────────────────────
+  /* 11_UI.md: Resume, Restart, Settings, Quit — available at any time,
+     including mid-air and during the countdown.
+
+     Quitting lives HERE rather than on a key. Escape used to abandon a race
+     outright with no confirmation, which is a lot of lost progress for a
+     mistyped key. */
+  drawPause(ctx, w, h) {
+    const cardW = Math.min(380, w - 48);
+    const cardH = 366;
+    const x = (w - cardW) / 2, y = (h - cardH) / 2;
+
+    ctx.fillStyle = 'rgba(10,8,7,0.72)';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = '#191614';
+    this.round(ctx, x, y, cardW, cardH, 12);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.font = '800 22px ui-monospace, Consolas, monospace';
+    ctx.fillStyle = '#ffd34d';
+    ctx.fillText('PAUSED', w / 2, y + 22);
+    ctx.textAlign = 'left';
+
+    const bw = cardW - 44, bx = x + 22;
+    let by = y + 62;
+    this.button(ctx, bx, by, bw, 40, 'RESUME', 'resume', null, { primary: true });
+    by += 50;
+    this.button(ctx, bx, by, bw, 36, 'RESTART RACE', 'restart', null);
+    by += 46;
+    this.button(ctx, bx, by, bw, 36, 'QUIT TO EVENTS', 'quitToEvents', null);
+
+    // ── settings worth reaching mid-race ─────────────────────────────────
+    by += 54;
+    ctx.font = '600 9px ui-monospace, Consolas, monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.42)';
+    ctx.fillText('SOUND', bx, by - 12);
+
+    by = this.volSlider(ctx, bx, by, bw, 'SFX', BR.Audio.sfxVolume, 'sfx');
+    by = this.volSlider(ctx, bx, by, bw, 'MUSIC', BR.Audio.musicVolume, 'music');
+
+    by += 6;
+    const auto = BR.Input.autoAccelerate;
+    this.button(ctx, bx, by, bw, 30,
+                'AUTO-ACCELERATE  ' + (auto ? 'ON' : 'OFF'), 'autoAccel', null);
+
+    ctx.textAlign = 'center';
+    ctx.font = '600 9px ui-monospace, Consolas, monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillText('P or START to resume', w / 2, y + cardH - 16);
+    ctx.textAlign = 'left';
+  },
+
+  /* Click-position slider. One interaction, no drag state. */
+  volSlider(ctx, x, y, w, label, value, key) {
+    const labW = 46, barX = x + labW, barW = w - labW, barH = 14;
+
+    ctx.font = '600 10px ui-monospace, Consolas, monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillText(label, x, y + 3);
+
+    const idx = this.regions.length;
+    this.regions.push({ x: barX, y: y - 4, w: barW, h: barH + 8,
+                        action: 'setvol', value: key });
+    const hot = this.hover === idx;
+
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    this.round(ctx, barX, y, barW, barH, 5);
+    ctx.fill();
+    ctx.fillStyle = hot ? '#ffdf72' : '#ffd34d';
+    if (value > 0.001) {
+      this.round(ctx, barX, y, Math.max(6, barW * value), barH, 5);
+      ctx.fill();
+    }
+    ctx.textAlign = 'right';
+    ctx.font = '600 9px ui-monospace, Consolas, monospace';
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    if (value > 0.12) ctx.fillText(Math.round(value * 100) + '%', barX + barW * value - 6, y + 3);
+    ctx.textAlign = 'left';
+
+    return y + barH + 12;
   },
 
   // ── main menu ────────────────────────────────────────────────────────────

@@ -263,8 +263,11 @@ BR.Audio = {
     if (!this.ready || this.ctx.state !== 'running') return;
 
     const RM = BR.RaceManager;
-    const racing = RM && RM.racers && RM.state === RM.STATE.RACING;
-    const engOn = racing || (RM && RM.state === RM.STATE.FINISHED);
+    // Nothing is moving while paused, so a held engine tone would sit there
+    // droning at whatever speed the car happened to be doing.
+    const paused = !!(BR.Game && BR.Game.paused);
+    const racing = !paused && RM && RM.racers && RM.state === RM.STATE.RACING;
+    const engOn = !paused && (racing || (RM && RM.state === RM.STATE.FINISHED));
 
     const humans = [];
     for (let i = 0; i < game.racers.length; i++) {

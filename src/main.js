@@ -386,10 +386,13 @@ BR.Game = {
     if (BR.Input.tapped('KeyT')) BR.Input.autoAccelerate = !BR.Input.autoAccelerate;
     if (racing) {
       if (BR.Input.tapped('KeyR')) this.reset();
-      if (BR.Input.tapped('KeyP') || BR.Input.padPauseTapped()) {
+      // Escape PAUSES rather than quitting. It used to abandon the race
+      // outright with no confirmation, which is a lot of lost progress for a
+      // mistyped key — quitting now lives in the pause menu.
+      if (BR.Input.tapped('KeyP') || BR.Input.tapped('Escape') ||
+          BR.Input.padPauseTapped()) {
         this.paused = !this.paused;
       }
-      if (BR.Input.tapped('Escape')) { this.abandonRace(); BR.Screens.set(BR.Screens.EVENTS); }
     }
 
     // Hit regions are rebuilt every frame by whatever draws them, so they are
