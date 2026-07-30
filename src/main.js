@@ -78,7 +78,8 @@ BR.Game = {
     BR.Input.autoAccelerate = save.settings.autoAccelerate;
     if (BR.MiniMap) BR.MiniMap.size = save.settings.mapSize;
     this.difficulty = save.settings.difficulty;
-    this.playerVehicleId = BR.ProgressionManager.selectedVehicle();
+    this.playerVehicleId = BR.ProgressionManager.selectedVehicleFor(1);
+    this.player2VehicleId = BR.ProgressionManager.selectedVehicleFor(2);
 
     // Content is data: the track is built from a definition, never hard-coded.
     this.arena = BR.TrackManager.build(BR.TRACKS[this.TRACK_ID]);
@@ -221,6 +222,16 @@ BR.Game = {
     this.buildRace();
   },
 
+  /* Pull both slots back out of the save and rebuild, so a garage change is
+     visible on the menu backdrop immediately rather than only once a race
+     starts. */
+  syncPlayerVehicles() {
+    const P = BR.ProgressionManager;
+    this.playerVehicleId = P.selectedVehicleFor(1);
+    this.player2VehicleId = P.selectedVehicleFor(2);
+    this.buildRace();
+  },
+
   /**
    * One viewport per human. Side by side rather than stacked: the camera sits
    * 17.5 degrees above the floor, so depth ahead is the scarce resource and a
@@ -267,7 +278,8 @@ BR.Game = {
     // challenge it was designed around; the pacing across the roster is carried
     // by lap count and grid size, which a difficulty setting does not touch.
     this.difficulty = BR.SaveManager.get().settings.difficulty || 'normal';
-    this.playerVehicleId = BR.ProgressionManager.selectedVehicle();
+    this.playerVehicleId = BR.ProgressionManager.selectedVehicleFor(1);
+    this.player2VehicleId = BR.ProgressionManager.selectedVehicleFor(2);
     BR.SaveManager.get().state.lastEvent = event.id;
 
     this.buildRace();

@@ -84,17 +84,45 @@ BR.ProgressionManager = {
     return null;
   },
 
-  selectedVehicle() {
-    const id = this.save().state.selectedVehicle;
-    return this.isVehicleOwned(id) ? id : this.save().ownership.vehicles[0];
+  /* Two slots: player one and player two. Slot 2 only matters in split screen,
+     but it persists like anything else so a pair of players do not re-pick
+     every session. */
+  slotKey(slot) { return slot === 2 ? 'player2Vehicle' : 'selectedVehicle'; },
+
+  selectedVehicleFor(slot) {
+    const st = this.save().state;
+    const id = st[this.slotKey(slot)];
+    if (this.isVehicleOwned(id)) return id;
+
+    // Fall back to anything owned that the other slot is not already using —
+    // two players in the same car is confusing on track and in the standings.
+    const other = st[this.slotKey(slot === 2 ? 1 : 2)];
+    const owned = this.ownedVehicles();
+    for (let i = 0; i < owned.length; i++) {
+      if (owned[i] !== other) return owned[i];
+    }
+    return owned[0];
   },
 
-  selectVehicle(id) {
+  selectedVehicle() { return this.selectedVehicleFor(1); },
+
+  /**
+   * Assign a car to a slot. If the other player already has it, the two SWAP
+   * rather than the pick being refused — it always does something sensible,
+   * and duplicates become impossible rather than merely discouraged.
+   */
+  selectVehicleFor(id, slot) {
     if (!this.isVehicleOwned(id)) return false;
-    this.save().state.selectedVehicle = id;
+    const st = this.save().state;
+    const mine = this.slotKey(slot);
+    const theirs = this.slotKey(slot === 2 ? 1 : 2);
+    if (st[theirs] === id) st[theirs] = st[mine];
+    st[mine] = id;
     BR.SaveManager.save();
     return true;
   },
+
+  selectVehicle(id) { return this.selectVehicleFor(id, 1); },
 
   /* ── recording a result ────────────────────────────────────────────────── */
 

@@ -67,6 +67,7 @@ BR.SaveManager = {
 
       state: {
         selectedVehicle: 'red-racer',
+        player2Vehicle: 'blue-buggy',
         lastEvent: null,
       },
     };

@@ -87,9 +87,23 @@ The race **ends only when both humans finish**, never when the first does —
 otherwise player two is cut off mid-lap. Human racers are prefixed `P1`/`P2` in
 the standings, and the AI field will not take a car a human is already driving.
 
+### Choosing cars
+
+The garage picks for **both** players. In split screen a `PICKING P1 / P2`
+toggle chooses which slot a click assigns to, and every card carries a badge
+showing who holds it, so both choices are legible at once.
+
+Both slots persist in the save, so a pair of players do not re-pick every
+session.
+
+**Picking a car the other player holds SWAPS them** rather than refusing. It
+always does something sensible, and it makes duplicates impossible rather than
+merely discouraged — two players in the same car is confusing on track and worse
+in the standings. If a saved pick is no longer owned, the slot falls back to
+something owned that the other player is not using.
+
 ### Open
 
-- **Player 2 cannot choose a car.** The garage picks player one's.
 - **Audio follows player one** — engine, drift and surface are all P1's.
 - Four-way split is untried; the layout takes a count, but the HUD is not
   designed for quarter-screen.

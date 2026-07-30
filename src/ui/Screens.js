@@ -35,6 +35,9 @@ BR.Screens = {
   toastTime: 0,
   pieceToast: null,
   pieceToastTime: 0,
+  garageSlot: 1,          // which player the garage is currently picking for
+
+  SLOT_COLOUR: { 1: '#ffd34d', 2: '#69d0ff' },
 
   /* What a locked vehicle asks of you, in words. */
   lockLabel(u) {
@@ -83,9 +86,17 @@ BR.Screens = {
     switch (r.action) {
       case 'goto':    this.set(r.value); break;
       case 'start':   G.startEvent(BR.eventById(r.value)); break;
+      case 'slot':
+        this.garageSlot = r.value;
+        BR.Audio.checkpoint();
+        break;
       case 'pick':
-        if (P.selectVehicle(r.value)) { BR.Audio.checkpoint(); }
-        else { this.say(this.lockLabel(P.unlockFor(r.value))); }
+        if (P.selectVehicleFor(r.value, this.garageSlot)) {
+          BR.Audio.checkpoint();
+          BR.Game.syncPlayerVehicles();
+        } else {
+          this.say(this.lockLabel(P.unlockFor(r.value)));
+        }
         break;
       case 'retry':   G.startEvent(this.activeEvent); break;
       case 'quit':    G.abandonRace(); this.set(this.EVENTS); break;
@@ -396,10 +407,41 @@ BR.Screens = {
     let y = Math.max(24, h * 0.09);
 
     this.title(ctx, 'GARAGE', x, y);
+
+    const twoUp = BR.Game.players === 2;
+    if (!twoUp) this.garageSlot = 1;
+
+    // In split screen the garage picks for whichever player is active. Both
+    // choices stay visible on the cards, so it is never a mystery who is in
+    // what.
+    if (twoUp) {
+      const tw = 96, tgap = 6;
+      for (let s = 1; s <= 2; s++) {
+        const tx = x + cardW - (tw * 2 + tgap) + (s - 1) * (tw + tgap);
+        const on = this.garageSlot === s;
+        const idx = this.regions.length;
+        this.regions.push({ x: tx, y: y - 2, w: tw, h: 30, action: 'slot', value: s });
+        const hot = this.hover === idx;
+        ctx.fillStyle = on ? 'rgba(255,255,255,0.14)'
+                           : (hot ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.04)');
+        this.round(ctx, tx, y - 2, tw, 30, 6);
+        ctx.fill();
+        ctx.strokeStyle = on ? this.SLOT_COLOUR[s] : 'rgba(255,255,255,0.14)';
+        ctx.lineWidth = on ? 2 : 1;
+        ctx.stroke();
+        ctx.textAlign = 'center';
+        ctx.font = '700 11px ui-monospace, Consolas, monospace';
+        ctx.fillStyle = on ? this.SLOT_COLOUR[s] : 'rgba(255,255,255,0.55)';
+        ctx.fillText('PICKING P' + s, tx + tw / 2, y + 8);
+        ctx.textAlign = 'left';
+      }
+    }
     y += 44;
 
     const colW = Math.floor((cardW - 16) / 3);
-    const selected = P.selectedVehicle();
+    const slot1 = P.selectedVehicleFor(1);
+    const slot2 = twoUp ? P.selectedVehicleFor(2) : null;
+    const selected = this.garageSlot === 2 ? slot2 : slot1;
 
     for (let i = 0; i < ids.length; i++) {
       const id = ids[i];
@@ -409,12 +451,29 @@ BR.Screens = {
       const cx2 = x + col * (colW + 8);
       const cy2 = y + row * 156;
 
-      ctx.fillStyle = id === selected ? 'rgba(255,211,77,0.12)' : 'rgba(25,22,20,0.9)';
+      const heldBy = id === slot1 ? 1 : (id === slot2 ? 2 : 0);
+      const active = id === selected;
+
+      ctx.fillStyle = heldBy
+        ? (heldBy === 1 ? 'rgba(255,211,77,0.12)' : 'rgba(105,208,255,0.12)')
+        : 'rgba(25,22,20,0.9)';
       this.round(ctx, cx2, cy2, colW, 146, 10);
       ctx.fill();
-      ctx.strokeStyle = id === selected ? '#ffd34d' : 'rgba(255,255,255,0.12)';
-      ctx.lineWidth = id === selected ? 2 : 1;
+      ctx.strokeStyle = heldBy ? this.SLOT_COLOUR[heldBy] : 'rgba(255,255,255,0.12)';
+      ctx.lineWidth = active ? 2 : (heldBy ? 1.5 : 1);
       ctx.stroke();
+
+      // Badge, so both players' picks are legible at once.
+      if (heldBy) {
+        ctx.fillStyle = this.SLOT_COLOUR[heldBy];
+        this.round(ctx, cx2 + colW - 30, cy2 + 8, 22, 16, 4);
+        ctx.fill();
+        ctx.textAlign = 'center';
+        ctx.font = '800 10px ui-monospace, Consolas, monospace';
+        ctx.fillStyle = '#221e1b';
+        ctx.fillText('P' + heldBy, cx2 + colW - 19, cy2 + 12);
+        ctx.textAlign = 'left';
+      }
 
       // Car, or a silhouette if it is not yours yet.
       ctx.save();
@@ -467,6 +526,12 @@ BR.Screens = {
     ctx.font = '600 11px ui-monospace, Consolas, monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
     ctx.fillText(BR.VEHICLES[selected].description, x + 132, by + 12);
+    if (twoUp) {
+      ctx.font = '600 10px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.32)';
+      ctx.fillText('Picking a car the other player holds swaps them',
+                   x + 132, by + 28);
+    }
     this.button(ctx, x, by, 120, 36, '← BACK', 'goto', this.MENU);
   },
 
