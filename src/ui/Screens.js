@@ -33,6 +33,15 @@ BR.Screens = {
   activeEvent: null,
   toast: null,
   toastTime: 0,
+  pieceToast: null,
+  pieceToastTime: 0,
+
+  /* What a locked vehicle asks of you, in words. */
+  lockLabel(u) {
+    if (!u) return 'Locked';
+    return u.pieces === 'all' ? 'Find every toy piece'
+                              : ('Needs ' + u.stars + ' stars');
+  },
 
   init(canvas) {
     const self = this;
@@ -76,10 +85,7 @@ BR.Screens = {
       case 'start':   G.startEvent(BR.eventById(r.value)); break;
       case 'pick':
         if (P.selectVehicle(r.value)) { BR.Audio.checkpoint(); }
-        else {
-          const u = P.unlockFor(r.value);
-          this.say(u ? ('Locked — needs ' + u.stars + ' stars') : 'Locked');
-        }
+        else { this.say(this.lockLabel(P.unlockFor(r.value))); }
         break;
       case 'retry':   G.startEvent(this.activeEvent); break;
       case 'quit':    G.abandonRace(); this.set(this.EVENTS); break;
@@ -96,7 +102,8 @@ BR.Screens = {
   /* ── drawing ───────────────────────────────────────────────────────────── */
 
   draw(ctx, w, h, dt) {
-    if (this.state === this.RACE) { this.regions = []; return; }
+    if (this.pieceToastTime > 0) this.pieceToastTime -= dt;
+    if (this.state === this.RACE) return;
     this.regions = [];
 
     // Dim the live track behind the UI.
@@ -194,7 +201,9 @@ BR.Screens = {
 
     ctx.font = '700 13px ui-monospace, Consolas, monospace';
     ctx.fillStyle = '#ffd34d';
-    ctx.fillText(P.stars() + ' / ' + P.maxStars() + ' STARS', cx, h * 0.22 + 82);
+    ctx.fillText(P.stars() + ' / ' + P.maxStars() + ' STARS   ·   ' +
+                 P.piecesFound().length + ' / ' + P.piecesTotal() + ' TOY PIECES',
+                 cx, h * 0.22 + 82);
     ctx.textAlign = 'left';
 
     const bw = 240, bx = cx - bw / 2;
@@ -391,9 +400,19 @@ BR.Screens = {
       } else {
         const u = P.unlockFor(id);
         ctx.textAlign = 'center';
-        ctx.font = '700 11px ui-monospace, Consolas, monospace';
+        ctx.font = '700 10px ui-monospace, Consolas, monospace';
         ctx.fillStyle = '#ffd34d';
-        ctx.fillText((u ? u.stars : '?') + ' ★ TO UNLOCK', cx2 + colW / 2, cy2 + 100);
+        if (u && u.pieces === 'all') {
+          ctx.fillText('FIND EVERY', cx2 + colW / 2, cy2 + 94);
+          ctx.fillText('TOY PIECE', cx2 + colW / 2, cy2 + 108);
+          ctx.font = '600 10px ui-monospace, Consolas, monospace';
+          ctx.fillStyle = 'rgba(255,255,255,0.45)';
+          ctx.fillText(P.piecesFound().length + ' / ' + P.piecesTotal(),
+                       cx2 + colW / 2, cy2 + 124);
+        } else {
+          ctx.font = '700 11px ui-monospace, Consolas, monospace';
+          ctx.fillText((u ? u.stars : '?') + ' ★ TO UNLOCK', cx2 + colW / 2, cy2 + 100);
+        }
         ctx.textAlign = 'left';
         this.regions.push({ x: cx2, y: cy2, w: colW, h: 146,
                             action: 'pick', value: id });

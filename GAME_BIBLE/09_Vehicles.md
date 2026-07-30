@@ -69,6 +69,20 @@ Wins contact, shrugs off hazards, understeers. The stress-free pick.
 Medium speed, high acceleration, high handling, low weight.
 Best out of corners and after crashes. Punished hard in traffic.
 
+### Heirloom — collection reward
+
+A battered wooden car, and the mysterious vehicle under the bed from
+`20_Narrative.md`. **Not bought with stars.** The only route to it is finding
+every toy piece across every track, which makes exploration the one thing stars
+cannot buy.
+
+Medium top speed, best handling on the roster, real weight, strong boost. A
+momentum car: deliberately not the fastest thing in the game, because a reward
+for thorough play should be *characterful* rather than dominant — the roster
+already learned that lesson with Yellow Rocket.
+
+*"Older than everything else in this room. Nobody remembers whose it was."*
+
 ### Coverage check
 
 | | Speed | Accel | Handling | Weight |

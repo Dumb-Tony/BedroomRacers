@@ -174,7 +174,7 @@ BR.Game = {
     // Cached tracks keep hazard state between races — put it back.
     BR.TrackManager.resetHazards(this.arena);
 
-    this.stats = { driftSeconds: 0 };
+    this.stats = { driftSeconds: 0, piecesThisRace: 0 };
     this.recorded = false;
   },
 
@@ -257,7 +257,7 @@ BR.Game = {
     // Cached tracks keep hazard state between races — put it back.
     BR.TrackManager.resetHazards(this.arena);
 
-    this.stats = { driftSeconds: 0 };
+    this.stats = { driftSeconds: 0, piecesThisRace: 0 };
     this.recorded = false;
     BR.Screens.lastResult = null;
   },
@@ -375,6 +375,7 @@ BR.Game = {
 
       BR.TrackManager.resolveHazards(this.arena, v);
       BR.TrackManager.checkBoostPads(this.arena, v);
+      if (act.kind === 'player') this.checkCollectibles(v);
 
       // Objective tracking. Accumulated in the fixed step so it is frame-rate
       // independent — a player on a 144Hz monitor must not earn drift stars
@@ -400,6 +401,26 @@ BR.Game = {
     }
 
     BR.Particles.emitForVehicle(this.vehicle, dt);
+  },
+
+  /* Toy pieces. Generous pickup radius — a piece you clipped and did not get
+     would be maddening, and they are already hard enough to reach. */
+  checkCollectibles(v) {
+    const P = BR.ProgressionManager;
+    const list = this.arena.collectibles;
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      if (P.hasPiece(c.id)) continue;
+      const dx = v.x - c.x, dy = v.y - c.y;
+      if (dx * dx + dy * dy > 62 * 62) continue;
+      const got = P.findPiece(c.id);
+      if (got) {
+        this.stats.piecesThisRace++;
+        BR.Screens.pieceToast = got;
+        BR.Screens.pieceToastTime = 3.2;
+        BR.Audio.boostFull();
+      }
+    }
   },
 
   /* Dynamic assistance, per 04_AI.md. Two rules make it fair:

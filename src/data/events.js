@@ -140,7 +140,20 @@ BR.UNLOCKS = [
   { vehicle: 'purple-micro',  stars: 3 },
   { vehicle: 'green-pickup',  stars: 6 },
   { vehicle: 'yellow-rocket', stars: 9 },
+  // Not bought with stars. The only way to it is to go looking.
+  { vehicle: 'heirloom',      pieces: 'all' },
 ];
+
+/* Every toy piece across every track forms one set. Completing it is the only
+   route to the Heirloom. */
+BR.allPieceIds = function () {
+  const ids = [];
+  for (const id in BR.TRACKS) {
+    const cs = BR.TRACKS[id].collectibles || [];
+    for (let i = 0; i < cs.length; i++) ids.push(cs[i].id);
+  }
+  return ids;
+};
 
 BR.eventById = function (id) {
   for (let i = 0; i < BR.EVENTS.length; i++) {

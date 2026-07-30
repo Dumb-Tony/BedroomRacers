@@ -15,7 +15,7 @@ A track is data, not code. Every track is composed of:
 | **Hazards** | Moving or triggered dangers |
 | **Ramps** | Launch volumes with direction and strength |
 | **Boost pads** | Trigger volumes granting boost |
-| **Collectibles** | Stars, tokens, hidden toy pieces |
+| **Collectibles** | Hidden toy pieces, authored track-relative — see below |
 | **Decoration** | Non-interactive visual dressing |
 
 ## Track data format
@@ -141,6 +141,28 @@ not optional:
 - The **critical path must be the widest, brightest path.**
 - Any blind corner needs either a camera pull-back or a landmark visible before it.
 - Test every track at mobile screen size before considering it finished.
+
+## Authoring collectibles
+
+Toy pieces are placed **relative to the track**, never in world coordinates:
+
+```js
+{ id: 'rug-2', t: 0.18, offset: 0.8 }   // 18% round the lap, 80% out toward
+                                        // the kerb (0 = centre line)
+{ id: 'rug-1', cut: 0.5 }               // halfway along a shortcut chord
+```
+
+Hand-placed `x`/`y` still works, and is how the first attempt put a piece **521
+units from the road** — behind a wall, permanently uncollectable — and two more
+on grass. Authoring against the track makes that impossible, because the
+position is derived from the geometry rather than guessed against it.
+
+`cut` placements are inset toward the arc, because the chord *is* the cut
+polygon's closing edge and a point exactly on it lands on the boundary, where
+the surface test is ambiguous.
+
+**Verify placement, don't eyeball it.** Every piece should be on drivable
+surface and within reach of the road. Both are cheap to assert.
 
 ## Track authoring checklist
 

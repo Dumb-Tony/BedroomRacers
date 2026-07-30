@@ -244,6 +244,30 @@ BR.HUD = {
   },
 
   drawCallouts(ctx, v, w, h) {
+    const S = BR.Screens;
+
+    // Toy piece pickup. Drawn here rather than in Screens because Screens does
+    // not render during a race.
+    if (S && S.pieceToastTime > 0) {
+      const t = S.pieceToast;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, S.pieceToastTime);
+      ctx.textAlign = 'center';
+      ctx.font = '800 22px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = '#ffd34d';
+      ctx.fillText('TOY PIECE FOUND', w / 2, h * 0.30);
+      ctx.font = '700 13px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.fillText(t.found + ' of ' + t.total, w / 2, h * 0.30 + 30);
+      if (t.setComplete) {
+        ctx.font = '800 15px ui-monospace, Consolas, monospace';
+        ctx.fillStyle = '#4fd8a8';
+        ctx.fillText('SET COMPLETE — HEIRLOOM UNLOCKED', w / 2, h * 0.30 + 56);
+      }
+      ctx.restore();
+      ctx.textAlign = 'left';
+    }
+
     if (v.landingFlash <= 0) return;
     const a = Math.min(1, v.landingFlash / 0.6);
     ctx.save();

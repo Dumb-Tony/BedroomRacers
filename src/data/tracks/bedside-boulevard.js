@@ -84,6 +84,16 @@ BR.TRACKS['bedside-boulevard'] = {
       path: [[4300, 2750], [4980, 2750], [4300, 2750]] },
   ],
 
+  /* Under the bed is where the room hides things, so three of the four are on
+     or beyond the hardwood — the fast, low-grip half where stopping to collect
+     costs the most. */
+  collectibles: [
+    { id: 'bb-1', t: 0.32, offset: -0.8 },      // on the boards, wrong side
+    { id: 'bb-2', t: 0.50, offset:  0.8 },      // out wide past the socks
+    { id: 'bb-3', cut: 0.5 },                   // inside the cardboard tunnel
+    { id: 'bb-4', t: 0.92, offset: -0.8 },      // tight on the run to the line
+  ],
+
   props: [
     { type: 'block',  x: 2260, y: 1180, r: 32, h: 38, rot: 0.3 },
     { type: 'crayon', x: 4880, y: 1520, r: 32, h: 26, rot: 1.1 },

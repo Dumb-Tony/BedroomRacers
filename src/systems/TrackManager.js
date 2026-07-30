@@ -68,6 +68,7 @@ BR.TrackManager = {
   },
 
   build(def) {
+    const self = this;
     const line = this.resample(this.spline(def.control, 24), 80);
     const n = line.length;
     const half = def.roadWidth / 2;
@@ -259,6 +260,47 @@ BR.TrackManager = {
       ramps: def.ramps || [],
       // Pad placed at the chord's exit, computed rather than authored — a
       // hard-coded position drifted out of place every time the cut was retuned.
+      /* Toy pieces are authored TRACK-RELATIVE, not in world coordinates:
+           { t, offset }  t is the fraction round the lap, offset is -1..1
+                          across the road, 0 being the centre line
+           { cut }        a fraction along the shortcut chord
+
+         Hand-placed x/y is still honoured, but it is how the first attempt put
+         a piece 521 units from the road — behind a wall, permanently
+         uncollectable — and two more on grass. Authoring against the track
+         makes that class of mistake impossible. */
+      collectibles: (def.collectibles || []).map(function (c) {
+        if (c.x !== undefined) return { id: c.id, x: c.x, y: c.y };
+
+        if (c.cut !== undefined && chord) {
+          const px = chord[0][0] + (chord[1][0] - chord[0][0]) * c.cut;
+          const py = chord[0][1] + (chord[1][1] - chord[0][1]) * c.cut;
+
+          // Pull it off the chord and into the cut. The chord IS the cut
+          // polygon's closing edge, so a point exactly on it sits on the
+          // boundary, where the surface test is ambiguous — it came back as
+          // rug rather than as the shortcut's own surface.
+          if (cutPoly && cutPoly.length) {
+            const a = cutPoly[Math.min(cutPoly.length - 1,
+                        Math.floor(c.cut * (cutPoly.length - 1)))];
+            const inset = c.inset === undefined ? 0.35 : c.inset;
+            return { id: c.id,
+                     x: px + (a[0] - px) * inset,
+                     y: py + (a[1] - py) * inset };
+          }
+          return { id: c.id, x: px, y: py };
+        }
+
+        const i = Math.floor(((c.t % 1) + 1) % 1 * n) % n;
+        const tg = self.tangentAt(line, i);
+        // 0.8 keeps it clear of the kerb even at full offset.
+        const off = (c.offset || 0) * half * 0.8;
+        return {
+          id: c.id,
+          x: line[i][0] - tg[1] * off,
+          y: line[i][1] + tg[0] * off,
+        };
+      }),
       boostPads: (def.boostPads || []).concat(
         (chord && def.shortcut.exitBoost)
           ? [{ x: chord[1][0] - 95, y: chord[1][1] - 95, w: 190, h: 190,

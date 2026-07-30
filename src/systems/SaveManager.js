@@ -58,6 +58,13 @@ BR.SaveManager = {
 
       records: {},           // trackId -> { bestLap, bestTotal }
 
+      /* Toy pieces are found permanently. Storing ids rather than counts means
+         a piece added to a track later does not retroactively count as found. */
+      collection: {
+        piecesFound: [],
+        setsCompleted: [],
+      },
+
       state: {
         selectedVehicle: 'red-racer',
         lastEvent: null,

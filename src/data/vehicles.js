@@ -77,6 +77,26 @@ BR.VEHICLES = {
     colorBody: '#2f9e52', colorTop: '#4fc072', colorTrim: '#d7f2e0',
   },
 
+  /* The mysterious vehicle hidden under the bed (20_Narrative.md), and the
+     reward for completing the toy piece set (01_Game_Loop.md). Not bought with
+     stars — the only way to it is to go looking.
+
+     Deliberately NOT the fastest thing in the game. It is a momentum car: the
+     best handling on the roster, real weight behind it, a strong boost, and a
+     top speed that will not save a scruffy lap. */
+  'heirloom': {
+    id: 'heirloom',
+    name: 'Heirloom',
+    description: 'Older than everything else in this room. Nobody remembers whose it was.',
+    maxSpeed: 330,
+    acceleration: 175,
+    handling: 1.05,
+    weight: 1.20,
+    boostPower: 1.25,
+    length: 27, width: 17, height: 13,
+    colorBody: '#8a5a32', colorTop: '#b07a48', colorTrim: '#e8cfa8',
+  },
+
   'purple-micro': {
     id: 'purple-micro',
     name: 'Purple Micro',

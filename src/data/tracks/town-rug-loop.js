@@ -88,6 +88,19 @@ BR.TRACKS['town-rug-loop'] = {
     },
   ],
 
+  /* ── Toy pieces ──────────────────────────────────────────────────────────
+     Hidden, but findable — off the racing line, never off the track. Each one
+     costs you a little time to fetch, which is the whole point: they are a
+     reason to drive somewhere other than the fastest way round.
+
+     Found permanently, so replaying a track shows only what is still missing. */
+  collectibles: [
+    { id: 'rug-1', cut: 0.5 },                  // halfway along the shortcut
+    { id: 'rug-2', t: 0.18, offset:  0.8 },     // wide, outside the fast sweep
+    { id: 'rug-3', t: 0.40, offset: -0.8 },     // tight inside, off the line
+    { id: 'rug-4', t: 0.80, offset:  0.8 },     // wide on the run home
+  ],
+
   /* ── Props ───────────────────────────────────────────────────────────────
      Oversized stationery is the scale cue: a crayon the size of a fallen tree
      (12_Art_Guide.md). Placed on verges and apexes, plus one squarely in the

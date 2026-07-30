@@ -151,6 +151,7 @@ BR.Renderer = {
     this.drawRoad(ctx, arena);
     this.drawDecoration(ctx, arena);
     this.drawBoostPads(ctx, arena);
+    this.drawCollectibles(ctx, arena, dt);
     this.drawFinishLine(ctx, arena);
     this.drawMarks(ctx);
     this.drawRamps(ctx, arena);
@@ -366,6 +367,51 @@ BR.Renderer = {
       ctx.fill();
       ctx.strokeStyle = '#4fd8a8';
       ctx.lineWidth = 2.5 / BR.CAMERA.zoom;
+      ctx.stroke();
+    }
+  },
+
+  /* Toy pieces. Only UNFOUND ones are drawn, so returning to a track shows
+     exactly what is still missing rather than a field of things you already
+     have. Bobbing and spinning, because a stationary object on a rug is
+     invisible at speed. */
+  bobPhase: 0,
+
+  drawCollectibles(ctx, arena, dt) {
+    const list = arena.collectibles;
+    if (!list || !list.length) return;
+    const Pj = BR.Projection;
+    const P = BR.ProgressionManager;
+    this.bobPhase += dt * 2.2;
+
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      if (P.hasPiece(c.id)) continue;
+
+      const bob = 14 + Math.sin(this.bobPhase + i) * 5;
+      const spin = this.bobPhase * 0.9 + i;
+
+      // Shadow keeps it anchored to the floor.
+      const g = Pj.project(c.x, c.y, 0);
+      ctx.beginPath();
+      ctx.ellipse(g.sx, g.sy, 11, 11 * Pj.groundTilt, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fill();
+
+      // A four-pointed star, drawn on the plane and turned so it catches
+      // the eye from any approach.
+      ctx.beginPath();
+      for (let k = 0; k < 8; k++) {
+        const a = spin + (k * Math.PI) / 4;
+        const r = k % 2 === 0 ? 21 : 8;
+        const p = Pj.project(c.x + Math.cos(a) * r, c.y + Math.sin(a) * r, bob);
+        if (k === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+      }
+      ctx.closePath();
+      ctx.fillStyle = '#ffd34d';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(120,80,10,0.65)';
+      ctx.lineWidth = 2 / BR.CAMERA.zoom;
       ctx.stroke();
     }
   },

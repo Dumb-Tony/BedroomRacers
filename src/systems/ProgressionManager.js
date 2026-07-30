@@ -39,6 +39,42 @@ BR.ProgressionManager = {
     return this.save().ownership.vehicles.indexOf(id) !== -1;
   },
 
+  /* ── toy pieces ────────────────────────────────────────────────────────── */
+
+  piecesFound() { return this.save().collection.piecesFound; },
+
+  hasPiece(id) { return this.piecesFound().indexOf(id) !== -1; },
+
+  piecesTotal() { return BR.allPieceIds().length; },
+
+  setComplete() {
+    const all = BR.allPieceIds();
+    for (let i = 0; i < all.length; i++) if (!this.hasPiece(all[i])) return false;
+    return all.length > 0;
+  },
+
+  /**
+   * Found permanently, the instant it is touched — not banked at the finish.
+   * Quitting a race keeps what you picked up, which matters because the whole
+   * point of a piece is that fetching it costs you the lap.
+   * @returns {object|null} null if already had it
+   */
+  findPiece(id) {
+    if (this.hasPiece(id)) return null;
+    this.piecesFound().push(id);
+
+    const out = { id: id, found: this.piecesFound().length,
+                  total: this.piecesTotal(), unlocked: [] };
+    if (this.setComplete()) {
+      const done = this.save().collection.setsCompleted;
+      if (done.indexOf('toy-set') === -1) done.push('toy-set');
+      out.unlocked = this.applyUnlocks();
+      out.setComplete = true;
+    }
+    BR.SaveManager.save();
+    return out;
+  },
+
   /* What a locked vehicle needs. Locked content stays visible so the player can
      see what is coming (11_UI.md). */
   unlockFor(vehicleId) {
@@ -184,7 +220,9 @@ BR.ProgressionManager = {
     const gained = [];
     for (let i = 0; i < BR.UNLOCKS.length; i++) {
       const u = BR.UNLOCKS[i];
-      if (stars >= u.stars && owned.indexOf(u.vehicle) === -1) {
+      if (owned.indexOf(u.vehicle) !== -1) continue;
+      const earned = u.pieces === 'all' ? this.setComplete() : stars >= u.stars;
+      if (earned) {
         owned.push(u.vehicle);
         gained.push(u.vehicle);
       }
