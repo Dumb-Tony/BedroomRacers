@@ -120,11 +120,12 @@ finish fanfare belong to the race, so they stay centred. See `13_Audio.md`.
 
 ### Open
 
-- **Keyboard rollover caps this in hardware, not software.** Most keyboards
-  report about six simultaneous keys; four drivers holding steer plus drift is
-  eight or more. Four-player wants a mechanical keyboard with n-key rollover,
-  and three is safer on unknown hardware. Gamepad support is the real answer and
-  is not built (`02_Mechanics.md`).
+- **Keyboard rollover caps this in hardware.** Most keyboards report about six
+  simultaneous keys; four drivers holding steer plus drift is eight or more.
+  **Gamepads are the answer and are now built** (`02_Mechanics.md`) — seats claim
+  pads in order, so mixing two pads and two keyboard players works. The menu only
+  warns about rollover for the seats still on keys. Four keyboard players remains
+  a bad idea on unknown hardware.
 - **Four humans leaves room for only one AI.** The roster is five cars plus the
   Heirloom, and the field will not take a car a human is driving.
 - Rendering four viewports roughly quadruples frame cost, unprofiled on low-end

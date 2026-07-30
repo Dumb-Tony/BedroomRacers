@@ -153,14 +153,45 @@ occluding the track. Test in landscape first.
 
 ### Gamepad
 
+> **Built.** Standard mapping, up to four pads.
+
 | Input | Action |
 | --- | --- |
-| Left stick | Steering |
-| Right trigger | Accelerate |
-| Left trigger | Brake / reverse |
-| Face button | Drift |
-| Face button | Boost |
-| Menu button | Pause |
+| Left stick | Steering — **analog** |
+| D-pad ← → | Steering, as a fallback |
+| Right trigger | Accelerate (only when auto-accelerate is off) |
+| Left trigger / B | Brake, reverse |
+| **A** or left bumper | Drift |
+| **X** or right bumper | Boost |
+| Start | Pause |
+
+**Seats claim connected pads in order.** Seat one takes the first pad; anyone
+without one falls back to their keyboard profile. Two pads and four players is a
+perfectly sensible arrangement, and each viewport shows whichever set of controls
+that seat is actually using.
+
+**A pad beats the keyboard** for a seat that has one, so a stray keypress from
+someone else cannot fight it.
+
+### Analog steering is the real gain
+
+The keyboard can only ask for −1, 0 or 1. A stick asks for anything between, and
+`VehicleController` already multiplies `steer` by a turn rate — so proportional
+steering needed no change to the simulation at all.
+
+Measured over the same three seconds: full lock turns 4.64 radians, half lock
+turns **1.34**. Not half, because the grip and speed curves are non-linear — which
+is exactly the fine control a keyboard cannot give.
+
+The deadzone is 0.18 and the remaining range is **rescaled**, so a stick can still
+reach full lock rather than topping out at 82%.
+
+### This one is unverified on hardware
+
+The Gamepad API is stubbed for testing — mapping, deadzone, seat claiming, edge
+detection and a car actually driven by a pad are all confirmed, but **no physical
+controller has been connected**. Real pads vary in mapping and deadzone
+behaviour, so expect to adjust.
 
 ## Input principles
 

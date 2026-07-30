@@ -264,11 +264,26 @@ BR.Screens = {
       ctx.fillStyle = 'rgba(255,255,255,0.34)';
       ctx.fillText('Exhibition — no medals, stars or ghosts. Toy pieces still count.',
                    cx, by + 44);
-      if (BR.Game.players > 2) {
+      // The rollover warning only applies to seats actually on the keyboard.
+      const pads = BR.Input.pads().length;
+      const onKeys = Math.max(0, BR.Game.players - pads);
+      if (onKeys > 2) {
         ctx.fillStyle = 'rgba(255,157,107,0.75)';
-        ctx.fillText('Four drivers can exceed what some keyboards report at once',
+        ctx.fillText(onKeys + ' drivers on one keyboard can exceed what it reports at once',
                      cx, by + 58);
       }
+    }
+
+    // Gamepads claim seats in order, so say which are covered.
+    const pads = BR.Input.pads().length;
+    if (pads > 0) {
+      ctx.textAlign = 'center';
+      ctx.font = '600 10px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = '#7fe06a';
+      ctx.fillText(pads === 1 ? '1 gamepad connected — player 1'
+                              : (pads + ' gamepads connected — players 1 to ' + pads),
+                   cx, by + (BR.Game.players > 1 ? 72 : 44));
+      ctx.textAlign = 'left';
       ctx.textAlign = 'left';
     }
 

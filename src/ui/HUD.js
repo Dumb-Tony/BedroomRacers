@@ -65,7 +65,10 @@ BR.HUD = {
       ctx.fillText(view.label, w / 2, h - 34);
       ctx.font = '600 9px ui-monospace, Consolas, monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.fillText(view.controls || '', w / 2, h - 20);
+      // A seat on a pad should not be told to press Left Shift.
+      const onPad = BR.Input.padFor(view.seat || 0);
+      ctx.fillText(onPad ? 'GAMEPAD  ·  stick  ·  A drift  ·  X boost'
+                         : (view.controls || ''), w / 2, h - 20);
       ctx.textAlign = 'left';
     }
 

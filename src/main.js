@@ -273,6 +273,7 @@ BR.Game = {
       view.y = Math.floor(i / cols) * vh;
       view.w = vw;
       view.h = vh;
+      view.seat = i;
       view.label = n === 1 ? null : ('P' + (i + 1) + ' — ' + view.racer.name);
       view.controls = n === 1 ? null : BR.Input.LABELS[view.racer.profile];
       view.colour = colours[i % colours.length];
@@ -385,7 +386,9 @@ BR.Game = {
     if (BR.Input.tapped('KeyT')) BR.Input.autoAccelerate = !BR.Input.autoAccelerate;
     if (racing) {
       if (BR.Input.tapped('KeyR')) this.reset();
-      if (BR.Input.tapped('KeyP')) this.paused = !this.paused;
+      if (BR.Input.tapped('KeyP') || BR.Input.padPauseTapped()) {
+        this.paused = !this.paused;
+      }
       if (BR.Input.tapped('Escape')) { this.abandonRace(); BR.Screens.set(BR.Screens.EVENTS); }
     }
 
@@ -449,7 +452,7 @@ BR.Game = {
 
       let input;
       if (act.kind === 'player') {
-        input = BR.Input.sample(act.profile);
+        input = BR.Input.sample(act.profile, act.humanIndex);
         // Only the first human is recorded — a ghost is one car's line.
         if (!locked && act.racer === this.racers[0]) BR.Ghost.capture(v, dt);
       } else {

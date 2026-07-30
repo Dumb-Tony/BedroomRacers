@@ -42,6 +42,14 @@ BR.Input = {
     window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
     // Dropping focus mid-drift leaves keys stuck down otherwise
     window.addEventListener('blur', () => { this.keys = {}; });
+
+    // Chrome will not report pads until one is used, so the connect event is
+    // what actually wakes them up.
+    const self = this;
+    const recount = function () { self.padCount = self.pads().length; };
+    window.addEventListener('gamepadconnected', recount);
+    window.addEventListener('gamepaddisconnected', recount);
+    recount();
   },
 
   down(...codes) {
@@ -109,8 +117,114 @@ BR.Input = {
   /* Profile order is also seating order, left to right across the keyboard. */
   PROFILE_ORDER: ['p2', 'p4', 'p3', 'p1'],
 
-  /** Build the frame's input struct for a control profile. */
-  sample(profileId) {
+  /* ── gamepads ────────────────────────────────────────────────────────────
+     The real answer to the keyboard rollover ceiling. Four drivers sharing one
+     keyboard exceeds what most of them can physically report; four pads report
+     independently and cannot ghost.
+
+     They also give ANALOG steering, which the keyboard's -1/0/1 cannot. The
+     vehicle controller already multiplies `steer` by a turn rate, so a stick
+     works with no change to the simulation — it simply asks for less lock.
+
+     Standard mapping. Seats claim CONNECTED pads in order, so seat one takes
+     the first pad and anyone without one falls back to their keys. Two pads and
+     four players is a perfectly sensible arrangement.                        */
+  DEADZONE: 0.18,
+
+  BUTTON: {
+    drift:  [0, 4],    // A, or left bumper
+    boost:  [2, 5],    // X, or right bumper
+    brake:  [1],       // B
+    accel:  [7],       // right trigger
+    slow:   [6],       // left trigger
+    pause:  [9],       // start
+    dpadL:  [14],
+    dpadR:  [15],
+  },
+
+  padCount: 0,
+  _padPrev: {},
+
+  pads() {
+    if (!navigator.getGamepads) return [];
+    const raw = navigator.getGamepads();
+    const out = [];
+    for (let i = 0; i < raw.length; i++) {
+      if (raw[i] && raw[i].connected) out.push(raw[i]);
+    }
+    return out;
+  },
+
+  /** The pad for a seat, or null if that seat is on the keyboard. */
+  padFor(seat) {
+    const list = this.pads();
+    return list[seat] || null;
+  },
+
+  btn(pad, idx) {
+    const b = pad.buttons[idx];
+    if (!b) return 0;
+    return typeof b === 'object' ? (b.pressed ? 1 : b.value) : b;
+  },
+
+  anyBtn(pad, list) {
+    for (let i = 0; i < list.length; i++) {
+      if (this.btn(pad, list[i]) > 0.5) return true;
+    }
+    return false;
+  },
+
+  /* Deadzone, then rescale so the usable range still reaches full lock —
+     otherwise the stick can never ask for more than 82% of the steering. */
+  axis(pad, i) {
+    let v = pad.axes[i] || 0;
+    const dz = this.DEADZONE;
+    if (Math.abs(v) < dz) return 0;
+    v = (v - Math.sign(v) * dz) / (1 - dz);
+    return v < -1 ? -1 : (v > 1 ? 1 : v);
+  },
+
+  samplePad(pad) {
+    let steer = this.axis(pad, 0);
+    // D-pad as a fallback for anyone who prefers it, or a broken stick.
+    if (steer === 0) {
+      if (this.anyBtn(pad, this.BUTTON.dpadL)) steer = -1;
+      else if (this.anyBtn(pad, this.BUTTON.dpadR)) steer = 1;
+    }
+
+    const accel = this.btn(pad, this.BUTTON.accel[0]);
+    const slow  = this.btn(pad, this.BUTTON.slow[0]);
+
+    return {
+      steer: steer,
+      throttle: this.autoAccelerate ? 1 : accel,
+      brake: Math.max(slow, this.anyBtn(pad, this.BUTTON.brake) ? 1 : 0),
+      drift: this.anyBtn(pad, this.BUTTON.drift),
+      boost: this.anyBtn(pad, this.BUTTON.boost),
+    };
+  },
+
+  /** True once per physical press of Start, on any pad. */
+  padPauseTapped() {
+    const list = this.pads();
+    let hit = false;
+    for (let i = 0; i < list.length; i++) {
+      const down = this.anyBtn(list[i], this.BUTTON.pause);
+      const key = 'pause' + i;
+      if (down && !this._padPrev[key]) hit = true;
+      this._padPrev[key] = down;
+    }
+    return hit;
+  },
+
+  /**
+   * Build the frame's input struct for a seat.
+   * A connected pad wins; otherwise the seat's keyboard profile is used.
+   */
+  sample(profileId, seat) {
+    const pad = this.padFor(seat || 0);
+    if (pad) return this.samplePad(pad);
+
     const p = this.PROFILES[profileId] || this.PROFILES.solo;
     const left  = this.down.apply(this, p.left);
     const right = this.down.apply(this, p.right);
