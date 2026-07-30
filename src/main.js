@@ -47,12 +47,14 @@ BR.Game = {
   ],
 
   playerVehicleId: 'red-racer',
-  player2VehicleId: 'blue-buggy',
   difficulty: 'normal',
 
-  /* 1 or 2. Two puts the screen into split-screen with a camera each. */
+  /* 1 to 4. Above one, the screen splits and every human gets a camera, a
+     control profile and an audio channel. */
+  MAX_PLAYERS: 4,
   players: 1,
   views: null,
+  playerVehicleIds: ['red-racer', 'blue-buggy', 'purple-micro', 'green-pickup'],
 
   vehicles: null,    // every vehicle, for the renderer
   racers: null,      // race entries wrapping those vehicles
@@ -78,8 +80,7 @@ BR.Game = {
     BR.Input.autoAccelerate = save.settings.autoAccelerate;
     if (BR.MiniMap) BR.MiniMap.size = save.settings.mapSize;
     this.difficulty = save.settings.difficulty;
-    this.playerVehicleId = BR.ProgressionManager.selectedVehicleFor(1);
-    this.player2VehicleId = BR.ProgressionManager.selectedVehicleFor(2);
+    this.refreshPlayerVehicles();
 
     // Content is data: the track is built from a definition, never hard-coded.
     this.arena = BR.TrackManager.build(BR.TRACKS[this.TRACK_ID]);
@@ -128,43 +129,39 @@ BR.Game = {
     this.vehicles = [];
     this.actors = [];
 
-    // Two humans is an exhibition: no ghost, and no progression (see
-    // bankResult). One save cannot represent two players' progress.
-    const twoUp = this.players === 2 && !timeTrial;
+    // More than one human is an exhibition: no ghost, and no medals, stars or
+    // records (see bankResult). One save cannot attribute them.
+    const humanCount = timeTrial
+      ? 1
+      : Math.max(1, Math.min(this.MAX_PLAYERS, this.players));
+    const multi = humanCount > 1;
 
-    const player = BR.Vehicle.create(this.playerVehicleId,
-                                     grid[0].x, grid[0].y, grid[0].heading);
-    this.vehicle = player;
-    // Easy softens collisions for the PLAYER only — opponents keep normal
-    // physics, so it reads as being tougher rather than as rivals being limp.
+    // Easy softens collisions for HUMANS only — opponents keep normal physics,
+    // so it reads as being tougher rather than as rivals being limp.
     const diff = BR.AIDriver.DIFFICULTY[this.difficulty] ||
                  BR.AIDriver.DIFFICULTY.normal;
-    player.forgiveness = diff.forgiveness;
-    this.vehicles.push(player);
-    const playerRacer = {
-      vehicle: player, isPlayer: true, ai: null,
-      // Prefixed in split screen so the results card cannot be ambiguous about
-      // which line is yours.
-      name: (twoUp ? 'P1 ' : '') + BR.VEHICLES[this.playerVehicleId].name,
-      profile: twoUp ? 'p1' : 'solo',
-    };
-    this.racers.push(playerRacer);
-    this.actors.push({ v: player, kind: 'player', racer: playerRacer,
-                       profile: playerRacer.profile, humanIndex: 0 });
 
-    if (twoUp) {
-      const g2 = grid[1];
-      const p2 = BR.Vehicle.create(this.player2VehicleId, g2.x, g2.y, g2.heading);
-      p2.forgiveness = player.forgiveness;
-      this.vehicles.push(p2);
-      const p2Racer = {
-        vehicle: p2, isPlayer: true, ai: null,
-        name: 'P2 ' + BR.VEHICLES[this.player2VehicleId].name,
-        profile: 'p2',
+    const takenCars = [];
+    for (let i = 0; i < humanCount; i++) {
+      const id = this.playerVehicleIds[i] ||
+                 BR.ProgressionManager.selectedVehicleFor(i + 1);
+      const g = grid[i];
+      const car = BR.Vehicle.create(id, g.x, g.y, g.heading);
+      car.forgiveness = diff.forgiveness;
+      if (i === 0) this.vehicle = car;
+      this.vehicles.push(car);
+      takenCars.push(id);
+
+      const racer = {
+        vehicle: car, isPlayer: true, ai: null,
+        // Prefixed in split screen so the results card cannot be ambiguous
+        // about which line is whose.
+        name: (multi ? ('P' + (i + 1) + ' ') : '') + BR.VEHICLES[id].name,
+        profile: multi ? ('p' + (i + 1)) : 'solo',
       };
-      this.racers.push(p2Racer);
-      this.actors.push({ v: p2, kind: 'player', racer: p2Racer, profile: 'p2',
-                         humanIndex: 1 });
+      this.racers.push(racer);
+      this.actors.push({ v: car, kind: 'player', racer: racer,
+                         profile: racer.profile, humanIndex: i });
     }
 
     if (timeTrial) {
@@ -182,18 +179,15 @@ BR.Game = {
     } else {
       BR.Ghost.recording = null;
       BR.Ghost.playback = null;
-      const humans = twoUp ? 2 : 1;
-      // Do not hand an AI a car a human is already driving — two identical
-      // names in the standings is confusing, and two identical cars on track
-      // worse.
-      const taken = twoUp ? [this.playerVehicleId, this.player2VehicleId] : [];
+      // Do not hand an AI a car a human is already driving — duplicate names in
+      // the standings are confusing, and duplicate cars on track worse.
       const field = this.FIELD.filter(function (f) {
-        return taken.indexOf(f.vehicle) === -1;
+        return takenCars.indexOf(f.vehicle) === -1;
       });
-      const n = Math.min(this.OPPONENTS, grid.length - humans, field.length);
+      const n = Math.min(this.OPPONENTS, grid.length - humanCount, field.length);
       for (let i = 0; i < n; i++) {
         const spec = field[i % field.length];
-        const g = grid[i + humans];
+        const g = grid[i + humanCount];
         const car = BR.Vehicle.create(spec.vehicle, g.x, g.y, g.heading);
         this.vehicles.push(car);
         const racer = {
@@ -216,20 +210,28 @@ BR.Game = {
     this.recorded = false;
   },
 
-  /* Swap the player's car and restart. The grid slot stays the same so the
+  /* Swap player one's car and restart. The grid slot stays the same so the
      comparison between vehicles is fair. */
   setVehicle(id) {
-    this.playerVehicleId = id;
+    BR.ProgressionManager.selectVehicleFor(id, 1);
+    this.refreshPlayerVehicles();
     this.buildRace();
   },
 
-  /* Pull both slots back out of the save and rebuild, so a garage change is
-     visible on the menu backdrop immediately rather than only once a race
-     starts. */
-  syncPlayerVehicles() {
+  /** Pull every slot back out of the save. */
+  refreshPlayerVehicles() {
     const P = BR.ProgressionManager;
-    this.playerVehicleId = P.selectedVehicleFor(1);
-    this.player2VehicleId = P.selectedVehicleFor(2);
+    this.playerVehicleIds = [];
+    for (let s = 1; s <= this.MAX_PLAYERS; s++) {
+      this.playerVehicleIds.push(P.selectedVehicleFor(s));
+    }
+    this.playerVehicleId = this.playerVehicleIds[0];
+  },
+
+  /* Re-read the garage and rebuild, so a change is visible on the menu
+     backdrop immediately rather than only once a race starts. */
+  syncPlayerVehicles() {
+    this.refreshPlayerVehicles();
     this.buildRace();
   },
 
@@ -254,19 +256,33 @@ BR.Game = {
       for (let i = 0; i < n; i++) this.views.push({ cam: { x: 0, y: 0, yaw: 0 } });
     }
 
-    const colours = ['#ffd34d', '#69d0ff'];
+    // 1 -> full screen. 2 -> side by side, because depth ahead is the scarce
+    // resource at a 17.5 degree camera and a short wide view throws it away.
+    // 3 and 4 -> quadrants, since there is no way to give four people tall
+    // views on one screen.
+    const cols = n === 1 ? 1 : 2;
+    const rows = n <= 2 ? 1 : 2;
+    const vw = Math.round(W / cols), vh = Math.round(H / rows);
+
+    const colours = ['#ffd34d', '#69d0ff', '#7fe06a', '#ff9d6b'];
     for (let i = 0; i < n; i++) {
       const view = this.views[i];
       view.racer = humans[i] || this.racers[0];
       view.vehicle = view.racer.vehicle;
-      view.x = n === 1 ? 0 : Math.round((W / n) * i);
-      view.y = 0;
-      view.w = n === 1 ? W : Math.round(W / n);
-      view.h = H;
-      view.label = n === 1 ? null : ('PLAYER ' + (i + 1) + ' — ' + view.racer.name);
+      view.x = (i % cols) * vw;
+      view.y = Math.floor(i / cols) * vh;
+      view.w = vw;
+      view.h = vh;
+      view.label = n === 1 ? null : ('P' + (i + 1) + ' — ' + view.racer.name);
       view.controls = n === 1 ? null : BR.Input.LABELS[view.racer.profile];
       view.colour = colours[i % colours.length];
     }
+
+    // Three players leaves a quadrant spare. A live standings board is more
+    // use there than an empty corner.
+    this.spareQuadrant = (n === 3)
+      ? { x: vw, y: vh, w: vw, h: vh }
+      : null;
   },
 
   startEvent(event) {
@@ -279,8 +295,7 @@ BR.Game = {
     // challenge it was designed around; the pacing across the roster is carried
     // by lap count and grid size, which a difficulty setting does not touch.
     this.difficulty = BR.SaveManager.get().settings.difficulty || 'normal';
-    this.playerVehicleId = BR.ProgressionManager.selectedVehicleFor(1);
-    this.player2VehicleId = BR.ProgressionManager.selectedVehicleFor(2);
+    this.refreshPlayerVehicles();
     BR.SaveManager.get().state.lastEvent = event.id;
 
     this.buildRace();
@@ -303,7 +318,7 @@ BR.Game = {
     // Two-up is an exhibition. One save cannot represent two players'
     // progress, and awarding it to whoever happens to be on the left would be
     // worse than awarding nothing.
-    if (this.players === 2) { BR.Screens.lastResult = null; return; }
+    if (this.players > 1) { BR.Screens.lastResult = null; return; }
 
     const RM = BR.RaceManager;
     const me = RM.player();

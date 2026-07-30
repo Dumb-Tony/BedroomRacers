@@ -83,12 +83,31 @@ BR.Input = {
       up:   ['KeyW'], down:  ['KeyS'],
       drift: ['ShiftLeft'], boost: ['Space'],
     },
+    // Three and four sit between the outer two, so the hands go
+    // left-to-right: WASD, TFGH, IJKL, arrows. No numpad — laptops do not have
+    // one, and a control scheme that excludes half the machines is not a
+    // control scheme.
+    p3: {
+      left: ['KeyJ'], right: ['KeyL'],
+      up:   ['KeyI'], down:  ['KeyK'],
+      drift: ['KeyU'], boost: ['KeyO'],
+    },
+    p4: {
+      left: ['KeyF'], right: ['KeyH'],
+      up:   ['KeyT'], down:  ['KeyG'],
+      drift: ['KeyR'], boost: ['KeyY'],
+    },
   },
 
   LABELS: {
     p1: '← →  ·  R-SHIFT drift  ·  ENTER boost',
     p2: 'A  D  ·  L-SHIFT drift  ·  SPACE boost',
+    p3: 'J  L  ·  U drift  ·  O boost',
+    p4: 'F  H  ·  R drift  ·  Y boost',
   },
+
+  /* Profile order is also seating order, left to right across the keyboard. */
+  PROFILE_ORDER: ['p2', 'p4', 'p3', 'p1'],
 
   /** Build the frame's input struct for a control profile. */
   sample(profileId) {

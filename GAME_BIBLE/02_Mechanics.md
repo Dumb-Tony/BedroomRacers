@@ -100,24 +100,44 @@ Vehicle accelerates automatically.
 | `Shift` | Boost |
 | `Esc` | Pause |
 
-### Split-screen — two players
+### Split-screen — two to four players
 
 Built alongside local multiplayer (`01_Game_Loop.md`). The keyboard is split
-**physically**, so neither player reaches across the other.
+**physically**, seats running left to right across it, so nobody reaches across
+anybody.
 
-| | Steer | Throttle / brake | Drift | Boost |
+| Seat | Steer | Throttle / brake | Drift | Boost |
 | --- | --- | --- | --- | --- |
-| Player 1 | `← →` | `↑ ↓` | `Right Shift` | `Enter` |
 | Player 2 | `A D` | `W S` | `Left Shift` | `Space` |
+| Player 4 | `F H` | `T G` | `R` | `Y` |
+| Player 3 | `J L` | `I K` | `U` | `O` |
+| Player 1 | `← →` | `↑ ↓` | `Right Shift` | `Enter` |
+
+24 distinct keys, verified free of collisions, and each profile reads only its
+own.
 
 **Single-player controls are unchanged.** Muscle memory built on
 arrows-or-WASD with Space and Shift is not worth breaking for a second player,
 so the solo profile keeps every one of those bindings.
 
+**No numpad.** Laptops do not have one, and a control scheme that excludes half
+the machines is not a control scheme.
+
 `Ctrl` is deliberately unused — `Ctrl+W` closes the tab.
 
-Each half of the screen labels its own driver and their controls, and highlights
-that driver in the results standings rather than every human.
+### The rollover ceiling
+
+**Four players will exceed what most keyboards can physically report.** Cheap
+membrane keyboards register roughly six simultaneous keys and ghost above that;
+four drivers holding steer plus drift is already eight or more. Nothing in
+software can fix it.
+
+Practical consequences: four-player is best on a mechanical keyboard with
+n-key rollover, and three is a much safer number on unknown hardware. Gamepad
+support would be the real answer — it is not built.
+
+Each viewport labels its own driver and their controls, and highlights that
+driver in the results standings rather than every human.
 
 ### Mobile
 Large buttons, minimal text. Options to support:

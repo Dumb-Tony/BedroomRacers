@@ -84,23 +84,38 @@ BR.ProgressionManager = {
     return null;
   },
 
-  /* Two slots: player one and player two. Slot 2 only matters in split screen,
-     but it persists like anything else so a pair of players do not re-pick
-     every session. */
-  slotKey(slot) { return slot === 2 ? 'player2Vehicle' : 'selectedVehicle'; },
+  /* Four slots, one per possible player. They persist like anything else, so a
+     group does not re-pick every session. Slot 1 keeps the original key name so
+     existing saves carry over untouched. */
+  MAX_SLOTS: 4,
+
+  slotKey(slot) {
+    return slot > 1 ? ('player' + slot + 'Vehicle') : 'selectedVehicle';
+  },
+
+  /** What every other slot is currently holding. */
+  otherSlotVehicles(slot) {
+    const st = this.save().state;
+    const out = [];
+    for (let s = 1; s <= this.MAX_SLOTS; s++) {
+      if (s !== slot) out.push(st[this.slotKey(s)]);
+    }
+    return out;
+  },
 
   selectedVehicleFor(slot) {
     const st = this.save().state;
     const id = st[this.slotKey(slot)];
     if (this.isVehicleOwned(id)) return id;
 
-    // Fall back to anything owned that the other slot is not already using —
-    // two players in the same car is confusing on track and in the standings.
-    const other = st[this.slotKey(slot === 2 ? 1 : 2)];
+    // Fall back to anything owned that no other slot is using — several players
+    // in the same car is confusing on track and in the standings.
+    const taken = this.otherSlotVehicles(slot);
     const owned = this.ownedVehicles();
     for (let i = 0; i < owned.length; i++) {
-      if (owned[i] !== other) return owned[i];
+      if (taken.indexOf(owned[i]) === -1) return owned[i];
     }
+    // More players than cars. Duplicates beat crashing.
     return owned[0];
   },
 
@@ -115,8 +130,13 @@ BR.ProgressionManager = {
     if (!this.isVehicleOwned(id)) return false;
     const st = this.save().state;
     const mine = this.slotKey(slot);
-    const theirs = this.slotKey(slot === 2 ? 1 : 2);
-    if (st[theirs] === id) st[theirs] = st[mine];
+
+    // Whichever slot already holds this car gives it up and takes ours.
+    for (let s = 1; s <= this.MAX_SLOTS; s++) {
+      if (s === slot) continue;
+      const key = this.slotKey(s);
+      if (st[key] === id) { st[key] = st[mine]; break; }
+    }
     st[mine] = id;
     BR.SaveManager.save();
     return true;

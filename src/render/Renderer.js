@@ -146,10 +146,52 @@ BR.Renderer = {
       ctx.restore();
     }
 
-    if (views.length > 1) {
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillRect(views[1].x - 2, 0, 4, this.h);
+    // Three players leave a quadrant spare; a live standings board is more use
+    // there than an empty corner.
+    if (game.spareQuadrant) this.drawStandings(ctx, game.spareQuadrant, game);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    if (views.length > 1) ctx.fillRect(views[1].x - 2, 0, 4, this.h);
+    if (views.length > 2) ctx.fillRect(0, views[2].y - 2, this.w, 4);
+  },
+
+  /* Live order of the whole field, for the spare quadrant in a three-player
+     split. Compact by design — it is a glance, not a results card. */
+  drawStandings(ctx, rect, game) {
+    const RM = BR.RaceManager;
+    if (!RM || !RM.racers) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(rect.x, rect.y, rect.w, rect.h);
+    ctx.clip();
+
+    ctx.fillStyle = 'rgba(18,16,14,0.9)';
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+
+    const list = RM.standings();
+    const pad = Math.max(14, rect.w * 0.06);
+    let y = rect.y + pad;
+
+    ctx.textBaseline = 'top';
+    ctx.font = '700 11px ui-monospace, Consolas, monospace';
+    ctx.fillStyle = '#ffd34d';
+    ctx.fillText('RUNNING ORDER', rect.x + pad, y);
+    y += 24;
+
+    const rowH = Math.min(26, (rect.h - pad * 2 - 24) / Math.max(1, list.length));
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      ctx.font = (r.isPlayer ? '700 ' : '600 ') + '12px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = r.isPlayer ? '#ece6da' : 'rgba(255,255,255,0.5)';
+      ctx.fillText(r.position + '.  ' + r.name, rect.x + pad, y);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillText('L' + (r.lap + 1), rect.x + rect.w - pad, y);
+      ctx.textAlign = 'left';
+      y += rowH;
     }
+    ctx.restore();
   },
 
   renderView(ctx, view, game, alpha, dt) {

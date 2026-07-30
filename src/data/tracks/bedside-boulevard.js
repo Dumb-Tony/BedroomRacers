@@ -52,7 +52,7 @@ BR.TRACKS['bedside-boulevard'] = {
   kerbHeight: 22,
   gateOverhang: 210,
   checkpointEvery: 6,
-  gridSlots: 6,
+  gridSlots: 8,
 
   finish: [1900, 3090],
 

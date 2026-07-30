@@ -37,7 +37,8 @@ BR.Screens = {
   pieceToastTime: 0,
   garageSlot: 1,          // which player the garage is currently picking for
 
-  SLOT_COLOUR: { 1: '#ffd34d', 2: '#69d0ff' },
+  /* Matches the viewport border colours in main.layoutViews. */
+  SLOT_COLOUR: { 1: '#ffd34d', 2: '#69d0ff', 3: '#7fe06a', 4: '#ff9d6b' },
 
   /* What a locked vehicle asks of you, in words. */
   lockLabel(u) {
@@ -236,9 +237,9 @@ BR.Screens = {
     ctx.fillText('PLAYERS', cx, by - 16);
     ctx.textAlign = 'left';
 
-    const pw = 118, pgap = 6;
-    for (let i = 1; i <= 2; i++) {
-      const px = cx - (pw * 2 + pgap) / 2 + (i - 1) * (pw + pgap);
+    const pw = 58, pgap = 6, pn = BR.Game.MAX_PLAYERS;
+    for (let i = 1; i <= pn; i++) {
+      const px = cx - (pw * pn + pgap * (pn - 1)) / 2 + (i - 1) * (pw + pgap);
       const on = BR.Game.players === i;
       const idx = this.regions.length;
       this.regions.push({ x: px, y: by, w: pw, h: 34, action: 'players', value: i });
@@ -253,16 +254,21 @@ BR.Screens = {
       ctx.textAlign = 'center';
       ctx.font = '700 11px ui-monospace, Consolas, monospace';
       ctx.fillStyle = on ? '#69d0ff' : 'rgba(255,255,255,0.65)';
-      ctx.fillText(i === 1 ? 'ONE' : 'TWO — SPLIT SCREEN', px + pw / 2, by + 13);
+      ctx.fillText(String(i), px + pw / 2, by + 13);
       ctx.textAlign = 'left';
     }
 
-    if (BR.Game.players === 2) {
+    if (BR.Game.players > 1) {
       ctx.textAlign = 'center';
       ctx.font = '600 10px ui-monospace, Consolas, monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.34)';
       ctx.fillText('Exhibition — no medals, stars or ghosts. Toy pieces still count.',
                    cx, by + 44);
+      if (BR.Game.players > 2) {
+        ctx.fillStyle = 'rgba(255,157,107,0.75)';
+        ctx.fillText('Four drivers can exceed what some keyboards report at once',
+                     cx, by + 58);
+      }
       ctx.textAlign = 'left';
     }
 
@@ -408,16 +414,18 @@ BR.Screens = {
 
     this.title(ctx, 'GARAGE', x, y);
 
-    const twoUp = BR.Game.players === 2;
-    if (!twoUp) this.garageSlot = 1;
+    const seats = Math.max(1, Math.min(BR.Game.MAX_PLAYERS, BR.Game.players));
+    const twoUp = seats > 1;
+    if (this.garageSlot > seats) this.garageSlot = 1;
 
     // In split screen the garage picks for whichever player is active. Both
     // choices stay visible on the cards, so it is never a mystery who is in
     // what.
     if (twoUp) {
-      const tw = 96, tgap = 6;
-      for (let s = 1; s <= 2; s++) {
-        const tx = x + cardW - (tw * 2 + tgap) + (s - 1) * (tw + tgap);
+      const tw = 62, tgap = 5;
+      for (let s = 1; s <= seats; s++) {
+        const tx = x + cardW - (tw * seats + tgap * (seats - 1)) +
+                   (s - 1) * (tw + tgap);
         const on = this.garageSlot === s;
         const idx = this.regions.length;
         this.regions.push({ x: tx, y: y - 2, w: tw, h: 30, action: 'slot', value: s });
@@ -432,16 +440,17 @@ BR.Screens = {
         ctx.textAlign = 'center';
         ctx.font = '700 11px ui-monospace, Consolas, monospace';
         ctx.fillStyle = on ? this.SLOT_COLOUR[s] : 'rgba(255,255,255,0.55)';
-        ctx.fillText('PICKING P' + s, tx + tw / 2, y + 8);
+        ctx.fillText('P' + s, tx + tw / 2, y + 8);
         ctx.textAlign = 'left';
       }
     }
     y += 44;
 
     const colW = Math.floor((cardW - 16) / 3);
-    const slot1 = P.selectedVehicleFor(1);
-    const slot2 = twoUp ? P.selectedVehicleFor(2) : null;
-    const selected = this.garageSlot === 2 ? slot2 : slot1;
+    // Which slot holds which car, so every seat's pick is visible at once.
+    const held = {};
+    for (let s = 1; s <= seats; s++) held[P.selectedVehicleFor(s)] = s;
+    const selected = P.selectedVehicleFor(this.garageSlot);
 
     for (let i = 0; i < ids.length; i++) {
       const id = ids[i];
@@ -451,12 +460,10 @@ BR.Screens = {
       const cx2 = x + col * (colW + 8);
       const cy2 = y + row * 156;
 
-      const heldBy = id === slot1 ? 1 : (id === slot2 ? 2 : 0);
+      const heldBy = held[id] || 0;
       const active = id === selected;
 
-      ctx.fillStyle = heldBy
-        ? (heldBy === 1 ? 'rgba(255,211,77,0.12)' : 'rgba(105,208,255,0.12)')
-        : 'rgba(25,22,20,0.9)';
+      ctx.fillStyle = heldBy ? 'rgba(255,255,255,0.10)' : 'rgba(25,22,20,0.9)';
       this.round(ctx, cx2, cy2, colW, 146, 10);
       ctx.fill();
       ctx.strokeStyle = heldBy ? this.SLOT_COLOUR[heldBy] : 'rgba(255,255,255,0.12)';

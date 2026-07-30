@@ -17,11 +17,29 @@ window.BR = window.BR || {};
 
 BR.HUD = {
 
+  /* Everything below is laid out for a full-size view. In a split, the whole
+     HUD is scaled instead of being re-laid-out — one transform keeps every
+     element in proportion and anchored to the same corners, where hand-tuned
+     compact positions would drift out of sync with the originals. */
+  REFERENCE_WIDTH: 900,
+
   draw(ctx, view, game, w, h) {
     // Menus render over a live view of the track, so the race HUD must not
     // come with it.
     if (BR.Screens && BR.Screens.state !== BR.Screens.RACE) return;
 
+    const k = Math.min(1, Math.max(0.55, w / this.REFERENCE_WIDTH));
+    if (k < 1) {
+      ctx.save();
+      ctx.scale(k, k);
+      this.drawScaled(ctx, view, game, w / k, h / k);
+      ctx.restore();
+      return;
+    }
+    this.drawScaled(ctx, view, game, w, h);
+  },
+
+  drawScaled(ctx, view, game, w, h) {
     const v = view.vehicle;
     const RM = BR.RaceManager;
     const racing = RM && RM.racers;

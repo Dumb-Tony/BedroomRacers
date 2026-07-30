@@ -68,6 +68,8 @@ BR.SaveManager = {
       state: {
         selectedVehicle: 'red-racer',
         player2Vehicle: 'blue-buggy',
+        player3Vehicle: 'purple-micro',
+        player4Vehicle: 'green-pickup',
         lastEvent: null,
       },
     };

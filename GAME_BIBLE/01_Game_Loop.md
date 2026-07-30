@@ -61,20 +61,30 @@ config entry — never changes to the race manager itself. See `05_Tracks.md`.
 
 ## Local multiplayer — split-screen
 
-> **Built.** Two players, two viewports, a camera each. The GDD's multiplayer
-> section has no home doc in this bible, so it lives here until one exists.
+> **Built. Two to four players**, a viewport, camera, control profile and audio
+> channel each. The GDD's multiplayer section has no home doc in this bible, so
+> it lives here until one exists.
 
 Of the four local options the GDD lists, the chase camera settles which is
 honest: **shared-keyboard is not possible**. One camera rotates to follow one
 car's travel direction, so two players cannot share a view. Turn-based time
 trials and ghost racing already exist as a side effect of Time Trial mode.
 
-**Side by side, not stacked.** The camera sits 17.5° above the floor, so depth
-ahead is the scarce resource and a short wide viewport throws it away. Two tall
-narrow views keep the sightline.
+**Two is side by side, not stacked.** The camera sits 17.5° above the floor, so
+depth ahead is the scarce resource and a short wide viewport throws it away. Two
+tall narrow views keep the sightline. Three and four go to quadrants, because
+there is no way to give four people tall views on one screen.
+
+**Three leaves a quadrant spare**, filled with a live running order — more use
+than an empty corner.
 
 **Cameras live on the view, not the renderer.** A singleton camera is exactly
-what makes a second viewport painful to add later.
+what makes a second viewport painful to add later, and it is why going from two
+to four was a layout change rather than a rewrite.
+
+The HUD **scales** in a small viewport rather than being re-laid-out. One
+transform keeps every element in proportion and anchored to the same corners;
+hand-tuned compact positions would drift out of sync with the originals.
 
 ### Two-up is an exhibition
 
@@ -110,9 +120,15 @@ finish fanfare belong to the race, so they stay centred. See `13_Audio.md`.
 
 ### Open
 
-- Four-way split is untried; the layout takes a count, but the HUD is not
-  designed for quarter-screen, and audio has two channels.
-- Rendering twice roughly doubles frame cost, unprofiled on low-end hardware.
+- **Keyboard rollover caps this in hardware, not software.** Most keyboards
+  report about six simultaneous keys; four drivers holding steer plus drift is
+  eight or more. Four-player wants a mechanical keyboard with n-key rollover,
+  and three is safer on unknown hardware. Gamepad support is the real answer and
+  is not built (`02_Mechanics.md`).
+- **Four humans leaves room for only one AI.** The roster is five cars plus the
+  Heirloom, and the field will not take a car a human is driving.
+- Rendering four viewports roughly quadruples frame cost, unprofiled on low-end
+  hardware.
 
 ### Delivery Dash examples
 Deliver a toy pizza, bring a block to the construction zone, return a missing

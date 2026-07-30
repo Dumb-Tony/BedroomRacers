@@ -46,7 +46,7 @@ BR.TRACKS['town-rug-loop'] = {
   kerbHeight: 22,
   gateOverhang: 210,    // gates reach past the kerbs so the shortcut crosses them
   checkpointEvery: 6,
-  gridSlots: 6,
+  gridSlots: 8,
 
   /* Finish line on the bottom straight, grid laid out behind it. */
   finish: [1750, 2830],

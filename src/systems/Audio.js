@@ -45,7 +45,7 @@ BR.Audio = {
   master: null, sfxBus: null, musicBus: null,
   noiseBuf: null,
 
-  MAX_CHANNELS: 2,
+  MAX_CHANNELS: 4,
   channels: null,
 
   prev: null,          // global race state, not per player
@@ -271,11 +271,18 @@ BR.Audio = {
       if (game.racers[i].isPlayer) humans.push(game.racers[i]);
     }
 
-    // Pan to match the split. One player sits centre; two are spread to their
-    // own side of the screen, which is also where their car is.
-    const spread = humans.length > 1;
+    // Pan each channel to where its viewport actually is, rather than by index.
+    // That way two side by side spread wide, four in quadrants pan by column,
+    // and one sits centre — all from the same rule.
+    const screenW = BR.Renderer.w || 1280;
     for (let i = 0; i < this.channels.length; i++) {
-      this.setPan(this.channels[i], spread ? (i === 0 ? -0.55 : 0.55) : 0);
+      const view = game.views && game.views[i];
+      let pan = 0;
+      if (view && humans.length > 1) {
+        const centre = (view.x + view.w / 2) / screenW;
+        pan = Math.max(-1, Math.min(1, (centre * 2 - 1) * 1.1));
+      }
+      this.setPan(this.channels[i], pan);
     }
 
     for (let i = 0; i < this.channels.length; i++) {
