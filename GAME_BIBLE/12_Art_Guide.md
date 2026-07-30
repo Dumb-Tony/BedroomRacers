@@ -93,18 +93,43 @@ compressed into 800px, so a rival 1000 units ahead sits only 345px up the screen
 at identical size. The scene can read as a flat stack of same-sized cars rather
 than a road going away from you.
 
-Three ways to give depth back, none yet built:
+Three ways to give depth back. **Option 2 is built**; the others remain open.
 
 1. **Scale with depth.** A little fake perspective — shrink things slightly as
-   camera-space *y* decreases. Cheap, effective, and it does not touch the
-   simulation because scaling is a render concern.
-2. **Fade with depth.** Warm haze toward the far edge. Suits the bedroom lighting
-   and hides pop-in at the draw limit.
-3. **Shadow size.** Already have shadows; making them tighten with distance is a
-   strong depth cue for free.
+   camera-space *y* decreases. Cheap, and it does not touch the simulation
+   because scaling is a render concern. **Still open**, and the one that would
+   change how every asset reads, so decide before final art.
+2. ~~**Fade with depth.**~~ **Built.** Warm haze toward the far edge.
+3. **Shadow size.** Already have shadows; tightening them with distance is a
+   strong depth cue for free. **Still open.**
 
-**Decide before final art.** Adding fake perspective later changes how every
-asset reads.
+### The depth fade
+
+A single screen-space vertical gradient, not a per-object tint. That shortcut is
+exact rather than lazy: for anything on the ground plane `sy = ry * groundTilt`,
+so screen row is a **monotonic function of camera depth**. Fading down the screen
+*is* fading with distance.
+
+- Strength and reach are both tunable (`CAMERA.depthFade`, `depthFadeEnd`), with
+  sliders. 0 disables it.
+- It stops short of the car. Everything below `horizonBias` is behind you and
+  near; hazing it would look like fog rolling in backwards.
+- **Haze colour is per track.** The rug circuit uses warm afternoon light
+  (`198,176,140`); Bedside Boulevard is cooler and greyer (`150,148,158`) because
+  half that lap is spent under the bed. This is the hook the lighting states in
+  `06_World_Town_Rug.md` will hang on.
+- The gradient is cached and only rebuilt when strength, reach or colour change.
+
+Measured: the far row shifts by `+34,+19,+22` toward the haze — warm, red gaining
+most — while the near row moves by `-9,-1,+2`, which is noise.
+
+One artifact, left deliberately: a tall object near the camera is lifted up the
+screen by `heightScale` and picks up a little haze at its top. That reads as
+atmosphere rather than as a bug.
+
+**Above about 0.7 strength the far half of the track starts washing out**, which
+costs the readability `05_Tracks.md` demands. The slider caps at 0.8 so that edge
+is reachable but obvious.
 
 ---
 

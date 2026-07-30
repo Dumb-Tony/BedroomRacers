@@ -337,6 +337,7 @@ BR.TrackManager = {
                  y: h.path[0][1], heading: 0 };
       }),
       decoration: def.decoration || [],
+      haze: def.haze || null,          // depth-fade colour, "r,g,b"
       bounds: { minX: minX - 400, minY: minY - 400,
                 maxX: maxX + 400, maxY: maxY + 400,
                 w: maxX - minX, h: maxY - minY },

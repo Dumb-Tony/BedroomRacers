@@ -197,11 +197,55 @@ BR.Renderer = {
 
     ctx.restore();
 
+    // Screen space, after the camera transform is unwound — see drawDepthFade.
+    this.drawDepthFade(ctx, arena, this.w, this.h);
+
     BR.HUD.draw(ctx, v, this.w, this.h);
     // Screen space, after the camera transform is unwound — the map is a plan
     // view and must not inherit the tilt or the rotation.
     BR.MiniMap.draw(ctx, BR.Game, this.w, this.h);
   },
+
+  /**
+   * Depth fade — warm haze toward the far edge.
+   *
+   * Drawn in SCREEN space as a single vertical gradient rather than by tinting
+   * each object, and that shortcut is exact rather than lazy: for anything on
+   * the ground plane, sy = ry * groundTilt, so screen row is a monotonic
+   * function of camera depth. Fading down the screen IS fading with distance.
+   *
+   * The one artifact is that a tall object near the camera is lifted up the
+   * screen by heightScale and picks up a little haze at its top. That reads as
+   * atmosphere rather than as a bug, so it is left alone.
+   *
+   * The fade stops short of the car — everything below horizonBias is behind
+   * you and near, and hazing it would look like fog rolling in backwards.
+   */
+  drawDepthFade(ctx, arena, w, h) {
+    const C = BR.CAMERA;
+    if (!C.depthFade || C.depthFade <= 0.005) return;
+
+    const haze = (arena && arena.haze) || this.DEFAULT_HAZE;
+    const end = Math.max(1, h * C.horizonBias * C.depthFadeEnd);
+
+    let g = this._fadeCache;
+    if (!g || g.h !== end || g.strength !== C.depthFade || g.haze !== haze) {
+      const grad = ctx.createLinearGradient(0, 0, 0, end);
+      grad.addColorStop(0.00, 'rgba(' + haze + ',' + C.depthFade.toFixed(3) + ')');
+      // Falls off faster than linear, so the near half stays clean.
+      grad.addColorStop(0.45, 'rgba(' + haze + ',' + (C.depthFade * 0.34).toFixed(3) + ')');
+      grad.addColorStop(1.00, 'rgba(' + haze + ',0)');
+      g = this._fadeCache = { grad: grad, h: end, strength: C.depthFade, haze: haze };
+    }
+
+    ctx.fillStyle = g.grad;
+    ctx.fillRect(0, 0, w, end);
+  },
+
+  /* Warm afternoon light, per 12_Art_Guide.md. A track may override it —
+     the under-bed and night-light states want their own. */
+  DEFAULT_HAZE: '198,176,140',
+  _fadeCache: null,
 
   /* Chequered finish line, painted on the ground plane. */
   drawFinishLine(ctx, arena) {

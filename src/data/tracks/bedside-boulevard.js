@@ -44,6 +44,10 @@ BR.TRACKS['bedside-boulevard'] = {
     [1150, 2650],
   ],
 
+  /* Cooler and dimmer than the rug circuit — half this lap is spent under the
+     bed, where the light does not reach. */
+  haze: '150,148,158',
+
   roadWidth: 260,
   kerbHeight: 22,
   gateOverhang: 210,

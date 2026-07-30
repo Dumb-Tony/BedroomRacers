@@ -158,6 +158,11 @@ BR.Debug = {
        'Positional catch-up. Low = laggy and cinematic.'],
       ['Look ahead',       C, 'lookAhead',     0.00, 0.60, 0.01,
        '0 = pure follow. horizonBias already looks ahead.'],
+      ['Depth fade',       C, 'depthFade',     0.00, 0.80, 0.02,
+       'Warm haze at the far edge. The projection has no perspective, so '
+       + 'without this a distant car is the same size as a near one. 0 = off.'],
+      ['Fade reach',       C, 'depthFadeEnd',  0.20, 1.00, 0.02,
+       'How far down the screen the haze reaches. 1.0 brings it to the car.'],
 
       ['GRIP — the drift lever'],
       ['Retention normal', P, 'lateralRetentionNormal', 0.70, 0.99, 0.005,

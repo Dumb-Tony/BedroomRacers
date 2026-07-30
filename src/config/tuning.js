@@ -176,4 +176,17 @@ BR.CAMERA = {
   lookAhead:     0.10,  // extra bias along velocity. Lower than a fixed camera
                         // needs, because horizonBias already looks ahead
   lookAheadMax:   120,  // cap, so top speed doesn't push the car off screen
+
+  /* Depth fade — warm haze toward the far edge.
+     The projection has NO perspective: a car 2000 units away is drawn exactly
+     the same size as one alongside, and at groundTilt 0.30 some 2300 units of
+     depth compress into 800 pixels. Without a depth cue the scene reads as a
+     flat stack of same-sized cars rather than a road going away from you
+     (12_Art_Guide.md, "The flatness problem").
+
+     0 disables it. Above about 0.7 the far half of the track starts washing
+     out, which costs readability — see 05_Tracks.md. */
+  depthFade:     0.42,  // strength of the haze at the far edge
+  depthFadeEnd:  0.78,  // how far down the screen it reaches, as a fraction of
+                        // horizonBias. 1.0 brings it all the way to the car
 };

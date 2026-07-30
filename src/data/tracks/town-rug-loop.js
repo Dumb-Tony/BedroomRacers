@@ -38,6 +38,10 @@ BR.TRACKS['town-rug-loop'] = {
     [ 560, 2000],
   ],
 
+  /* Warm afternoon light through the window — the default, stated explicitly
+     so the two tracks can be compared side by side. */
+  haze: '198,176,140',
+
   roadWidth: 280,       // ~10 car widths — wide, per the rookie brief
   kerbHeight: 22,
   gateOverhang: 210,    // gates reach past the kerbs so the shortcut crosses them
