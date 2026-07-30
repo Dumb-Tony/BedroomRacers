@@ -86,10 +86,15 @@ BR.RaceManager = {
     }
     this.sortPositions();
 
-    // The race is over for the PLAYER when the player crosses the line. It
-    // used to wait for every AI, which meant sitting and coasting for another
-    // minute with no results while the back of the field trailed in.
-    if (this.player().finished && this.state === this.STATE.RACING) {
+    // The race is over when every HUMAN has crossed the line — not when the
+    // field has. Waiting for the AI meant coasting for another minute with no
+    // results; waiting only for player one would cut player two off mid-lap in
+    // split screen.
+    let humansDone = true;
+    for (let i = 0; i < this.racers.length; i++) {
+      if (this.racers[i].isPlayer && !this.racers[i].finished) humansDone = false;
+    }
+    if (humansDone && this.state === this.STATE.RACING) {
       this.finishTimer += dt;
       if (this.finishTimer >= this.FINISH_DELAY) {
         this.state = this.STATE.FINISHED;

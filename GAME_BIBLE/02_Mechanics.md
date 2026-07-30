@@ -100,6 +100,25 @@ Vehicle accelerates automatically.
 | `Shift` | Boost |
 | `Esc` | Pause |
 
+### Split-screen — two players
+
+Built alongside local multiplayer (`01_Game_Loop.md`). The keyboard is split
+**physically**, so neither player reaches across the other.
+
+| | Steer | Throttle / brake | Drift | Boost |
+| --- | --- | --- | --- | --- |
+| Player 1 | `← →` | `↑ ↓` | `Right Shift` | `Enter` |
+| Player 2 | `A D` | `W S` | `Left Shift` | `Space` |
+
+**Single-player controls are unchanged.** Muscle memory built on
+arrows-or-WASD with Space and Shift is not worth breaking for a second player,
+so the solo profile keeps every one of those bindings.
+
+`Ctrl` is deliberately unused — `Ctrl+W` closes the tab.
+
+Each half of the screen labels its own driver and their controls, and highlights
+that driver in the results standings rather than every human.
+
 ### Mobile
 Large buttons, minimal text. Options to support:
 

@@ -90,6 +90,11 @@ BR.Screens = {
       case 'retry':   G.startEvent(this.activeEvent); break;
       case 'quit':    G.abandonRace(); this.set(this.EVENTS); break;
       case 'locked':  this.say('Locked — needs ' + r.value + ' stars'); break;
+      case 'players':
+        BR.Game.players = r.value;
+        BR.Game.buildRace();
+        BR.Audio.checkpoint();
+        break;
       case 'difficulty':
         BR.SaveManager.get().settings.difficulty = r.value;
         BR.SaveManager.save();
@@ -211,6 +216,44 @@ BR.Screens = {
     this.button(ctx, bx, by, bw, 46, 'RACE', 'goto', this.EVENTS, { primary: true });
     by += 58;
     this.button(ctx, bx, by, bw, 42, 'GARAGE', 'goto', this.GARAGE);
+
+    // ── players ───────────────────────────────────────────────────────────
+    by += 58;
+    ctx.textAlign = 'center';
+    ctx.font = '600 10px ui-monospace, Consolas, monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.42)';
+    ctx.fillText('PLAYERS', cx, by - 16);
+    ctx.textAlign = 'left';
+
+    const pw = 118, pgap = 6;
+    for (let i = 1; i <= 2; i++) {
+      const px = cx - (pw * 2 + pgap) / 2 + (i - 1) * (pw + pgap);
+      const on = BR.Game.players === i;
+      const idx = this.regions.length;
+      this.regions.push({ x: px, y: by, w: pw, h: 34, action: 'players', value: i });
+      const hot = this.hover === idx;
+      ctx.fillStyle = on ? 'rgba(105,208,255,0.20)'
+                         : (hot ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.06)');
+      this.round(ctx, px, by, pw, 34, 7);
+      ctx.fill();
+      ctx.strokeStyle = on ? '#69d0ff' : 'rgba(255,255,255,0.16)';
+      ctx.lineWidth = on ? 2 : 1;
+      ctx.stroke();
+      ctx.textAlign = 'center';
+      ctx.font = '700 11px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = on ? '#69d0ff' : 'rgba(255,255,255,0.65)';
+      ctx.fillText(i === 1 ? 'ONE' : 'TWO — SPLIT SCREEN', px + pw / 2, by + 13);
+      ctx.textAlign = 'left';
+    }
+
+    if (BR.Game.players === 2) {
+      ctx.textAlign = 'center';
+      ctx.font = '600 10px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.34)';
+      ctx.fillText('Two up is an exhibition — no stars, medals or ghosts',
+                   cx, by + 44);
+      ctx.textAlign = 'left';
+    }
 
     // ── difficulty ────────────────────────────────────────────────────────
     // 11_UI.md lists this under accessibility, not options, so it lives where

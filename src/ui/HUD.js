@@ -17,24 +17,39 @@ window.BR = window.BR || {};
 
 BR.HUD = {
 
-  draw(ctx, v, w, h) {
+  draw(ctx, view, game, w, h) {
     // Menus render over a live view of the track, so the race HUD must not
     // come with it.
     if (BR.Screens && BR.Screens.state !== BR.Screens.RACE) return;
 
+    const v = view.vehicle;
     const RM = BR.RaceManager;
     const racing = RM && RM.racers;
+    // Each half of a split screen belongs to its own driver.
+    const me = view.racer || (RM && RM.player());
 
     ctx.save();
     ctx.textBaseline = 'top';
 
     this.drawDriving(ctx, v, w, h);
-    if (racing) {
-      this.drawRaceState(ctx, RM, w, h);
+    if (racing && me) {
+      this.drawRaceState(ctx, RM, me, w, h);
       if (RM.state === RM.STATE.COUNTDOWN) this.drawCountdown(ctx, RM, w, h);
-      if (RM.state === RM.STATE.FINISHED)  this.drawResults(ctx, RM, w, h);
+      if (RM.state === RM.STATE.FINISHED)  this.drawResults(ctx, RM, me, w, h);
     }
     this.drawCallouts(ctx, v, w, h);
+
+    // In split screen, say whose half this is and how they steer.
+    if (view.label) {
+      ctx.textAlign = 'center';
+      ctx.font = '700 11px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = view.colour || '#ffd34d';
+      ctx.fillText(view.label, w / 2, h - 34);
+      ctx.font = '600 9px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillText(view.controls || '', w / 2, h - 20);
+      ctx.textAlign = 'left';
+    }
 
     ctx.restore();
   },
@@ -78,9 +93,7 @@ BR.HUD = {
   },
 
   // ── position, lap, timer ─────────────────────────────────────────────────
-  drawRaceState(ctx, RM, w, h) {
-    const me = RM.player();
-
+  drawRaceState(ctx, RM, me, w, h) {
     // Position — the most-read element on screen.
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
     this.roundRect(ctx, 16, 16, 132, 74, 10);
@@ -147,8 +160,7 @@ BR.HUD = {
     ctx.restore();
   },
 
-  drawResults(ctx, RM, w, h) {
-    const me = RM.player();
+  drawResults(ctx, RM, me, w, h) {
     const list = RM.standings();
     const cardW = Math.min(460, w - 48);
     const cardH = 128 + list.length * 30;
@@ -178,7 +190,8 @@ BR.HUD = {
     let ry = y + 92;
     for (let i = 0; i < list.length; i++) {
       const r = list[i];
-      const mine = r.isPlayer;
+      // Highlight the driver whose half of the screen this is, not every human.
+      const mine = r === me;
       ctx.fillStyle = mine ? 'rgba(255,211,77,0.12)' : 'transparent';
       if (mine) { this.roundRect(ctx, x + 14, ry - 5, cardW - 28, 27, 5); ctx.fill(); }
 

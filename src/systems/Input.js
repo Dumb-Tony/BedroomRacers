@@ -58,21 +58,54 @@ BR.Input = {
     this.pressed = {};
   },
 
-  /** Build the frame's input struct. */
-  sample() {
-    const left  = this.down('ArrowLeft',  'KeyA');
-    const right = this.down('ArrowRight', 'KeyD');
-    const up    = this.down('ArrowUp',    'KeyW');
-    const down  = this.down('ArrowDown',  'KeyS');
+  /* ── control profiles ────────────────────────────────────────────────────
+     SOLO IS UNCHANGED. A whole session of muscle memory has been built on
+     arrows-or-WASD with Space and Shift, and split-screen is not a reason to
+     move it.
+
+     The two-player profiles split the keyboard physically — one player on the
+     arrows with the right-hand modifiers, one on WASD with the left-hand ones —
+     so nobody is reaching across anybody. Ctrl is deliberately avoided: Ctrl+W
+     closes the tab. */
+  PROFILES: {
+    solo: {
+      left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'],
+      up:   ['ArrowUp', 'KeyW'],   down:  ['ArrowDown', 'KeyS'],
+      drift: ['Space'], boost: ['ShiftLeft', 'ShiftRight'],
+    },
+    p1: {
+      left: ['ArrowLeft'], right: ['ArrowRight'],
+      up:   ['ArrowUp'],   down:  ['ArrowDown'],
+      drift: ['ShiftRight'], boost: ['Enter'],
+    },
+    p2: {
+      left: ['KeyA'], right: ['KeyD'],
+      up:   ['KeyW'], down:  ['KeyS'],
+      drift: ['ShiftLeft'], boost: ['Space'],
+    },
+  },
+
+  LABELS: {
+    p1: '← →  ·  R-SHIFT drift  ·  ENTER boost',
+    p2: 'A  D  ·  L-SHIFT drift  ·  SPACE boost',
+  },
+
+  /** Build the frame's input struct for a control profile. */
+  sample(profileId) {
+    const p = this.PROFILES[profileId] || this.PROFILES.solo;
+    const left  = this.down.apply(this, p.left);
+    const right = this.down.apply(this, p.right);
+    const up    = this.down.apply(this, p.up);
+    const down  = this.down.apply(this, p.down);
 
     return {
       steer:    (right ? 1 : 0) - (left ? 1 : 0),
       throttle: this.autoAccelerate ? 1 : (up ? 1 : 0),
-      // Space is drift AND brake in the simple scheme (02_Mechanics.md).
-      // Drift only bites while moving; at low speed it reads as braking.
+      // Drift doubles as brake in the simple scheme (02_Mechanics.md). Drift
+      // only bites while moving; at low speed it reads as braking.
       brake:    down ? 1 : 0,
-      drift:    this.down('Space'),
-      boost:    this.down('ShiftLeft', 'ShiftRight'),
+      drift:    this.down.apply(this, p.drift),
+      boost:    this.down.apply(this, p.boost),
     };
   },
 };

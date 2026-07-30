@@ -47,7 +47,12 @@ BR.Game = {
   ],
 
   playerVehicleId: 'red-racer',
+  player2VehicleId: 'blue-buggy',
   difficulty: 'normal',
+
+  /* 1 or 2. Two puts the screen into split-screen with a camera each. */
+  players: 1,
+  views: null,
 
   vehicles: null,    // every vehicle, for the renderer
   racers: null,      // race entries wrapping those vehicles
@@ -122,6 +127,10 @@ BR.Game = {
     this.vehicles = [];
     this.actors = [];
 
+    // Two humans is an exhibition: no ghost, and no progression (see
+    // bankResult). One save cannot represent two players' progress.
+    const twoUp = this.players === 2 && !timeTrial;
+
     const player = BR.Vehicle.create(this.playerVehicleId,
                                      grid[0].x, grid[0].y, grid[0].heading);
     this.vehicle = player;
@@ -133,10 +142,28 @@ BR.Game = {
     this.vehicles.push(player);
     const playerRacer = {
       vehicle: player, isPlayer: true, ai: null,
-      name: BR.VEHICLES[this.playerVehicleId].name,
+      // Prefixed in split screen so the results card cannot be ambiguous about
+      // which line is yours.
+      name: (twoUp ? 'P1 ' : '') + BR.VEHICLES[this.playerVehicleId].name,
+      profile: twoUp ? 'p1' : 'solo',
     };
     this.racers.push(playerRacer);
-    this.actors.push({ v: player, kind: 'player', racer: playerRacer });
+    this.actors.push({ v: player, kind: 'player', racer: playerRacer,
+                       profile: playerRacer.profile });
+
+    if (twoUp) {
+      const g2 = grid[1];
+      const p2 = BR.Vehicle.create(this.player2VehicleId, g2.x, g2.y, g2.heading);
+      p2.forgiveness = player.forgiveness;
+      this.vehicles.push(p2);
+      const p2Racer = {
+        vehicle: p2, isPlayer: true, ai: null,
+        name: 'P2 ' + BR.VEHICLES[this.player2VehicleId].name,
+        profile: 'p2',
+      };
+      this.racers.push(p2Racer);
+      this.actors.push({ v: p2, kind: 'player', racer: p2Racer, profile: 'p2' });
+    }
 
     if (timeTrial) {
       // Your best run, replayed from its recorded inputs through the same
@@ -153,10 +180,18 @@ BR.Game = {
     } else {
       BR.Ghost.recording = null;
       BR.Ghost.playback = null;
-      const n = Math.min(this.OPPONENTS, grid.length - 1);
+      const humans = twoUp ? 2 : 1;
+      // Do not hand an AI a car a human is already driving — two identical
+      // names in the standings is confusing, and two identical cars on track
+      // worse.
+      const taken = twoUp ? [this.playerVehicleId, this.player2VehicleId] : [];
+      const field = this.FIELD.filter(function (f) {
+        return taken.indexOf(f.vehicle) === -1;
+      });
+      const n = Math.min(this.OPPONENTS, grid.length - humans, field.length);
       for (let i = 0; i < n; i++) {
-        const spec = this.FIELD[i % this.FIELD.length];
-        const g = grid[i + 1];
+        const spec = field[i % field.length];
+        const g = grid[i + humans];
         const car = BR.Vehicle.create(spec.vehicle, g.x, g.y, g.heading);
         this.vehicles.push(car);
         const racer = {
@@ -169,6 +204,7 @@ BR.Game = {
     }
 
     BR.RaceManager.init(this.arena, this.racers, this.LAPS);
+    this.layoutViews();
     BR.Renderer.snapCameraTo(grid[0].x, grid[0].y, grid[0].heading);
 
     // Cached tracks keep hazard state between races — put it back.
@@ -183,6 +219,42 @@ BR.Game = {
   setVehicle(id) {
     this.playerVehicleId = id;
     this.buildRace();
+  },
+
+  /**
+   * One viewport per human. Side by side rather than stacked: the camera sits
+   * 17.5 degrees above the floor, so depth ahead is the scarce resource and a
+   * short wide viewport throws it away.
+   *
+   * Rects are recomputed freely — cameras live on the view objects and are
+   * preserved, so a window resize does not jolt the view.
+   */
+  layoutViews() {
+    const humans = [];
+    for (let i = 0; i < this.racers.length; i++) {
+      if (this.racers[i].isPlayer) humans.push(this.racers[i]);
+    }
+    const n = Math.max(1, humans.length);
+    const W = BR.Renderer.w || 1280, H = BR.Renderer.h || 800;
+
+    if (!this.views || this.views.length !== n) {
+      this.views = [];
+      for (let i = 0; i < n; i++) this.views.push({ cam: { x: 0, y: 0, yaw: 0 } });
+    }
+
+    const colours = ['#ffd34d', '#69d0ff'];
+    for (let i = 0; i < n; i++) {
+      const view = this.views[i];
+      view.racer = humans[i] || this.racers[0];
+      view.vehicle = view.racer.vehicle;
+      view.x = n === 1 ? 0 : Math.round((W / n) * i);
+      view.y = 0;
+      view.w = n === 1 ? W : Math.round(W / n);
+      view.h = H;
+      view.label = n === 1 ? null : ('PLAYER ' + (i + 1) + ' — ' + view.racer.name);
+      view.controls = n === 1 ? null : BR.Input.LABELS[view.racer.profile];
+      view.colour = colours[i % colours.length];
+    }
   },
 
   startEvent(event) {
@@ -214,6 +286,11 @@ BR.Game = {
   bankResult() {
     if (this.recorded || !this.event) return;
     this.recorded = true;
+
+    // Two-up is an exhibition. One save cannot represent two players'
+    // progress, and awarding it to whoever happens to be on the left would be
+    // worse than awarding nothing.
+    if (this.players === 2) { BR.Screens.lastResult = null; return; }
 
     const RM = BR.RaceManager;
     const me = RM.player();
@@ -308,7 +385,9 @@ BR.Game = {
     // the simulation, so their randomness cannot break determinism.
     BR.Particles.update(this.paused ? 0 : dt);
 
-    BR.Renderer.render(this.vehicles, this.vehicle, this.arena, alpha, dt);
+    // Viewport rects follow the window; cameras persist on the view objects.
+    this.layoutViews();
+    BR.Renderer.render(this, alpha, dt);
     BR.Screens.draw(BR.Renderer.ctx, BR.Renderer.w, BR.Renderer.h, dt);
 
     // Once per RENDERED frame, never from inside the fixed step — see Audio.js.
@@ -342,8 +421,9 @@ BR.Game = {
 
       let input;
       if (act.kind === 'player') {
-        input = BR.Input.sample();
-        if (!locked) BR.Ghost.capture(v, dt);
+        input = BR.Input.sample(act.profile);
+        // Only the first human is recorded — a ghost is one car's line.
+        if (!locked && act.racer === this.racers[0]) BR.Ghost.capture(v, dt);
       } else {
         input = BR.AIDriver.drive(r.ai, v, this.arena, dt);
       }
@@ -380,7 +460,8 @@ BR.Game = {
       // Objective tracking. Accumulated in the fixed step so it is frame-rate
       // independent — a player on a 144Hz monitor must not earn drift stars
       // faster than one on 60Hz.
-      if (act.kind === 'player' && v.grounded && v.slip > BR.PHYSICS.driftMinAngle &&
+      if (act.kind === 'player' && act.racer === this.racers[0] &&
+          v.grounded && v.slip > BR.PHYSICS.driftMinAngle &&
           Math.hypot(v.vel.x, v.vel.y) > BR.PHYSICS.driftMinSpeed) {
         this.stats.driftSeconds += dt;
       }
@@ -400,7 +481,13 @@ BR.Game = {
       }
     }
 
-    BR.Particles.emitForVehicle(this.vehicle, dt);
+    // Marks and dust for every human — an opponent's slide is not the
+    // player's business, but the other player's certainly is.
+    for (let i = 0; i < this.racers.length; i++) {
+      if (this.racers[i].isPlayer) {
+        BR.Particles.emitForVehicle(this.racers[i].vehicle, dt);
+      }
+    }
   },
 
   /* Toy pieces. Generous pickup radius — a piece you clipped and did not get

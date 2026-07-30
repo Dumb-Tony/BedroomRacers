@@ -59,13 +59,21 @@ BR.Renderer = {
 
   /* Jump the camera straight to the car with no easing. Used on spawn and
      reset, so the view doesn't sweep across the arena. */
+  /* Cameras live on the VIEW, not on the renderer. Split-screen needs one per
+     player, and a singleton camera is exactly the thing that makes adding a
+     second viewport painful later. */
   snapCameraTo(x, y, yaw) {
-    this.camX = x;
-    this.camY = y;
-    this.camYaw = yaw || 0;
+    const views = BR.Game && BR.Game.views;
+    if (!views) return;
+    for (let i = 0; i < views.length; i++) {
+      const v = views[i].vehicle;
+      views[i].cam.x = v ? v.x : x;
+      views[i].cam.y = v ? v.y : y;
+      views[i].cam.yaw = v ? v.heading : (yaw || 0);
+    }
   },
 
-  updateCamera(v, ix, iy, dt) {
+  updateCamera(cam, v, ix, iy, dt) {
     const C = BR.CAMERA;
     const M = BR.M;
 
@@ -85,8 +93,8 @@ BR.Renderer = {
       targetYaw = v.heading;
     }
 
-    const dYaw = M.wrapAngle(targetYaw - this.camYaw);
-    this.camYaw += dYaw * (1 - Math.exp(-C.yawRate * dt));
+    const dYaw = M.wrapAngle(targetYaw - cam.yaw);
+    cam.yaw += dYaw * (1 - Math.exp(-C.yawRate * dt));
 
     // ── position: world space, ground plane only ───────────────────────────
     // Deliberately ignores z — a camera that tracks height bounces on jumps.
@@ -101,8 +109,8 @@ BR.Renderer = {
     }
 
     const k = 1 - Math.exp(-C.followRate * dt);   // frame-rate independent lerp
-    this.camX = M.lerp(this.camX, tx, k);
-    this.camY = M.lerp(this.camY, ty, k);
+    cam.x = M.lerp(cam.x, tx, k);
+    cam.y = M.lerp(cam.y, ty, k);
   },
 
   /**
@@ -112,14 +120,45 @@ BR.Renderer = {
    * @param {number} dt     real frame delta, for camera smoothing only
    */
   /**
-   * @param {Array}  racers  every vehicle in the race
-   * @param {object} player  the vehicle the camera follows
+   * Draws every viewport. One in single player, two side by side in split
+   * screen.
+   *
+   * Side-by-side rather than stacked: this camera is only 17.5 degrees above
+   * the floor, so depth ahead is the scarce resource and a short wide viewport
+   * throws it away. Two tall narrow views keep the sightline.
    */
-  render(racers, player, arena, alpha, dt) {
+  render(game, alpha, dt) {
     const ctx = this.ctx;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.clearRect(0, 0, this.w, this.h);
+    ctx.fillStyle = '#2b2622';
+    ctx.fillRect(0, 0, this.w, this.h);
+
+    const views = game.views;
+    for (let i = 0; i < views.length; i++) {
+      const view = views[i];
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(view.x, view.y, view.w, view.h);
+      ctx.clip();
+      ctx.translate(view.x, view.y);
+      this.renderView(ctx, view, game, alpha, dt);
+      ctx.restore();
+    }
+
+    if (views.length > 1) {
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(views[1].x - 2, 0, 4, this.h);
+    }
+  },
+
+  renderView(ctx, view, game, alpha, dt) {
     const M = BR.M;
     const Pj = BR.Projection;
-    const v = player;
+    const arena = game.arena;
+    const racers = game.vehicles;
+    const v = view.vehicle;
+    const W = view.w, H = view.h;
 
     // Interpolate between simulation states so a 144Hz display is smooth on a
     // 60Hz sim.
@@ -127,24 +166,17 @@ BR.Renderer = {
     const iy = M.lerp(v.prevY, v.y, alpha);
     const ih = v.prevHeading + M.wrapAngle(v.heading - v.prevHeading) * alpha;
 
-    this.updateCamera(v, ix, iy, dt);
+    this.updateCamera(view.cam, v, ix, iy, dt);
 
     // Hand the camera to the projection BEFORE anything projects. Everything
     // downstream comes back already camera-relative, so the only transform
     // left is centring.
-    Pj.setCamera(this.camX, this.camY, this.camYaw);
-
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.clearRect(0, 0, this.w, this.h);
-
-    // Room floor behind the arena.
-    ctx.fillStyle = '#2b2622';
-    ctx.fillRect(0, 0, this.w, this.h);
+    Pj.setCamera(view.cam.x, view.cam.y, view.cam.yaw);
 
     ctx.save();
     // horizonBias pushes the car down the screen so more road is visible
     // ahead of it. This is what makes the camera read as "behind" the car.
-    ctx.translate(this.w / 2, this.h * BR.CAMERA.horizonBias);
+    ctx.translate(W / 2, H * BR.CAMERA.horizonBias);
     ctx.scale(BR.CAMERA.zoom, BR.CAMERA.zoom);
 
     this.drawGround(ctx, arena);
@@ -197,13 +229,11 @@ BR.Renderer = {
 
     ctx.restore();
 
-    // Screen space, after the camera transform is unwound — see drawDepthFade.
-    this.drawDepthFade(ctx, arena, this.w, this.h);
-
-    BR.HUD.draw(ctx, v, this.w, this.h);
-    // Screen space, after the camera transform is unwound — the map is a plan
-    // view and must not inherit the tilt or the rotation.
-    BR.MiniMap.draw(ctx, BR.Game, this.w, this.h);
+    // Viewport space, after the camera transform is unwound.
+    this.drawDepthFade(ctx, arena, W, H);
+    BR.HUD.draw(ctx, view, game, W, H);
+    // The map is a plan view and must not inherit the tilt or the rotation.
+    BR.MiniMap.draw(ctx, game, view, W, H);
   },
 
   /**

@@ -47,7 +47,7 @@ BR.MiniMap = {
     return { x: f.cx + (x - f.wx) * f.scale, y: f.cy + (y - f.wy) * f.scale };
   },
 
-  draw(ctx, game, w, h) {
+  draw(ctx, game, view, w, h) {
     if (this.size <= 0.01) return;
     const track = game.arena;
     if (!track || !track.centreline) return;
@@ -63,10 +63,9 @@ BR.MiniMap = {
     const boxX = w - boxW - pad;
     const boxY = h - boxH - pad;
 
-    const key = boxX + ':' + boxY + ':' + boxW + ':' + boxH;
-    if (this.fitFor !== track.id || this.fitBox !== key) {
-      this.computeFit(track, boxX, boxY, boxW, boxH);
-    }
+    // Recomputed per viewport: in split screen the two halves have different
+    // boxes, so a cache keyed only on the track would fight itself.
+    this.computeFit(track, boxX, boxY, boxW, boxH);
 
     ctx.save();
 
@@ -133,9 +132,10 @@ BR.MiniMap = {
     // ── opponents ─────────────────────────────────────────────────────────
     // In their own body colours, so identifying a car on the map matches
     // identifying it on the track.
+    const self = view.vehicle;
     for (let i = 0; i < game.vehicles.length; i++) {
       const v = game.vehicles[i];
-      if (v === game.vehicle) continue;
+      if (v === self) continue;
       const p = this.toMap(v.x, v.y);
       ctx.beginPath();
       ctx.arc(p.x, p.y, 3.6, 0, Math.PI * 2);
@@ -149,7 +149,7 @@ BR.MiniMap = {
     // ── the player: an arrowhead, so facing is readable ───────────────────
     // Colour alone is not enough — vehicles are named by colour, and
     // 11_UI.md requires shape as well for colourblind players.
-    const me = game.vehicle;
+    const me = self;
     const p = this.toMap(me.x, me.y);
     const a = me.heading;
     const r = 6.5;

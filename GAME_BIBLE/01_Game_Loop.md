@@ -59,6 +59,42 @@ Standard Race and Time Trial are the MVP modes. Everything else is later content
 Modes are data-driven. Adding one should mean a new mode handler plus an event
 config entry — never changes to the race manager itself. See `05_Tracks.md`.
 
+## Local multiplayer — split-screen
+
+> **Built.** Two players, two viewports, a camera each. The GDD's multiplayer
+> section has no home doc in this bible, so it lives here until one exists.
+
+Of the four local options the GDD lists, the chase camera settles which is
+honest: **shared-keyboard is not possible**. One camera rotates to follow one
+car's travel direction, so two players cannot share a view. Turn-based time
+trials and ghost racing already exist as a side effect of Time Trial mode.
+
+**Side by side, not stacked.** The camera sits 17.5° above the floor, so depth
+ahead is the scarce resource and a short wide viewport throws it away. Two tall
+narrow views keep the sightline.
+
+**Cameras live on the view, not the renderer.** A singleton camera is exactly
+what makes a second viewport painful to add later.
+
+### Two-up is an exhibition
+
+**No stars, medals, ghosts or records.** One save cannot represent two players'
+progress, and awarding it to whoever happens to be on the left would be worse
+than awarding nothing. The menu says so rather than letting it be discovered
+afterwards.
+
+The race **ends only when both humans finish**, never when the first does —
+otherwise player two is cut off mid-lap. Human racers are prefixed `P1`/`P2` in
+the standings, and the AI field will not take a car a human is already driving.
+
+### Open
+
+- **Player 2 cannot choose a car.** The garage picks player one's.
+- **Audio follows player one** — engine, drift and surface are all P1's.
+- Four-way split is untried; the layout takes a count, but the HUD is not
+  designed for quarter-screen.
+- Rendering twice roughly doubles frame cost, unprofiled on low-end hardware.
+
 ### Delivery Dash examples
 Deliver a toy pizza, bring a block to the construction zone, return a missing
 puzzle piece, carry a battery to a toy robot.
