@@ -81,7 +81,32 @@ Rules:
 
 ## Alternate routes and shortcuts
 
-Shortcuts are the replayability pillar in practice. Guidelines:
+### A shortcut needs a detour to bypass
+
+The single most useful thing learned building these. **You cannot make a
+shortcut by cutting a corner on a convex track.** A chord across a 90° arc saves
+about 10% of the distance, and turning in and back out costs more than that. The
+first attempt measured **0.03 seconds** — nothing — and no amount of retuning
+the surface, the width or the exit boost changed it, because the geometry was
+the problem.
+
+What works is giving the road a **detour**, and letting the shortcut carry
+straight on across its mouth. Then the entry barely costs any steering, which is
+where the time was going. The rug circuit now swings east around a car park; the
+shortcut is simply not following it. Measured **0.78s saved**, inside the range
+below, at a 36° entry angle.
+
+### Checkpoints and alternate routes
+
+**Never place a checkpoint inside a bypassed section.** It cannot be satisfied
+by both routes: deep in a detour the road's perpendicular points *away* from the
+shortcut, so no amount of extra gate length makes the cut cross it. Two gates
+were being skipped outright, and a lap taken via the shortcut never validated.
+
+Gate the **junctions** instead — both routes pass through those by definition.
+Verified by walking a lap each way: identical checkpoints, identical laps.
+
+### Guidelines
 
 - **Every track has at least one.** Non-negotiable from Phase 3 onward.
 - A shortcut should be **visible but not obvious** — findable by a curious player on

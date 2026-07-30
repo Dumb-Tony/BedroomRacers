@@ -27,8 +27,9 @@ BR.TRACKS['town-rug-loop'] = {
     [ 900, 2750],
     [2400, 2880],
     [3500, 2700],
-    [4100, 2250],
-    [4200, 1650],
+    [4100, 2250],   // shortcut entry — the road leaves here
+    [4500, 1950],   // the detour: road swings out east around the car park
+    [4200, 1650],   // shortcut exit — and rejoins here
     [3900, 1120],
     [3250,  820],
     [2350,  740],
@@ -47,16 +48,28 @@ BR.TRACKS['town-rug-loop'] = {
   finish: [1750, 2830],
 
   /* ── Shortcut ────────────────────────────────────────────────────────────
-     Cuts the inside of the long left-hand sweep. The inner kerb is opened for
-     that arc and replaced by a straight chord wall, so the chord is simply
-     shorter than the road.
+     The road SWINGS OUT east here and comes back. The shortcut is simply
+     carrying straight on across the mouth of that detour.
 
-     The risk is real: the cut is printed rug rather than road, so it is slower
-     and looser (rugGrass in 03_Driving_Physics.md), and there is a crayon
-     sitting in it. The reward is distance plus a boost pad on the exit. Worth
-     it only if you carry speed cleanly — which is exactly the trade 05_Tracks.md
-     asks for. */
-  shortcut: { fromT: 0.46, toT: 0.71, surface: 'rugRoad', exitBoost: 0.45 },
+     This is the second attempt. The first cut a chord across an ordinary
+     convex corner and measured 0.03 seconds — effectively nothing. The
+     geometry was the problem, not the tuning: on a convex loop a chord across
+     a 90-degree arc saves about 10% of the distance, and turning in and back
+     out costs more than that. A shortcut needs a DETOUR to bypass, and the
+     entry has to be close to straight ahead so it barely costs any steering.
+
+     Authored by world position rather than lap fraction, because a fraction is
+     guesswork the moment a control point moves.
+
+     The risk: it is narrow, there is a crayon in it, and the entry arrives at
+     the end of a long fast straight where the car is least willing to change
+     direction. The reward: distance, plus a boost pad on the exit. */
+  shortcut: {
+    fromXY: [4100, 2250],
+    toXY:   [4200, 1650],
+    surface: 'rugRoad',
+    exitBoost: 0.45,
+  },
 
   /* ── Jump ────────────────────────────────────────────────────────────────
      A hardback lying across the top straight. Travel there is -x, so the ramp

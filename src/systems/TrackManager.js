@@ -104,8 +104,17 @@ BR.TrackManager = {
        the trade, and it needs no extra data. */
     let cutFrom = -1, cutTo = -1, chord = null;
     if (def.shortcut) {
-      cutFrom = Math.floor(def.shortcut.fromT * n) % n;
-      cutTo   = Math.floor(def.shortcut.toT   * n) % n;
+      const sc = def.shortcut;
+      // Authored by WORLD POSITION where possible. Lap fractions are guesswork
+      // the moment a control point moves — the same trap as hand-placing
+      // collectibles.
+      if (sc.fromXY) {
+        cutFrom = this.nearestIndex(line, sc.fromXY[0], sc.fromXY[1]);
+        cutTo   = this.nearestIndex(line, sc.toXY[0],   sc.toXY[1]);
+      } else {
+        cutFrom = Math.floor(sc.fromT * n) % n;
+        cutTo   = Math.floor(sc.toT   * n) % n;
+      }
     }
 
     function inCut(i) {
@@ -189,32 +198,47 @@ BR.TrackManager = {
     // the circuit.
     const startIdx = this.nearestIndex(line, def.finish[0], def.finish[1]);
     const overhang = def.gateOverhang || 200;
-    const checkpoints = [];
     const every = def.checkpointEvery || 6;
-    let id = 0;
+
+    /* Which centreline points get a gate.
+       NOTHING inside the bypassed section does. 05_Tracks.md requires every
+       route through the same sequence, and a gate in there cannot satisfy
+       that: deep in a detour the road's perpendicular points AWAY from the
+       chord, so no amount of extra reach makes the shortcut cross it. Two
+       gates were being skipped outright, which meant a lap taken via the
+       shortcut never validated.
+
+       Instead the junctions themselves are gated. Both routes pass through
+       them by definition, because that is what a junction is. */
+    const gateAt = [];
+    const strictlyInsideCut = function (i) {
+      return cutFrom >= 0 && inCut(i) && i !== cutFrom && i !== cutTo;
+    };
     for (let k = 0; k < n; k += every) {
       const i = (startIdx + k) % n;
+      if (strictlyInsideCut(i)) continue;
+      gateAt.push(i);
+    }
+    if (cutFrom >= 0) {
+      if (gateAt.indexOf(cutFrom) === -1) gateAt.push(cutFrom);
+      if (gateAt.indexOf(cutTo) === -1) gateAt.push(cutTo);
+    }
+    // Order along the direction of travel, starting at the finish.
+    gateAt.sort(function (p, q) {
+      return ((p - startIdx + n) % n) - ((q - startIdx + n) % n);
+    });
+
+    const checkpoints = [];
+    for (let g = 0; g < gateAt.length; g++) {
+      const i = gateAt[g];
       const t = this.tangentAt(line, i);
       const nx = -t[1], ny = t[0];
-
-      // Gates are ASYMMETRIC. Across the shortcut they must reach past the
-      // chord, or a car taking the cut skips the gate entirely and the lap
-      // never validates — 05_Tracks.md requires every route through the same
-      // sequence. Symmetric gates cannot do that: the chord bows far deeper
-      // into the infield than any fixed overhang.
-      let innerReach = half + overhang;
-      if (inCut(i) && chord) {
-        const d = this.distToSegment(line[i][0], line[i][1],
-                                     chord[0][0], chord[0][1],
-                                     chord[1][0], chord[1][1]);
-        innerReach = Math.max(innerReach, d + 150);
-      }
-
+      const reach = half + overhang;
       checkpoints.push({
-        id: id++,
-        a: [line[i][0] - nx * innerReach, line[i][1] - ny * innerReach],
-        b: [line[i][0] + nx * (half + overhang), line[i][1] + ny * (half + overhang)],
-        isFinish: k === 0,
+        id: g,
+        a: [line[i][0] - nx * reach, line[i][1] - ny * reach],
+        b: [line[i][0] + nx * reach, line[i][1] + ny * reach],
+        isFinish: i === startIdx,
       });
     }
 
