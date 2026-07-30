@@ -102,11 +102,16 @@ merely discouraged — two players in the same car is confusing on track and wor
 in the standings. If a saved pick is no longer owned, the slot falls back to
 something owned that the other player is not using.
 
+### Sound
+
+Each player has their **own audio channel** — engine, tyres, drift, boost,
+collisions and rivals — panned to their side of the screen. The countdown, GO and
+finish fanfare belong to the race, so they stay centred. See `13_Audio.md`.
+
 ### Open
 
-- **Audio follows player one** — engine, drift and surface are all P1's.
 - Four-way split is untried; the layout takes a count, but the HUD is not
-  designed for quarter-screen.
+  designed for quarter-screen, and audio has two channels.
 - Rendering twice roughly doubles frame cost, unprofiled on low-end hardware.
 
 ### Delivery Dash examples

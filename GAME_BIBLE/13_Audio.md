@@ -121,7 +121,7 @@ recorded texture, which is mood.
 | Collision | Noise burst through a sweeping bandpass. Severity picks pitch and length, so a graze ticks and a square hit clunks |
 | Landing | Bright tick plus chime when clean, dull thud when not |
 | Checkpoint / lap / countdown | Short tones, with a second note on the final lap |
-| Opponents | **One shared proximity layer**, never a voice each |
+| Opponents | **One proximity layer per listener**, never a voice each |
 | Music | Sparse procedural toy percussion over a pulse, scheduled against the audio clock. Lifts slightly on the final lap |
 
 ### Two rules the implementation obeys
@@ -134,6 +134,25 @@ determinism that Time Trial ghosts depend on (`15_Save_System.md`).
 **The player is always louder than the field.** Six cars each with a full engine,
 drift and collision voice would overwhelm the mix and the CPU, so opponents
 collapse into a single layer whose level tracks the nearest car.
+
+### Every human gets a channel
+
+In split screen both players are "the player". Each has their own engine, tyres,
+drift, boost, collisions and rival-proximity layer, and their own edge-detection
+state — so a collision on the left does not sound on the right.
+
+**Channels are panned to match the split**: player one to the left, player two to
+the right, which is also where their car is. A single player sits centre. Both
+channels are built at startup and silenced when unused, because allocating
+mid-race and reconnecting a running graph both click.
+
+Sounds that belong to the RACE rather than to a driver — the countdown, GO and
+the finish fanfare — stay centred and fire once however many people are playing.
+
+One trap this uncovered, and it affected single player too: the countdown
+tracker was left at its finished value between races, so **the lights went out in
+silence from the second race of a session onwards**. It now re-arms on entering
+the countdown. Verified across three consecutive races.
 
 Measured over a full race: 121 oscillators created in ~93 seconds, about 1.3 per
 second. One-shots are not leaking voices.

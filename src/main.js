@@ -150,7 +150,7 @@ BR.Game = {
     };
     this.racers.push(playerRacer);
     this.actors.push({ v: player, kind: 'player', racer: playerRacer,
-                       profile: playerRacer.profile });
+                       profile: playerRacer.profile, humanIndex: 0 });
 
     if (twoUp) {
       const g2 = grid[1];
@@ -163,7 +163,8 @@ BR.Game = {
         profile: 'p2',
       };
       this.racers.push(p2Racer);
-      this.actors.push({ v: p2, kind: 'player', racer: p2Racer, profile: 'p2' });
+      this.actors.push({ v: p2, kind: 'player', racer: p2Racer, profile: 'p2',
+                         humanIndex: 1 });
     }
 
     if (timeTrial) {
@@ -467,7 +468,7 @@ BR.Game = {
 
       BR.TrackManager.resolveHazards(this.arena, v);
       BR.TrackManager.checkBoostPads(this.arena, v);
-      if (act.kind === 'player') this.checkCollectibles(v);
+      if (act.kind === 'player') this.checkCollectibles(v, act.humanIndex || 0);
 
       // Objective tracking. Accumulated in the fixed step so it is frame-rate
       // independent — a player on a 144Hz monitor must not earn drift stars
@@ -504,7 +505,7 @@ BR.Game = {
 
   /* Toy pieces. Generous pickup radius — a piece you clipped and did not get
      would be maddening, and they are already hard enough to reach. */
-  checkCollectibles(v) {
+  checkCollectibles(v, humanIndex) {
     const P = BR.ProgressionManager;
     const list = this.arena.collectibles;
     for (let i = 0; i < list.length; i++) {
@@ -517,7 +518,8 @@ BR.Game = {
         this.stats.piecesThisRace++;
         BR.Screens.pieceToast = got;
         BR.Screens.pieceToastTime = 3.2;
-        BR.Audio.boostFull();
+        // Pans to whoever actually picked it up.
+        BR.Audio.boostFull(BR.Audio.channelOut(humanIndex));
       }
     }
   },

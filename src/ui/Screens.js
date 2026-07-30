@@ -261,7 +261,7 @@ BR.Screens = {
       ctx.textAlign = 'center';
       ctx.font = '600 10px ui-monospace, Consolas, monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.34)';
-      ctx.fillText('Two up is an exhibition — no stars, medals or ghosts',
+      ctx.fillText('Exhibition — no medals, stars or ghosts. Toy pieces still count.',
                    cx, by + 44);
       ctx.textAlign = 'left';
     }
