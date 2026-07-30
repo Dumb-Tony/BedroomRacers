@@ -274,6 +274,7 @@ BR.Renderer = {
     // Viewport space, after the camera transform is unwound.
     this.drawDepthFade(ctx, arena, W, H);
     BR.HUD.draw(ctx, view, game, W, H);
+    BR.CornerHint.draw(ctx, game, view, W, H);
     // The map is a plan view and must not inherit the tilt or the rotation.
     BR.MiniMap.draw(ctx, game, view, W, H);
   },

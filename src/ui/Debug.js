@@ -130,8 +130,10 @@ BR.Debug = {
     this.sliders = [
       ['HUD'],
       ['Map size',     BR.MiniMap, 'size', 0.0, 1.4, 0.05,
-       '0 hides it. 11_UI.md asks whether a mini-map earns its screen space or '
-       + 'a next-corner indicator would serve better — switch it off and see.'],
+       'Where you are in the LAP. 0 hides it. Compare against the corner hint '
+       + '— 11_UI.md asks which earns its screen space.'],
+      ['Corner hint',  BR.CornerHint, 'size', 0.0, 1.6, 0.05,
+       'What the road does NEXT. 0 hides it. Bottom centre, in the eye line.'],
 
       ['AUDIO'],
       ['SFX volume',   BR.Audio, 'sfxVolume',   0.0, 1.0, 0.05,

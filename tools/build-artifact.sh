@@ -43,6 +43,7 @@ FILES=(
   "src/render/Renderer.js"
   "src/ui/HUD.js"
   "src/ui/MiniMap.js"
+  "src/ui/CornerHint.js"
   "src/ui/Screens.js"
   "src/ui/Debug.js"
   "src/main.js"
