@@ -93,13 +93,16 @@ compressed into 800px, so a rival 1000 units ahead sits only 345px up the screen
 at identical size. The scene can read as a flat stack of same-sized cars rather
 than a road going away from you.
 
-Three ways to give depth back. **Two are built.**
+Three ways to give depth back. **All three are built**, and all three are
+independently tunable so their contributions can be judged separately.
 
 1. ~~**Scale with depth.**~~ **Built.** A little fake perspective — see below.
 2. ~~**Fade with depth.**~~ **Built.** Warm haze toward the far edge.
-3. **Shadow size.** Tightening shadows with distance is a strong depth cue for
-   free. **Still open**, though depth scaling now shrinks a vehicle's shadow with
-   the rest of it, so this would only add contrast falloff.
+3. ~~**Shadow falloff.**~~ **Built.** Distant shadows lose contrast.
+
+They are deliberately separable. Each has a slider that reaches zero, so if the
+combination reads as too much, the answer is which one to pull back rather than
+a rebuild.
 
 ### Depth scaling
 
@@ -135,6 +138,27 @@ Two details that matter:
   continuously along the wall. Verified: **zero pixels of gap** at a shared join.
 
 Nothing behind the camera is ever enlarged — distance only shrinks.
+
+### Shadow falloff
+
+Depth scaling already shrinks a shadow along with its object; this is the
+**contrast** half, and it is what atmosphere actually does to a shadow — the haze
+between you and it lifts its black toward the ambient.
+
+Shares `depthRange` with depth scaling, so the two cues stay in step. At the
+default 0.5 a shadow keeps 87% of its opacity at 600 units, 75% at 1200, and 50%
+at 2400 and beyond.
+
+Applies to every shadow the game draws: vehicles, props, hazards and toy pieces.
+The vehicle shadow already faded with **height** — a car far from its own shadow
+casts a fainter one — and the two multiply, which is correct.
+
+Measured by capturing the black fills the renderer emits over a live race: **13
+distinct shadow alphas with falloff on, against 4 with it off**. The faintest
+drops to 0.18, nothing gets darker, and a car's shadow at the far edge sits at
+0.21 against 0.42 alongside — halved, but still clearly present. **Shadows must
+stay visible at distance**; they are the only cue for height (`03_Driving_Physics.md`),
+so this cannot be pushed until they vanish.
 
 ### The depth fade
 

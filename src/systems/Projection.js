@@ -113,6 +113,21 @@ BR.Projection = {
     return 1 - t * this.depthScale;
   },
 
+  /* Shadow contrast falls with distance — the third depth cue in
+     12_Art_Guide.md. Depth scaling already shrinks a shadow with its object;
+     this is the contrast half, and it is what atmosphere actually does to a
+     shadow: the haze between you and it lifts its black toward the ambient.
+
+     Shares depthRange with depthScale, so the two cues stay in step. */
+  shadowFalloff: 0.5,   // opacity lost at the far edge. 0 = off
+
+  shadowAlphaAt(ry) {
+    if (this.shadowFalloff <= 0) return 1;
+    const ahead = ry < 0 ? -ry : 0;
+    const t = ahead > this.depthRange ? 1 : ahead / this.depthRange;
+    return 1 - t * this.shadowFalloff;
+  },
+
   /** Shrink a projected point toward an anchor. */
   shrink(p, anchor, s) {
     return { sx: anchor.sx + (p.sx - anchor.sx) * s,

@@ -150,7 +150,9 @@ BR.Debug = {
        'Fake perspective: how much smaller distant OBJECTS draw. The ground '
        + 'plane does not narrow. 0 = off.'],
       ['Scaling range',    Pj, 'depthRange',  600, 4000, 100,
-       'World units over which the shrink is spread.'],
+       'World units over which the shrink is spread. Shared with shadow falloff.'],
+      ['Shadow falloff',   Pj, 'shadowFalloff', 0.00, 0.90, 0.05,
+       'How much opacity a shadow loses at the far edge. 0 = off.'],
 
       ['CAMERA — chase'],
       ['Zoom',             C, 'zoom',          0.80, 2.60, 0.05,

@@ -440,7 +440,8 @@ BR.Renderer = {
       const k2 = Pj.scaleAt(g.depth);
       ctx.beginPath();
       ctx.ellipse(g.sx, g.sy, 11 * k2, 11 * k2 * Pj.groundTilt, 0, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillStyle = 'rgba(0,0,0,' +
+        (0.3 * Pj.shadowAlphaAt(g.depth)).toFixed(3) + ')';
       ctx.fill();
 
       // A four-pointed star, drawn on the plane and turned so it catches
@@ -483,7 +484,8 @@ BR.Renderer = {
       else ctx.lineTo(base[s].sx, base[s].sy);
     }
     ctx.closePath();
-    ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    ctx.fillStyle = 'rgba(0,0,0,' +
+      (0.32 * Pj.shadowAlphaAt(anchor.depth)).toFixed(3) + ')';
     ctx.fill();
 
     const body = p.type === 'crayon' ? '#c8452f' : '#2f6fd8';
@@ -531,7 +533,8 @@ BR.Renderer = {
       if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
     }
     ctx.closePath();
-    ctx.fillStyle = 'rgba(0,0,0,0.34)';
+    ctx.fillStyle = 'rgba(0,0,0,' +
+      (0.34 * Pj.shadowAlphaAt(anchor.depth)).toFixed(3) + ')';
     ctx.fill();
 
     const base = world.map(function (p) { return PT(p[0], p[1], 0); });
@@ -716,7 +719,10 @@ BR.Renderer = {
       if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
     }
     ctx.closePath();
-    ctx.fillStyle = 'rgba(0,0,0,' + (0.42 * (1 - lift * 0.55)).toFixed(3) + ')';
+    // Height fades it (the car is further from its own shadow), and so does
+    // distance.
+    ctx.fillStyle = 'rgba(0,0,0,' +
+      (0.42 * (1 - lift * 0.55) * Pj.shadowAlphaAt(anchor.depth)).toFixed(3) + ')';
     ctx.fill();
 
     // ── boost ring, on the ground around the car (vehicle-attached meter).
