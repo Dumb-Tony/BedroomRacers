@@ -37,7 +37,9 @@ BR.VehicleController = {
   step(v, input, dt) {
     const P = BR.PHYSICS;
     const M = BR.M;
-    const S = BR.SURFACES[v.surface] || BR.SURFACES.rugRoad;
+    // surfaceMod carries blended numbers where a surface is a continuum rather
+    // than a name — packed sand, for instance. Falls back to the named entry.
+    const S = v.surfaceMod || BR.SURFACES[v.surface] || BR.SURFACES.rugRoad;
     const spec = v.spec;
 
     // Snapshot for render interpolation. The renderer draws between the last

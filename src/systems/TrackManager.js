@@ -338,6 +338,15 @@ BR.TrackManager = {
       }),
       decoration: def.decoration || [],
       haze: def.haze || null,          // depth-fade colour, "r,g,b"
+
+      /* Surfaces and colours are per world now rather than baked into the
+         renderer — a sandbox is not a bedroom rug with different numbers. */
+      baseSurface: def.baseSurface || 'rugRoad',
+      offSurface:  def.offSurface  || 'rugGrass',
+      groundColour: def.groundColour || '#5c8a4a',
+      roadColour:   def.roadColour   || '#403c39',
+      weaveColour:  def.weaveColour  || 'rgba(0,0,0,0.055)',
+      sandy: !!def.sandy,
       bounds: { minX: minX - 400, minY: minY - 400,
                 maxX: maxX + 400, maxY: maxY + 400,
                 w: maxX - minX, h: maxY - minY },
@@ -406,7 +415,33 @@ BR.TrackManager = {
       const d = dx * dx + dy * dy;
       if (d < best) best = d;
     }
-    return Math.sqrt(best) <= track.halfWidth ? 'rugRoad' : 'rugGrass';
+    return Math.sqrt(best) <= track.halfWidth
+      ? (track.baseSurface || 'rugRoad')
+      : (track.offSurface || 'rugGrass');
+  },
+
+  /**
+   * The handling modifiers under a point.
+   *
+   * Usually just the named surface's entry, but sand BLENDS: loose sand and
+   * packed sand are the two ends of a continuum, and where a car sits between
+   * them depends on how worn that patch of ground is. Returning numbers rather
+   * than a name is what lets the ground be continuous instead of stepping
+   * between two states.
+   */
+  surfaceModsAt(track, x, y, name) {
+    const S = BR.SURFACES;
+    const base = S[name] || S.rugRoad;
+    if (name !== 'sand' || !BR.SandGrid.active) return base;
+
+    const t = BR.SandGrid.at(x, y);
+    if (t <= 0) return base;
+    const packed = S.packedSand;
+    return {
+      grip:     base.grip     + (packed.grip     - base.grip)     * t,
+      maxSpeed: base.maxSpeed + (packed.maxSpeed - base.maxSpeed) * t,
+      accel:    base.accel    + (packed.accel    - base.accel)    * t,
+    };
   },
 
   /**

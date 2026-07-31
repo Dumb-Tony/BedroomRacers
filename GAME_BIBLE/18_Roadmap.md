@@ -128,15 +128,55 @@ resolved before track 2. Hand-authoring does not scale past track 1.
 
 ---
 
-## Phase 6 — New Environment
+## Phase 6 — New Environment ✅
 
-The first major expansion.
-
-**Recommendation: Sandbox Speedway** (`08_World_Sandbox.md`), not the plastic stunt
-track. The sandbox is flat and reuses the existing simulation almost entirely, which
-makes it a genuine test of the modular-world architecture at low risk. The stunt track
-breaks the flat-plane assumption and needs an elevation model decided first
+The first major expansion. **Sandbox Speedway** was chosen over the plastic stunt
+track because it is flat and reuses the existing simulation, making it a genuine
+test of the modular-world architecture at low risk. The stunt track breaks the
+flat-plane assumption and still needs an elevation model decided first
 (`07_World_Stunt_Track.md`).
+
+**Built:**
+- Dune Dash — the first track outside the bedroom
+- Sand compaction (`SandGrid.js`) — the racing line is worn in, not painted on
+- Four surfaces: `sand`, `packedSand`, `looseSand`, `puddle`
+- Per-track world colour and haze, so daylight works without a new art treatment
+- Two events: Dune Dash (8 stars) and Sandbox Time Trial (12 stars)
+
+**Exit criteria:**
+- [x] A new world added without changing the simulation — only `VehicleController`
+      moved, by three lines, to read an optional surface modifier
+- [x] The racing line measurably emerges: **+2.8s over three solo laps, net of a
+      matched control run with packing disabled**
+- [x] Packing pays over a full race: **12.5s against sand that never firms up**
+- [x] Compaction resets per race, so no track becomes permanently solved
+- [x] Bedroom tracks unaffected — the grid is inert on non-sandy tracks
+- [x] Frame-rate independent (packing runs in the fixed step)
+
+**Verified, and it mattered:** the wear-in arc was tuned against measurement, not
+feel. At the first-guess rate the line finished forming during lap one and laps
+two and three were identical — the mechanic worked but the *story* did not.
+
+The same pass caught a separate and worse problem: Bedside and Sandbox had
+hand-guessed target times, leaving gold 18-37 seconds off the pace. Every medal
+on both worlds was free on the first attempt. Target times are now derived from a
+simulated reference run — see the ratios recorded at the top of `events.js`.
+
+---
+
+## Phase 7 — Next
+
+Not yet chosen. The strongest candidates:
+
+- **The AI should seek worn sand** (`08` open question 3). Small, and it makes
+  opponents look genuinely smart while turning a player's line into something
+  that can be exploited against them.
+- **More sandbox tracks** — The Big Dig, Bucket Brigade, Tide Pool. The world is
+  built; these are content.
+- **The plastic stunt track** (`07`), which needs the elevation model decided
+  first and is the largest remaining technical risk in the project.
+- **Items** (`10_Items.md` open question 4) — still undecided whether the
+  flagship mode should have them at all.
 
 ---
 

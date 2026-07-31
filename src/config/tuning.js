@@ -141,6 +141,24 @@ BR.SURFACES = {
   plastic:   { grip: 1.10, maxSpeed: 1.15, accel: 1.10 },
   paper:     { grip: 0.60, maxSpeed: 1.00, accel: 0.85 },
   bookCover: { grip: 0.90, maxSpeed: 1.05, accel: 1.00 },
+
+  /* ── Sandbox Speedway (08_World_Sandbox.md) ────────────────────────────
+     Loose sand is slow and vague. Driving over it PACKS it down, and packed
+     sand is nearly as good as road — so a racing line emerges over three laps
+     rather than being painted on. The vehicle blends between these two by how
+     compacted the ground under it actually is; see SandGrid.
+
+     The gap between them is the whole feature. Too small and compaction is
+     invisible; too large and lap one is miserable. */
+  sand:       { grip: 0.74, maxSpeed: 0.82, accel: 0.76 },
+  packedSand: { grip: 0.97, maxSpeed: 1.02, accel: 0.98 },
+
+  // Off the dug track entirely. Not compactable — wandering out here is a
+  // mistake, not a shortcut.
+  looseSand:  { grip: 0.66, maxSpeed: 0.68, accel: 0.62 },
+
+  // Standing water. Fast and frictionless in the worst way.
+  puddle:     { grip: 0.42, maxSpeed: 0.95, accel: 0.70 },
 };
 
 /* Reference vehicle acceleration. A vehicle's `acceleration` stat is divided

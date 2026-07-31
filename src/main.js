@@ -209,6 +209,7 @@ BR.Game = {
 
     // Cached tracks keep hazard state between races — put it back.
     BR.TrackManager.resetHazards(this.arena);
+    this.resetSand();
 
     this.stats = { driftSeconds: 0, piecesThisRace: 0 };
     this.recorded = false;
@@ -220,6 +221,22 @@ BR.Game = {
     BR.ProgressionManager.selectVehicleFor(id, 1);
     this.refreshPlayerVehicles();
     this.buildRace();
+  },
+
+  /**
+   * Sand is worn in per RACE, not per lap and not permanently.
+   *
+   * Within a race the line builds and matters; across races everyone starts
+   * from flat sand again, so a fresh grid is a fresh problem rather than a
+   * track that is permanently solved.
+   */
+  resetSand() {
+    if (!this.arena.sandy) { BR.SandGrid.disable(); return; }
+    if (!BR.SandGrid.active || BR.SandGrid.forTrack !== this.arena.id) {
+      BR.SandGrid.init(this.arena.bounds);
+      BR.SandGrid.forTrack = this.arena.id;
+    }
+    BR.SandGrid.reset();
   },
 
   /** Pull every slot back out of the save. */
@@ -366,6 +383,7 @@ BR.Game = {
 
     // Cached tracks keep hazard state between races — put it back.
     BR.TrackManager.resetHazards(this.arena);
+    this.resetSand();
 
     this.stats = { driftSeconds: 0, piecesThisRace: 0 };
     this.recorded = false;
@@ -480,8 +498,13 @@ BR.Game = {
       // acceleration all reflect where the car actually is. This is what makes
       // cutting a corner across the rug cost something.
       v.surface = BR.TrackManager.surfaceAt(this.arena, v.x, v.y);
+      v.surfaceMod = BR.TrackManager.surfaceModsAt(this.arena, v.x, v.y, v.surface);
 
       BR.VehicleController.step(v, input, dt);
+
+      // Packing the sand happens in the FIXED step, so a 144Hz machine cannot
+      // wear a racing line in faster than a 60Hz one.
+      if (v.surface === 'sand') BR.SandGrid.drive(v, dt);
 
       // Ramps before walls: a launched car should already be airborne when wall
       // resolution runs, so it can clear low geometry on the same tick.

@@ -371,12 +371,13 @@ BR.Renderer = {
     ctx.moveTo(c[0].sx, c[0].sy);
     for (let i = 1; i < 4; i++) ctx.lineTo(c[i].sx, c[i].sy);
     ctx.closePath();
-    ctx.fillStyle = '#5c8a4a';       // rug green
+    ctx.fillStyle = arena.groundColour;
     ctx.fill();
 
-    // Weave. Also the clearest read on how far the plane is tilted.
+    // Weave, or wind ripples in sand. Also the clearest read on how far the
+    // plane is tilted.
     const step = 180;
-    ctx.strokeStyle = 'rgba(0,0,0,0.055)';
+    ctx.strokeStyle = arena.weaveColour;
     ctx.lineWidth = 1.5 / BR.CAMERA.zoom;
     ctx.beginPath();
     for (let x = b.minX; x <= b.maxX; x += step) {
@@ -407,8 +408,13 @@ BR.Renderer = {
     ctx.beginPath();
     trace(arena.outer);
     trace(arena.inner);
-    ctx.fillStyle = '#403c39';       // printed tarmac
+    ctx.fillStyle = arena.roadColour;
     ctx.fill('evenodd');
+
+    // Compacted sand, drawn over the loose surface. Only touched cells are
+    // visited, so this costs nothing on a track nobody has driven yet and stays
+    // bounded by the line people actually take.
+    if (arena.sandy && BR.SandGrid.active) this.drawCompaction(ctx);
 
     // Kerbs, drawn light so the road reads as the brightest path.
     ctx.lineWidth = 3 / BR.CAMERA.zoom;
@@ -442,6 +448,32 @@ BR.Renderer = {
       ctx.moveTo(a.sx, a.sy); ctx.lineTo(b2.sx, b2.sy);
     }
     ctx.stroke();
+  },
+
+  /* Packed sand, drawn as darker patches over the loose surface. Iterates only
+     the cells anyone has actually touched, so it costs nothing on lap one and
+     stays bounded by the line people take. */
+  drawCompaction(ctx) {
+    const Pj = BR.Projection;
+    const G = BR.SandGrid;
+    const list = G.touched;
+
+    for (let k = 0; k < list.length; k++) {
+      const t = G.cells[list[k]];
+      if (t < 0.05) continue;
+      const r = G.cellRect(list[k]);
+      const p = [
+        Pj.project(r.x, r.y, 0), Pj.project(r.x + r.w, r.y, 0),
+        Pj.project(r.x + r.w, r.y + r.h, 0), Pj.project(r.x, r.y + r.h, 0),
+      ];
+      ctx.beginPath();
+      ctx.moveTo(p[0].sx, p[0].sy);
+      for (let i = 1; i < 4; i++) ctx.lineTo(p[i].sx, p[i].sy);
+      ctx.closePath();
+      // Damp, packed sand: darker and a little cooler than the loose stuff.
+      ctx.fillStyle = 'rgba(120,92,58,' + (0.55 * t).toFixed(3) + ')';
+      ctx.fill();
+    }
   },
 
   /* Printed buildings and a pond inside the loop, so the circuit reads as a
