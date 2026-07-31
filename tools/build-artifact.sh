@@ -19,6 +19,12 @@ OUT_DIR="$ROOT/dist"
 OUT="$OUT_DIR/play.html"
 MARKER="__GAME_SOURCE__"
 
+# DEVELOPMENT ONLY — loaded by index.html, deliberately excluded from the
+# shipped bundle. index.html is the dev page; this build is the release.
+DEV_ONLY=(
+  "src/ui/Debug.js"
+)
+
 # Load order matters and must match index.html.
 FILES=(
   "src/config/tuning.js"
@@ -45,7 +51,6 @@ FILES=(
   "src/ui/MiniMap.js"
   "src/ui/CornerHint.js"
   "src/ui/Screens.js"
-  "src/ui/Debug.js"
   "src/main.js"
 )
 
@@ -56,11 +61,13 @@ done
 [ -f "$TEMPLATE" ] || { echo "MISSING: tools/artifact-template.html" >&2; exit 1; }
 
 # Guard against index.html and this script drifting apart. Every script tag in
-# index.html pointing at src/ must appear in FILES above.
+# index.html pointing at src/ must appear in FILES above, or be listed as
+# development-only.
 missing=0
 while IFS= read -r ref; do
   found=0
-  for f in "${FILES[@]}"; do [ "$f" = "$ref" ] && found=1 && break; done
+  for f in "${FILES[@]}";    do [ "$f" = "$ref" ] && found=1 && break; done
+  for f in "${DEV_ONLY[@]}"; do [ "$f" = "$ref" ] && found=1 && break; done
   if [ "$found" -eq 0 ]; then
     echo "NOT BUNDLED: $ref is loaded by index.html but missing from FILES" >&2
     missing=1

@@ -45,6 +45,7 @@ BR.SaveManager = {
         difficulty: 'normal',
         autoAccelerate: true,
         mapSize: 0.82,
+        cornerHint: 1,
       },
 
       progression: {

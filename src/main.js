@@ -79,6 +79,9 @@ BR.Game = {
     BR.Audio.musicVolume = save.settings.musicVolume;
     BR.Input.autoAccelerate = save.settings.autoAccelerate;
     if (BR.MiniMap) BR.MiniMap.size = save.settings.mapSize;
+    if (BR.CornerHint && save.settings.cornerHint !== undefined) {
+      BR.CornerHint.size = save.settings.cornerHint;
+    }
     this.difficulty = save.settings.difficulty;
     this.refreshPlayerVehicles();
 
@@ -104,7 +107,8 @@ BR.Game = {
     BR.Screens.init(document.getElementById('game'));
     BR.Screens.set(BR.Screens.MENU);
 
-    BR.Debug.init(this);
+    // Development tooling only — absent from the shipped bundle.
+    if (BR.Debug) BR.Debug.init(this);
 
     const self = this;
     requestAnimationFrame(function (t) { self.frame(t); });
@@ -382,7 +386,7 @@ BR.Game = {
 
     const racing = BR.Screens.state === BR.Screens.RACE;
 
-    if (BR.Input.tapped('KeyH')) BR.Debug.toggle();
+    if (BR.Input.tapped('KeyH') && BR.Debug) BR.Debug.toggle();
     if (BR.Input.tapped('KeyT')) BR.Input.autoAccelerate = !BR.Input.autoAccelerate;
     if (racing) {
       if (BR.Input.tapped('KeyR')) this.reset();
@@ -431,7 +435,7 @@ BR.Game = {
       this.bankResult();
     }
 
-    BR.Debug.update(this, dt);
+    if (BR.Debug) BR.Debug.update(this, dt);
     BR.Input.clearTaps();
   },
 

@@ -225,8 +225,8 @@
   <header class="bar">
     <div class="mark">Bedroom Racers</div>
     <div class="meta">
-      <span class="tag">Phase 2</span>
-      <span>Race structure</span>
+      <span class="tag">Phase 5</span>
+      <span>Two tracks &middot; up to four players</span>
     </div>
   </header>
 
@@ -257,45 +257,48 @@
     </div>
 
     <div class="card">
-      <h2>What this build is for</h2>
+      <h2>What still needs your hands</h2>
       <dl>
         <div>
-          <dt>Ground tilt</dt>
-          <dd>Still at its guessed value. <em>Blocks all vehicle art and track
-            authoring</em> &mdash; sprites have to be pre-rendered at whatever
-            angle this lands on, so changing it later throws away art rather
-            than code. Drag it and watch the grid.</dd>
-        </div>
-        <div>
-          <dt>Yaw rate</dt>
-          <dd>How fast the camera swings round to follow travel direction. The
-            lag is deliberate, but it stacks with slip: a true 43° drift
-            currently reads as <em>64° sideways</em>. Thrilling or
-            disorienting is your call.</dd>
-        </div>
-        <div>
           <dt>Drift feel</dt>
-          <dd>Measured targets already pass &mdash; drifting clears a 90° corner
-            in 40 ticks against 55 for steering. What a machine can't judge is
+          <dd>The measurable targets pass &mdash; drifting clears a 90° corner in
+            40 ticks against 55 for steering. What a machine can't judge is
             whether it's <em>satisfying</em>, and whether a first-timer can hold
             a slide without spinning.</dd>
+        </div>
+        <div>
+          <dt>Map or corner arrow</dt>
+          <dd>Both are in the pause menu and both switch off. They answer
+            different questions &mdash; <em>where am I in the lap</em> against
+            <em>what happens next</em>. Whether a track wants both is a judgement
+            no test makes.</dd>
+        </div>
+        <div>
+          <dt>Gamepads</dt>
+          <dd>Mapping and deadzone are verified against a stub, but <em>no real
+            controller has ever been plugged in</em>. Analog steering may well
+            want a different turn rate to the keyboard's.</dd>
         </div>
       </dl>
     </div>
 
     <div class="card">
-      <h2>Deliberately absent</h2>
+      <h2>Good to know</h2>
       <p class="absent">
-        No art, sound, menus, progression or items. This is still a test arena
-        rather than a designed track &mdash; a straight, a sweeper, a hairpin, a
-        chicane and one ramp, chosen for corner variety and nothing else.
+        Opponents share your physics exactly. They produce the same inputs a
+        keyboard does and run through the same controller, so they cannot do
+        anything your car can't.
         <br><br>
-        Opponents share the player's physics exactly. They produce the same
-        inputs a keyboard does and run through the same controller, so they
-        cannot do anything your car can't.
+        <code>P</code> or <code>Esc</code> pauses &mdash; sound, display and
+        auto-accelerate live in there, along with restart and quit.
         <br><br>
-        Every slider in the panel is live. <code>Show tuning</code> opens the
-        current values as pasteable JavaScript.
+        Up to four players share the keyboard, or plug in gamepads: seats claim
+        them in order, so two pads and two keyboard players works. Two or more
+        players is an exhibition &mdash; no medals, stars or ghosts, though toy
+        pieces still count.
+        <br><br>
+        The developer tuning panel is not in this build. It lives in the source
+        version for tuning work.
       </p>
     </div>
 

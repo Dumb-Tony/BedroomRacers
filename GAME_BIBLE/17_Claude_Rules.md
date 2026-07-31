@@ -70,6 +70,23 @@ When a good idea arrives mid-task:
 - **Match surrounding code.** Consistency beats personal preference.
 - **No new dependencies without asking.** Phaser is the dependency budget.
 
+## Development tooling is not shipped
+
+`index.html` is the **development page**; `dist/play.html` is the **release**.
+`tools/build-artifact.sh` keeps a `DEV_ONLY` list of files that the dev page
+loads and the bundle deliberately omits — currently the tuning panel.
+
+The build's drift check knows about that list, so a dev-only file does not trip
+the "loaded by index.html but not bundled" guard, and a genuinely forgotten file
+still does.
+
+Anything guarded this way must be **optional at every call site**
+(`if (BR.Debug) …`), because in the shipped build it simply is not there.
+
+Player-facing settings belong in the pause menu, not the tuning panel. If a
+player would reasonably want to change it mid-session, it is not developer
+tooling.
+
 ## Tuning values
 
 Every constant in `03_Driving_Physics.md` is a guess until someone drives it.

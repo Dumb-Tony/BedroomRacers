@@ -105,6 +105,22 @@ BR.Screens = {
         BR.SaveManager.save();
         break;
       }
+      case 'toggleMap': {
+        const st = BR.SaveManager.get().settings;
+        BR.MiniMap.size = BR.MiniMap.size > 0 ? 0 : 0.82;
+        st.mapSize = BR.MiniMap.size;
+        BR.SaveManager.save();
+        BR.Audio.checkpoint();
+        break;
+      }
+      case 'toggleCorners': {
+        const st = BR.SaveManager.get().settings;
+        BR.CornerHint.size = BR.CornerHint.size > 0 ? 0 : 1;
+        st.cornerHint = BR.CornerHint.size;
+        BR.SaveManager.save();
+        BR.Audio.checkpoint();
+        break;
+      }
       case 'autoAccel':
         BR.Input.autoAccelerate = !BR.Input.autoAccelerate;
         BR.SaveManager.get().settings.autoAccelerate = BR.Input.autoAccelerate;
@@ -283,6 +299,21 @@ BR.Screens = {
     const auto = BR.Input.autoAccelerate;
     this.button(ctx, bx, by, bw, 30,
                 'AUTO-ACCELERATE  ' + (auto ? 'ON' : 'OFF'), 'autoAccel', null);
+
+    // Display options that used to live only in the debug panel. 11_UI.md asks
+    // which of these earns its screen space; the answer should not require a
+    // developer tool to explore.
+    by += 40;
+    ctx.font = '600 9px ui-monospace, Consolas, monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.42)';
+    ctx.fillText('DISPLAY', bx, by - 12);
+
+    const halfW = (bw - 8) / 2;
+    this.button(ctx, bx, by, halfW, 30,
+                'MAP  ' + (BR.MiniMap.size > 0 ? 'ON' : 'OFF'), 'toggleMap', null);
+    this.button(ctx, bx + halfW + 8, by, halfW, 30,
+                'CORNERS  ' + (BR.CornerHint.size > 0 ? 'ON' : 'OFF'),
+                'toggleCorners', null);
 
     ctx.textAlign = 'center';
     ctx.font = '600 9px ui-monospace, Consolas, monospace';
