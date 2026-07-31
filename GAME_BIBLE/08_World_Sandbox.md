@@ -119,11 +119,20 @@ Flowing water and the sprinkler hazard are **not built**.
 1. ~~Which sand deformation model?~~ **Resolved: option 2, measured above.**
 2. ~~Does compaction persist across laps only, or the whole event?~~ **Resolved:
    per race.**
-3. **How does compaction interact with AI racing lines — should AI seek compacted
-   sand?** Still open, and now the most interesting one. The AI currently follows
-   the static racing line and packs it by coincidence. AI that *sought* worn sand
-   would look genuinely smart for very little code — and would make a player's
-   line something opponents exploit, which cuts both ways and is worth having.
+3. ~~Should AI seek compacted sand?~~ **Resolved: yes, built.** A `sandReading`
+   trait per personality (`04_AI.md`). Worth about a second a lap to the
+   Technician and a fifth of one to the Rookie, and it scales with the parameter.
+
+   The claim to test was not "does it go faster" but **"will it follow a line it
+   did not make"** — the promise that a player's line becomes something opponents
+   take off them. Tested in isolation by packing a band one cell off the racing
+   line and dropping a driver on the line: it settles a little over halfway
+   across (35 units of 70), against a control that never leaves 0.5.
+
+   In an ordinary race the effect on firmness is close to nil, and that is
+   **correct**: the field already packs the racing line, so there is nothing
+   better to find. The trait bites when the packed sand is somewhere the AI would
+   not otherwise be — which is exactly when it should.
 4. **Are dunes purely a surface effect, or do they need slope in the physics
    model?** Still open. Dune Dash sidesteps it — the sand is flat and only its
    firmness varies. A dune that is actually a *hill* needs `07`'s elevation model.

@@ -14,7 +14,15 @@
 
    ── TARGET TIMES ARE MEASURED, NOT GUESSED ────────────────────────────────
    Author a new event by simulating it with the 'technician' AI on 'normal' and
-   taking that total as the reference M. Then:
+   taking that total as the reference M.
+
+   Simulate it FOUR TIMES and use the quickest. The technician makes random
+   mistakes and a time trial has no traffic to average them out: tt-rug-route
+   returned 90.4, 90.5 and 98.0 from identical code, so a single run once put
+   the reference 8 seconds out. The cleanest run is also the better reference
+   on its own terms — a target time should describe a lap without a fumble.
+
+   Then:
 
        time trial      platinum 0.885·M   gold 0.951·M
                        silver   1.040·M   bronze 1.162·M

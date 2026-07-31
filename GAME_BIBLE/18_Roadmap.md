@@ -166,11 +166,17 @@ simulated reference run — see the ratios recorded at the top of `events.js`.
 
 ## Phase 7 — Next
 
-Not yet chosen. The strongest candidates:
+**Done since Phase 6 closed:** AI that seeks worn sand (`08` open question 3,
+`04_AI.md`). A `sandReading` trait per personality — the Technician gains about a
+second a lap, the Rookie a fifth of one. It follows a line it did not make,
+settling halfway onto a band packed one cell off the racing line, so a player's
+line is now something opponents can take off them.
 
-- **The AI should seek worn sand** (`08` open question 3). Small, and it makes
-  opponents look genuinely smart while turning a player's line into something
-  that can be exploited against them.
+That work also hardened the target-time method: a single reference run swung 8
+seconds on a time trial, so calibration now takes the quickest of four.
+
+Remaining candidates:
+
 - **More sandbox tracks** — The Big Dig, Bucket Brigade, Tide Pool. The world is
   built; these are content.
 - **The plastic stunt track** (`07`), which needs the elevation model decided

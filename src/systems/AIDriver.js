@@ -18,26 +18,34 @@ window.BR = window.BR || {};
 
 BR.AIDriver = {
 
+  /* sandReading — how much a driver steers toward sand that has already been
+     packed down (SandGrid.js). Inert on tracks without sand. It is the only
+     trait that reads the world rather than the authored line, and it is what
+     makes a worn line something opponents will take off you. */
   PERSONALITIES: {
     rookie: {
       name: 'Rookie',
       targetSpeedMul: 0.80, lineAccuracy: 0.65, cornerCaution: 1.35,
       boostEfficiency: 0.25, mistakeChance: 0.16, driftSkill: 0.4,
+      sandReading: 0.15,      // hasn't noticed the ground is different
     },
     technician: {
       name: 'Technician',
       targetSpeedMul: 0.99, lineAccuracy: 0.95, cornerCaution: 0.95,
       boostEfficiency: 0.90, mistakeChance: 0.03, driftSkill: 0.95,
+      sandReading: 0.95,      // reading the surface is the whole personality
     },
     speedster: {
       name: 'Speedster',
       targetSpeedMul: 1.08, lineAccuracy: 0.72, cornerCaution: 0.70,
       boostEfficiency: 0.60, mistakeChance: 0.14, driftSkill: 0.6,
+      sandReading: 0.45,      // too busy going fast to look down
     },
     bully: {
       name: 'Bully',
       targetSpeedMul: 0.94, lineAccuracy: 0.70, cornerCaution: 1.05,
       boostEfficiency: 0.50, mistakeChance: 0.08, driftSkill: 0.5,
+      sandReading: 0.55,      // will happily take the line you just made
     },
   },
 
@@ -59,6 +67,9 @@ BR.AIDriver = {
       wp: 0,              // current waypoint index
       lateral: 0,         // offset from the line, for personality and traffic
       lateralTarget: 0,
+      wander: 0,          // the personality half of lateralTarget
+      sandOffset: null,   // the packed-sand half, null when the sand is uniform
+      sandTimer: 0,
       mistakeTimer: 0,    // seconds left of a deliberate error
       stuckTimer: 0,
       recoverTimer: 0,
@@ -81,6 +92,55 @@ BR.AIDriver = {
     return bd;
   },
 
+  /* ── reading the sand ────────────────────────────────────────────────────
+     Sample points across the road, as a fraction of the scan radius.
+
+     THE SCAN RADIUS IS SET BY THE GRID, NOT THE ROAD. The first version scanned
+     a fraction of the racing line's usable width, which on Dune Dash is 134
+     units — so the whole five-point scan fitted inside a single 70-unit sand
+     cell, every sample returned the same number, and half the reads came back
+     "no opinion". The AI could not see a packed line it was driving alongside.
+     A scan narrower than one cell cannot resolve anything by construction.
+
+     8Hz, not per frame: the sand changes far slower than that, and the result
+     is eased into ai.lateral anyway. Sampling faster only chases noise. */
+  SAND_SAMPLES: [-1, -0.55, 0, 0.55, 1],
+  SAND_INTERVAL: 0.125,
+  SAND_MARGIN: 0.06,   // ignore differences this small — flat sand is a tie
+
+  /**
+   * Steer toward sand that is already packed.
+   *
+   * FAIRNESS: this reads BR.SandGrid, which is drawn on screen — the AI is
+   * looking at the ground exactly as a player does. It gets no lap times, no
+   * opponent state and no lookahead the player lacks. Keep it that way; the
+   * moment an AI knows something invisible, the racing stops feeling fair
+   * (04_AI.md).
+   *
+   * @returns {number} lateral offset in world units, or null for "no opinion"
+   */
+  readSand(ai, tgt, la) {
+    const SG = BR.SandGrid;
+    if (!SG || !SG.active) return null;
+
+    // At least one cell either side, or the scan cannot tell two cells apart.
+    // Never wider than the road, or the AI would aim at firm sand past the kerb.
+    const radius = Math.min(Math.max(tgt.width * 0.5, SG.CELL), tgt.width);
+    let bestOff = 0, best = -1, flattest = 2;
+
+    for (let k = 0; k < this.SAND_SAMPLES.length; k++) {
+      const off = this.SAND_SAMPLES[k] * radius;
+      const c = SG.at(tgt.x - Math.sin(la) * off, tgt.y + Math.cos(la) * off);
+      if (c > best) { best = c; bestOff = off; }
+      if (c < flattest) flattest = c;
+    }
+
+    // On lap one every sample is loose and every sample is equal. Returning an
+    // offset there would be the AI inventing a preference out of nothing.
+    if (best - flattest < this.SAND_MARGIN) return null;
+    return bestOff;
+  },
+
   /**
    * @returns {object} the same input struct a keyboard produces
    */
@@ -97,12 +157,29 @@ BR.AIDriver = {
     const lookahead = 1 + Math.round(M.clamp(speed / 70, 0, 5));
     const tgt = line[(ai.wp + lookahead) % n];
 
+    // Direction of the line at the target. Needed by the sand scan below as
+    // well as by the aim, so it is computed before both.
+    const ahead = line[(ai.wp + lookahead + 1) % n];
+    const la = Math.atan2(ahead.y - tgt.y, ahead.x - tgt.x);
+
     // Lateral offset: a little personality-driven wander so the field doesn't
     // drive in a single file down one perfect line.
     if (Math.random() < 0.01) {
-      ai.lateralTarget = (Math.random() * 2 - 1) * tgt.width * 0.34 *
-                         (1 - ai.p.lineAccuracy);
+      ai.wander = (Math.random() * 2 - 1) * tgt.width * 0.34 *
+                  (1 - ai.p.lineAccuracy);
     }
+
+    // On sand, a pull toward ground that has already been packed down. Null
+    // means the sand ahead is uniform — lap one, or a stretch nobody has used —
+    // and the wander is left to do its job alone.
+    ai.sandTimer -= dt;
+    if (ai.sandTimer <= 0) {
+      ai.sandTimer = this.SAND_INTERVAL;
+      ai.sandOffset = this.readSand(ai, tgt, la);
+    }
+    const pull = ai.sandOffset === null ? 0 : ai.p.sandReading;
+    ai.lateralTarget = ai.wander * (1 - pull) + (ai.sandOffset || 0) * pull;
+
     ai.lateral = M.approach(ai.lateral, ai.lateralTarget, 60 * dt);
 
     // Deliberate mistakes. An AI that never errs feels unbeatable even when
@@ -113,8 +190,6 @@ BR.AIDriver = {
     if (ai.mistakeTimer > 0) ai.mistakeTimer -= dt;
 
     // Aim, offset perpendicular to the line.
-    const ahead = line[(ai.wp + lookahead + 1) % n];
-    const la = Math.atan2(ahead.y - tgt.y, ahead.x - tgt.x);
     const aimX = tgt.x - Math.sin(la) * ai.lateral;
     const aimY = tgt.y + Math.cos(la) * ai.lateral;
 
