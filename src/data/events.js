@@ -351,6 +351,54 @@ BR.EVENTS.push(
   }
 );
 
+/* ── Item races ────────────────────────────────────────────────────────────
+   A SEPARATE MODE, deliberately (10_Items.md Q4). The flagship Standard Race
+   stays item-free: it already has drift-charged boost, shortcuts, worn sand and
+   speed-gated loops to argue with, and the six Time Trials are only worth
+   comparing against a race decided by driving.
+
+   These exist because local multiplayer is the one place a flat skill gap makes
+   racing dull, and because an item race is a different pleasure rather than a
+   diluted version of the same one. */
+BR.EVENTS.push(
+  {
+    id: 'ir-01',
+    name: 'Toybox Scramble',
+    blurb: 'Items on. Grab a box, hold your nerve, and watch your mirrors.',
+    trackId: 'town-rug-loop',
+    mode: 'standard-race',
+    items: true,
+    laps: 3,
+    opponents: 5,
+    difficulty: 'normal',
+    platinumTime: 85,           // 0.93 x 91.0, the clean reference run
+    unlockStars: 4,
+    objectives: [
+      { id: 'finish',  label: 'Finish the race' },
+      { id: 'win',     label: 'Win the race' },
+      { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+    ],
+  },
+  {
+    id: 'ir-02',
+    name: 'Sandbox Scrap',
+    blurb: 'Items in the sand. The line you wear in is the line they will take.',
+    trackId: 'sandbox-dune-dash',
+    mode: 'standard-race',
+    items: true,
+    laps: 3,
+    opponents: 5,
+    difficulty: 'hard',
+    platinumTime: 83,           // 0.93 x 89.4
+    unlockStars: 18,
+    objectives: [
+      { id: 'finish',   label: 'Finish the race' },
+      { id: 'win',      label: 'Win the race' },
+      { id: 'spotless', label: 'Win without a single collision' },
+    ],
+  }
+);
+
 /* Vehicles are earned with stars. 09_Vehicles.md left open whether the starter
    roster should all be available immediately; two to start and three to earn
    gives progression something to hand out early, which is the whole point of a
