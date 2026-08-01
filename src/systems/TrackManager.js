@@ -131,9 +131,34 @@ BR.TrackManager = {
     }
 
     // ── walls ──────────────────────────────────────────────────────────────
+    /* ── gaps in the rail ────────────────────────────────────────────────────
+       An authored stretch with no barrier. On a flat track that is just an
+       opening; on a raised deck it is a drop, and Recovery.js is what happens
+       next. Authored as lap fractions and a side:
+
+         openEdges: [{ from: 0.50, to: 0.60, side: 'outer' }]
+
+       Without this the elevation model could only ever build tracks you cannot
+       fall off, which is why open question 4 in 07_World_Stunt_Track.md stayed
+       open for two tracks. */
+    const openEdges = def.openEdges || [];
+    function isOpen(i, side) {
+      const t = i / n;
+      for (let k = 0; k < openEdges.length; k++) {
+        const o = openEdges[k];
+        if (o.side && o.side !== side && o.side !== 'both') continue;
+        const inRange = o.from <= o.to
+          ? (t >= o.from && t <= o.to)
+          : (t >= o.from || t <= o.to);      // wraps past the line
+        if (inRange) return true;
+      }
+      return false;
+    }
+
     const walls = [];
-    function edgeToWalls(pts, h, clearAt) {
+    function edgeToWalls(pts, h, clearAt, side) {
       for (let i = 0; i < pts.length; i++) {
+        if (isOpen(i, side)) continue;
         const a = pts[i], b = pts[(i + 1) % pts.length];
         walls.push({ ax: a[0], ay: a[1], bx: b[0], by: b[1],
                      h: h, clearAt: clearAt,
@@ -144,7 +169,7 @@ BR.TrackManager = {
       }
     }
     const kerbH = def.kerbHeight || 22;
-    edgeToWalls(outer, kerbH, Infinity);
+    edgeToWalls(outer, kerbH, Infinity, 'outer');
 
     /* ── shortcut ────────────────────────────────────────────────────────────
        Open the inner kerb across an arc and replace it with a straight chord.
@@ -177,7 +202,7 @@ BR.TrackManager = {
     }
 
     for (let i = 0; i < inner.length; i++) {
-      if (inCut(i)) continue;
+      if (inCut(i) || isOpen(i, 'inner')) continue;
       const a = inner[i], b = inner[(i + 1) % inner.length];
       walls.push({ ax: a[0], ay: a[1], bx: b[0], by: b[1],
                    h: kerbH, clearAt: Infinity,

@@ -502,8 +502,26 @@ BR.Game = {
       if (this.arena.elevated) {
         const tr = BR.TrackManager.trackAt(this.arena, v.x, v.y, v.lineIdx);
         v.lineIdx = tr.idx;
-        v.level = tr.level;
-        v.roadZ = tr.z;
+        v.trackDist = tr.dist;
+        // Only update the deck while actually ON it. A car in mid-air over the
+        // floor must keep the height of the deck it fell from, or it snaps down
+        // to whatever is beneath before it has visibly fallen.
+        if (!v.falling) {
+          v.level = tr.level;
+          v.roadZ = tr.z;
+          if (tr.dist <= this.arena.halfWidth) v.lastSafeIdx = tr.idx;
+        }
+        BR.Recovery.check(v, this.arena);
+      }
+
+      /* Falling is not driving. The controller, the surface, the ramps and the
+         walls all sit this out for the same reason a rail does — the car is
+         somewhere the track model has no opinion about. */
+      if (v.falling) {
+        v.prevX = v.x; v.prevY = v.y; v.prevZ = v.z;
+        v.prevHeading = v.heading; v.prevRoadZ = v.roadZ; v.prevUp = v.up;
+        BR.Recovery.step(v, this.arena, dt);
+        continue;
       }
 
       /* On a loop the car is a passenger. The controller, the surface, the

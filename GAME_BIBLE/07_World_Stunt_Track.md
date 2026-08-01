@@ -223,11 +223,29 @@ The first draft of Dresser Drop was a ring and tested none of this.
    lower because the indices between them are the ramp. `advanceWaypoint`
    already searched a narrow window forward, for an unrelated reason, and that
    turns out to be the same defence `trackAt` needed.
-4. **What does falling off do here?** Still open, and now the most pressing one.
-   Dresser Drop has continuous side rails on the raised deck, so it is dodged
-   rather than answered — you cannot currently leave the upper deck except by
-   driving down it. A track with a gap in the rail needs a real answer: does the
-   car fall to the floor and rejoin, or is it a reset?
+4. ~~What does falling off do here?~~ **Resolved: you fall, you watch, you get
+   put back.** `Recovery.js`, and a `openEdges` field that lets a track author a
+   gap in its rail — Shelf Run has one on the outside of the shelf, 440 up.
+
+   Not a reset to the last checkpoint. That can be half a lap back, and losing a
+   lap for clipping an edge is the kind of punishment that stops people taking
+   the risk in the first place. The car is lifted to **the last centreline index
+   it occupied while on the road**, pointing along the track, keeping 30% of the
+   speed it went over with. Measured cost: **1.18 seconds** and nearly all the
+   momentum, which is enough to hurt without being a lap.
+
+   **The fall is shown.** Teleporting on contact with the edge is cheaper and
+   reads as a bug — the car vanishes with no explanation. It drops for 0.85s,
+   tumbling, lands on the carpet, holds for a beat, and is then replaced. `z` is
+   measured from the deck the car left, so the floor is at `-roadZ`; without
+   clamping there, a 440-unit fall spends its last fraction of a second
+   underneath the room.
+
+   The gap is on the **outside of the corner only**. The inside keeps its rail,
+   so there is always a line that costs nothing — the drop is a price for
+   running wide, not a tax on being there. Measured across a full race, the AI
+   field falls **zero** times, and neither Dresser Drop (no gap) nor any flat
+   track can trigger any of it.
 5. ~~Is this the right second world?~~ **Resolved: no, and it was right not to
    be.** Sandbox Speedway went first and proved the modular-world architecture,
    which is why this one cost a track file and a few dozen lines. Attempted

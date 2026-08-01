@@ -85,6 +85,22 @@ BR.TRACKS['stunt-shelf-run'] = {
 
   finish: [1500, 1500],
 
+  /* ── THE GAP ─────────────────────────────────────────────────────────────
+     No rail on the outside of the shelf, 440 units up, through the fastest
+     part of the high run. Run wide here and there is nothing to catch you.
+
+     This is what open question 4 in 07_World_Stunt_Track.md was waiting for:
+     both stunt tracks previously ran unbroken barriers, so the elevation model
+     had never had to answer what happens when a car leaves a raised deck.
+     Recovery.js answers it — you fall, you watch, you get put back where you
+     last legitimately were.
+
+     The OUTSIDE of the corner only. The inside keeps its rail, so there is
+     always a safe line: the gap costs you nothing if you do not run wide. */
+  openEdges: [
+    { from: 0.55, to: 0.66, side: 'outer' },
+  ],
+
   zones: [],
 
   /* One ride, on the floor stretch where there is room to have built speed.

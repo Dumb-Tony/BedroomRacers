@@ -207,13 +207,23 @@ forced a fix to the loop: orientation is now a `up` VECTOR rather than a roll
 angle, because one number cannot say which axis is turning, and the loop had
 been barrel-rolling the car where a pitch belongs.
 
+**And falling off** (`07` open question 4, `Recovery.js`) — the last open
+question that world had. A track can now author a gap in its rail
+(`openEdges`), and going through one drops you: 0.85s of tumbling fall, a
+landing on the carpet, then a lift back to the last centreline point you
+legitimately occupied, keeping 30% of your speed. Measured cost 1.18 seconds.
+Not a checkpoint reset, because losing a lap for clipping an edge stops people
+taking the risk at all.
+
+**Shelf Run** is the second stunt track, and the one with the gap: three decks,
+a two-storey crossover, and one ride rather than four.
+
 Remaining candidates:
-- **What falling off a raised deck does** (`07` open question 4). Dresser Drop
-  dodges it with continuous side rails; any track with a gap in them needs a
-  real answer, and it is a whole subsystem.
-- **A second stunt track.** Dresser Drop is now carrying the loop, the
-  corkscrew, the climb and the crossover on its own, and 15% of its lap is spent
-  on rails. The world needs somewhere to spread out.
+- **Items** (`10_Items.md` open question 4) — still undecided whether the
+  flagship mode should have them at all, and the oldest unanswered question in
+  the bible.
+- **Track-switching gates and falling track sections** (`07`) — content on the
+  systems that now exist rather than new systems.
 - **Items** (`10_Items.md` open question 4) — still undecided whether the
   flagship mode should have them at all.
 

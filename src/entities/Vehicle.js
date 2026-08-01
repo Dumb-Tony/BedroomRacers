@@ -37,6 +37,14 @@ BR.Vehicle = {
       // ── loops ───────────────────────────────────────────────────────────
       rail: null,         // the ride currently carrying this car, if any
       railIndex: -1,      // edge trigger, so a loop cannot immediately re-board
+
+      // ── going over the edge ─────────────────────────────────────────────
+      falling: false,
+      fallTimer: 0,
+      fallSpeed: 0,
+      trackDist: 0,       // distance to the centreline, for the edge test
+      lastSafeIdx: -1,    // last centreline index reached while ON the road
+      recovered: 0,       // how many times this car has been put back
       roll: 0,            // how far round a ride the car is — diagnostics
       /* Which way is up for THIS car — render only, and the simulation never
          reads it. A vector rather than an angle because a loop pitches and a
