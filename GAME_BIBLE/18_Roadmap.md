@@ -193,12 +193,20 @@ on it, Dresser Drop, which climbs onto the dresser and crosses back under itself
 
 Fourteen events across four worlds now.
 
+**And the loop** (`07` option 3, `Rails.js`). The car is captured at the mouth,
+carried round at constant speed and released the way the loop points; roll is a
+render property and the simulation never learns that up has moved. Arrive under
+`minSpeed` and you are not taken round at all — you drive along the floor
+beneath it, which makes the loop a reward for carrying speed rather than a tax
+on arriving slowly. The AI needed no changes: it drives the line, the line goes
+through the mouth.
+
 Remaining candidates:
 - **What falling off a raised deck does** (`07` open question 4). Dresser Drop
   dodges it with continuous side rails; any track with a gap in them needs a
   real answer, and it is a whole subsystem.
-- **Loops and corkscrews** via rail sections (`07` option 3) — the other half of
-  the stunt world, and the half the box art is actually about.
+- **Corkscrews** — the same rail with the circle swept sideways instead of kept
+  vertical. Small, now that `Rails.js` exists.
 - **Items** (`10_Items.md` open question 4) — still undecided whether the
   flagship mode should have them at all.
 

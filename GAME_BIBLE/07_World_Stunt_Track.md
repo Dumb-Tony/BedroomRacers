@@ -1,11 +1,11 @@
 # 07 — World: Plastic Stunt Track
 
-> **STARTED (Phase 7).** The elevation model is decided, built and measured, and
-> one track ships on it — Dresser Drop. Loops, corkscrews and track-switching
-> gates are **not** built.
+> **STARTED (Phase 7).** The elevation model and the loop are both decided,
+> built and measured, and one track ships on them — Dresser Drop. Corkscrews and
+> track-switching gates are **not** built.
 >
-> Source: `src/data/tracks/stunt-dresser-drop.js`, plus `resolveElevation` and
-> `trackAt` in `TrackManager.js`.
+> Source: `src/data/tracks/stunt-dresser-drop.js`, `src/systems/Rails.js`, plus
+> `resolveElevation` and `trackAt` in `TrackManager.js`.
 
 ## Concept
 
@@ -87,8 +87,40 @@ What it actually took:
 | `Renderer.drawRoad` | quads sorted back to front instead of one even-odd fill |
 | everything else | passed a `z` it previously hardcoded to 0 |
 
-Option 3 (rail sections for loops) is still unbuilt and still the right answer
-for loops. Nothing here forecloses it.
+### RESOLVED — option 3 for the loop, exactly as recommended
+
+`Rails.js`. The car is captured at the mouth, carried round a vertical circle at
+constant speed, and released travelling the way the loop points. Ground position
+creeps forward across the ride so the exit is visibly past the entry. Roll is a
+**render property only** — the simulation never learns that up has moved.
+
+Measured on Dresser Drop's loop (radius 115, arc 738):
+
+| arrival speed | boards | ride | apex | roll | exit speed |
+| --- | --- | --- | --- | --- | --- |
+| 150 | **no** | — | — | — | drives on underneath |
+| 220 | yes | 3.22s | 230 | 359° | 230 |
+| 320 | yes | 2.27s | 230 | 359° | 327 |
+| 400 | yes | 1.93s | 230 | 359° | 384 |
+
+**The entry is the decision, and it is the only one.** Arrive under `minSpeed`
+and you are not taken round — you drive along the floor beneath the loop.
+Nothing is confiscated and nothing is punished: the loop is a reward you have to
+be carrying speed to collect, which is the only framing that does not feel like
+the game taking the wheel off you for three seconds.
+
+Speed is preserved through the ride and carried out the far side, so a loop
+neither gives nor takes pace — but a faster arrival is a shorter ride, which
+keeps the approach worth caring about. `exitBoost` pays 0.35 of a boost bar.
+
+**Edge triggered, for the same reason ramps are.** The loop sets the car down
+`length` units along its own direction, which can still be inside the mouth it
+just came out of — so it boards again immediately. The full-grid race showed
+four rides over three laps before `railIndex` was added; three after, one a lap.
+
+The AI needed **no changes at all**. It drives the racing line, the line goes
+through the mouth, and it gets carried. An opponent taking a loop is an opponent
+that happened to be going fast enough.
 
 ### Two things that were not obvious
 
@@ -129,9 +161,11 @@ The first draft of Dresser Drop was a ring and tested none of this.
 
 ## Still unbuilt
 
-Loops, corkscrews, magnetic boosters, track-switching gates, falling track
-sections and wall-mounted routes. Loops and corkscrews want option 3 (rail
-sections); the rest are content on top of what now exists.
+Corkscrews, magnetic boosters, track-switching gates, falling track sections and
+wall-mounted routes. A corkscrew is the same rail with the circle swept sideways
+along the travel axis rather than kept in the vertical plane — `Rails.ringPoint`
+is where that would go, and it is a small change now the rest exists. The others
+are content on top of what is already here.
 
 The **legal note above still binds** every one of them. Dresser Drop uses violet
 and teal rather than the obvious orange and blue, and draws no connector

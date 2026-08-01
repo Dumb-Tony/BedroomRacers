@@ -395,6 +395,23 @@ BR.TrackManager = {
                  r: h.r || 40, h: h.h || 34, t: h.phase || 0, x: h.path[0][0],
                  y: h.path[0][1], heading: 0 };
       }),
+      /* Loops. Defaults live here rather than in every track file, and `dir` is
+         normalised once so Rails can trust it. */
+      rails: (def.rails || []).map(function (r) {
+        const len = Math.hypot(r.dir[0], r.dir[1]) || 1;
+        return {
+          x: r.x, y: r.y, w: r.w, h: r.h,
+          dir: [r.dir[0] / len, r.dir[1] / len],
+          radius: r.radius || 130,
+          length: r.length === undefined ? 150 : r.length,
+          width: r.width || 150,
+          minSpeed: r.minSpeed === undefined ? 230 : r.minSpeed,
+          exitBoost: r.exitBoost === undefined ? 0.35 : r.exitBoost,
+          colour:     r.colour     || '#8a63d2',
+          altColour:  r.altColour  || '#6f4cb8',
+          railColour: r.railColour || '#c9b3f0',
+        };
+      }),
       decoration: def.decoration || [],
       haze: def.haze || null,          // depth-fade colour, "r,g,b"
 
@@ -493,6 +510,7 @@ BR.TrackManager = {
     (def.ramps || []).forEach(function (r, i) { check('ramp', i, r); });
     (def.boostPads || []).forEach(function (r, i) { check('boostPad', i, r); });
     (def.zones || []).forEach(function (r, i) { check('zone', i, r); });
+    (def.rails || []).forEach(function (r, i) { check('rail', i, r); });
 
     if (strays.length && typeof console !== 'undefined') {
       console.warn('TRACK ' + def.id + ': ' + strays.join('; '));

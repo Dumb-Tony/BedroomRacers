@@ -115,6 +115,25 @@ BR.TRACKS['stunt-dresser-drop'] = {
     { x: 1998, y: 1325, w: 96, h: 300, rise: [-1, 0], launch: 560 },
   ],
 
+  /* ── THE LOOP ────────────────────────────────────────────────────────────
+     On the floor, on the long run out of the crossing where there is room to
+     have built up speed. t 0.08, road at (3055,1843) heading roughly east.
+
+     Arrive under minSpeed and you are simply not taken round — you drive along
+     the floor beneath it. The loop is a reward for carrying speed, not a tax on
+     arriving slowly (Rails.js). */
+  rails: [
+    {
+      x: 2985, y: 1743, w: 140, h: 200,
+      dir: [0.89, -0.45],          // the road's heading at t 0.08
+      radius: 115,                 // 230 tall; ~2.1s at racing speed
+      length: 150,                 // ground covered, so the exit clears the entry
+      width: 150,
+      minSpeed: 230,
+      exitBoost: 0.35,
+    },
+  ],
+
   boostPads: [
     { x: 1322, y: 2938, w: 185, h: 165, gain: 0.4 },   // t 0.88, on the floor
     { x: 4230, y: 1700, w: 165, h: 185, gain: 0.4 },   // t 0.20, on the climb

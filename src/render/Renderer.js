@@ -249,6 +249,19 @@ BR.Renderer = {
       const hz = arena.hazards[i];
       drawables.push({ key: Pj.depthAt(hz.x, hz.y), hazard: hz });
     }
+    /* Loops go in as INDIVIDUAL RIBBON SEGMENTS rather than one object. A loop
+       is taller than anything else on the track and the car passes both behind
+       and in front of it within a second, so sorting it as a single unit puts
+       the car wholly in front of the loop or wholly behind it — and the moment
+       it is meant to sell is exactly the one in between. */
+    const rails = arena.rails || [];
+    for (let i = 0; i < rails.length; i++) {
+      const R = rails[i];
+      for (let s = 0; s < this.RING_SEGS; s++) {
+        const p = BR.Rails.ringPoint(R, s / this.RING_SEGS, 0);
+        drawables.push({ key: Pj.depthAt(p[0], p[1]), rail: R, seg: s });
+      }
+    }
     for (let i = 0; i < racers.length; i++) {
       const c = racers[i];
       const cx = M.lerp(c.prevX, c.x, alpha);
@@ -258,18 +271,22 @@ BR.Renderer = {
       const cdeck = M.lerp(c.prevRoadZ || 0, c.roadZ || 0, alpha);
       const cz = cdeck + M.lerp(c.prevZ, c.z, alpha);
       const ch = c.prevHeading + M.wrapAngle(c.heading - c.prevHeading) * alpha;
+      // Roll runs 0..2PI through a loop and must NOT be wrapped — wrapping
+      // turns the last few degrees of the ride into a backflip.
+      const cr = M.lerp(c.prevRoll || 0, c.roll || 0, alpha);
       drawables.push({ key: Pj.depthAt(cx, cy), car: c,
-                       cx: cx, cy: cy, cz: cz, ch: ch, deck: cdeck });
+                       cx: cx, cy: cy, cz: cz, ch: ch, deck: cdeck, roll: cr });
     }
     drawables.sort((a, b) => a.key - b.key);
 
     for (let i = 0; i < drawables.length; i++) {
       const d = drawables[i];
       if (d.wall)        this.drawWall(ctx, d.wall, arena.wallHeight);
+      else if (d.rail)   this.drawRailSegment(ctx, d.rail, d.seg);
       else if (d.prop)   this.drawProp(ctx, d.prop);
       else if (d.hazard) this.drawHazard(ctx, d.hazard);
       else               this.drawVehicle(ctx, d.car, d.cx, d.cy, d.cz, d.ch,
-                                          d.car === v, d.deck);
+                                          d.car === v, d.deck, d.roll);
     }
 
     this.drawDust(ctx);
@@ -766,6 +783,50 @@ BR.Renderer = {
 
   // ── walls ────────────────────────────────────────────────────────────────
 
+  /* Segments around one loop. More than the eye needs, because the silhouette
+     is a circle and a coarse ring reads as a polygon at this camera angle. */
+  RING_SEGS: 34,
+
+  /**
+   * One slice of the loop's ribbon: the surface the car is carried on, plus a
+   * rail up each side so it reads as moulded channel rather than a flat band.
+   */
+  drawRailSegment(ctx, R, s) {
+    const Pj = BR.Projection;
+    const t0 = s / this.RING_SEGS, t1 = (s + 1) / this.RING_SEGS;
+
+    const P = function (t, side, lift) {
+      const p = BR.Rails.ringPoint(R, t, side);
+      // The side rails stand off the surface, along the loop's own radius.
+      const a = t * Math.PI * 2;
+      return Pj.project(p[0], p[1], p[2] + (lift || 0) * Math.cos(a));
+    };
+
+    // Driving surface.
+    const a0 = P(t0, -1, 0), b0 = P(t0, 1, 0);
+    const a1 = P(t1, -1, 0), b1 = P(t1, 1, 0);
+    ctx.beginPath();
+    ctx.moveTo(a0.sx, a0.sy); ctx.lineTo(b0.sx, b0.sy);
+    ctx.lineTo(b1.sx, b1.sy); ctx.lineTo(a1.sx, a1.sy);
+    ctx.closePath();
+    // Banded, so the loop's rotation is legible while you are going round it.
+    ctx.fillStyle = (s % 2) ? R.colour : R.altColour;
+    ctx.fill();
+    ctx.strokeStyle = R.colour;
+    ctx.lineWidth = 1 / BR.CAMERA.zoom;
+    ctx.stroke();
+
+    // Side rails.
+    ctx.strokeStyle = R.railColour;
+    ctx.lineWidth = 3.5 / BR.CAMERA.zoom;
+    for (let side = -1; side <= 1; side += 2) {
+      const q0 = P(t0, side, 20), q1 = P(t1, side, 20);
+      ctx.beginPath();
+      ctx.moveTo(q0.sx, q0.sy); ctx.lineTo(q1.sx, q1.sy);
+      ctx.stroke();
+    }
+  },
+
   drawWall(ctx, w, fallbackH) {
     const Pj = BR.Projection;
     const H = w.h === undefined ? fallbackH : w.h;
@@ -888,10 +949,11 @@ BR.Renderer = {
 
   // ── vehicle ──────────────────────────────────────────────────────────────
 
-  drawVehicle(ctx, v, x, y, z, heading, isPlayer, deckZ) {
+  drawVehicle(ctx, v, x, y, z, heading, isPlayer, deckZ, roll) {
     // `z` is absolute height; `deckZ` is the track surface under the car. On a
     // flat track both the shadow and the anchor sit at 0 exactly as before.
     const ground = deckZ || 0;
+    const rl = roll || 0;
     const Pj = BR.Projection;
     const spec = v.spec;
 
@@ -952,8 +1014,24 @@ BR.Renderer = {
       ctx.stroke();
     }
 
-    const base = world.map(function (p) { return PT(p[0], p[1], z); });
-    const top  = world.map(function (p) { return PT(p[0], p[1], z + H); });
+    /* ── roll ──────────────────────────────────────────────────────────────
+       Upright, "up" is (0,0,1) and this is the extrusion it has always been.
+       Through a loop the car turns about its own travel axis, so up swings out
+       sideways and then all the way over: at PI the body is below its own
+       footprint and the car is genuinely upside down.
+
+       Rotation is about the car's MID-HEIGHT, not its floor — pivoting on the
+       floor edge would make it heave up and down through the ride instead of
+       turning on the spot. */
+    const ux = -Math.sin(heading) * Math.sin(rl);
+    const uy =  Math.cos(heading) * Math.sin(rl);
+    const uz =  Math.cos(rl);
+    const base = world.map(function (p) {
+      return PT(p[0] - ux * H / 2, p[1] - uy * H / 2, z + H / 2 - uz * H / 2);
+    });
+    const top = world.map(function (p) {
+      return PT(p[0] + ux * H / 2, p[1] + uy * H / 2, z + H / 2 + uz * H / 2);
+    });
 
     // ── sides, nearer edges last so they overdraw correctly ────────────────
     const edges = [];

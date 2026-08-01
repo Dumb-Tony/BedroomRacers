@@ -506,6 +506,17 @@ BR.Game = {
         v.roadZ = tr.z;
       }
 
+      /* On a loop the car is a passenger. The controller, the surface, the
+         ramps and the walls all sit this tick out — a rail already knows
+         exactly where the car is, and letting the wall solver see a car
+         halfway up a vertical circle would push it somewhere absurd. */
+      if (v.rail) {
+        v.prevX = v.x; v.prevY = v.y; v.prevZ = v.z;
+        v.prevHeading = v.heading; v.prevRoadZ = v.roadZ; v.prevRoll = v.roll;
+        BR.Rails.step(v, dt);
+        continue;
+      }
+
       // Surface under the wheels, read BEFORE stepping so grip, top speed and
       // acceleration all reflect where the car actually is. This is what makes
       // cutting a corner across the rug cost something.
@@ -513,6 +524,10 @@ BR.Game = {
       v.surfaceMod = BR.TrackManager.surfaceModsAt(this.arena, v.x, v.y, v.surface);
 
       BR.VehicleController.step(v, input, dt);
+
+      // Getting on happens after the controller, so the speed tested at the
+      // mouth is the speed the car actually arrives with.
+      BR.Rails.check(v, this.arena.rails);
 
       // Packing the sand happens in the FIXED step, so a 144Hz machine cannot
       // wear a racing line in faster than a 60Hz one.
@@ -628,6 +643,10 @@ BR.Game = {
         // A ghost is a replay, not a rival. Letting it push the player would
         // also break its own determinism.
         if (a.isGhost || b.isGhost) continue;
+        // A car on a loop is on rails. It cannot be shoved off them, and it
+        // cannot shove — its position is scripted, so a push would either be
+        // ignored or tear it off the track.
+        if (a.rail || b.rail) continue;
         if (Math.abs(a.z - b.z) > 14) continue;   // one is airborne over the other
 
         const dx = b.x - a.x, dy = b.y - a.y;

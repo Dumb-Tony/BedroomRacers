@@ -34,6 +34,12 @@ BR.Vehicle = {
       level: 0,           // which deck — only walls on it can be hit
       lineIdx: -1,        // last known centreline index, for windowed lookup
 
+      // ── loops ───────────────────────────────────────────────────────────
+      rail: null,         // the ride currently carrying this car, if any
+      railIndex: -1,      // edge trigger, so a loop cannot immediately re-board
+      roll: 0,            // rotation about the travel axis — render only
+      prevRoll: 0,
+
       // ── handling state ──────────────────────────────────────────────────
       retention: BR.PHYSICS.lateralRetentionNormal,  // current lateral slide
       slip: 0,            // rad between heading and travel direction

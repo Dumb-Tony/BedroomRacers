@@ -279,13 +279,13 @@ BR.EVENTS.push(
   {
     id: 'st-01',
     name: 'Dresser Drop',
-    blurb: 'Up onto the dresser, along the top, then down and under yourself.',
+    blurb: 'Through the loop, up onto the dresser, then down and under yourself.',
     trackId: 'stunt-dresser-drop',
     mode: 'standard-race',
     laps: 3,
     opponents: 4,
     difficulty: 'normal',
-    platinumTime: 92,           // 0.93 x 99.0, the clean reference run
+    platinumTime: 97,           // 0.93 x 104.4, the clean reference run
     unlockStars: 26,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -302,8 +302,8 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 0,
     difficulty: 'normal',
-    times: { gold: 94, silver: 103, bronze: 115 },   // clean reference 99.0
-    platinumTime: 88,
+    times: { gold: 99, silver: 109, bronze: 121 },   // clean reference 104.4
+    platinumTime: 92,
     unlockStars: 29,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
