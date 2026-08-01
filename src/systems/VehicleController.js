@@ -35,6 +35,12 @@ BR.VehicleController = {
    * @param {number} dt    fixed timestep, seconds
    */
   step(v, input, dt) {
+    /* Stunned: no steering, no throttle. Capped at Items.MAX_STUN, so an item
+       never takes the wheel away for longer than a bad crash does — that is the
+       0.8s ceiling in 03_Driving_Physics.md, and items get no exception. */
+    if (v.stunTime > 0) {
+      input = { steer: 0, throttle: 0, brake: 0, drift: false, boost: false };
+    }
     const P = BR.PHYSICS;
     const M = BR.M;
     // surfaceMod carries blended numbers where a surface is a continuum rather
@@ -110,8 +116,11 @@ BR.VehicleController = {
     // the car from 350 to 449. Using total speed means you cannot accelerate
     // while sliding sideways, which is both correct and what makes
     // overcommitting to a drift cost you.
+    /* The Wind-Up Key raises ACCELERATION, never the ceiling — which is what
+       keeps it a different thing from boost rather than a weaker copy of it. */
+    const wind = v.windUp > 0 ? 1.55 : 1;
     if (input.throttle > 0 && v.grounded && speed < maxForward && vF < maxForward) {
-      vF += P.engineForce * accelMul * S.accel * input.throttle * dt;
+      vF += P.engineForce * accelMul * wind * S.accel * input.throttle * dt;
     }
 
     if (input.brake > 0 && v.grounded) {

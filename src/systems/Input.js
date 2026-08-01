@@ -80,16 +80,19 @@ BR.Input = {
       left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'],
       up:   ['ArrowUp', 'KeyW'],   down:  ['ArrowDown', 'KeyS'],
       drift: ['Space'], boost: ['ShiftLeft', 'ShiftRight'],
+      item: ['KeyE'],
     },
     p1: {
       left: ['ArrowLeft'], right: ['ArrowRight'],
       up:   ['ArrowUp'],   down:  ['ArrowDown'],
       drift: ['ShiftRight'], boost: ['Enter'],
+      item: ['Slash'],
     },
     p2: {
       left: ['KeyA'], right: ['KeyD'],
       up:   ['KeyW'], down:  ['KeyS'],
       drift: ['ShiftLeft'], boost: ['Space'],
+      item: ['KeyQ'],
     },
     // Three and four sit between the outer two, so the hands go
     // left-to-right: WASD, TFGH, IJKL, arrows. No numpad — laptops do not have
@@ -99,11 +102,13 @@ BR.Input = {
       left: ['KeyJ'], right: ['KeyL'],
       up:   ['KeyI'], down:  ['KeyK'],
       drift: ['KeyU'], boost: ['KeyO'],
+      item: ['KeyP'],
     },
     p4: {
       left: ['KeyF'], right: ['KeyH'],
       up:   ['KeyT'], down:  ['KeyG'],
       drift: ['KeyR'], boost: ['KeyY'],
+      item: ['KeyV'],
     },
   },
 
@@ -134,6 +139,7 @@ BR.Input = {
   BUTTON: {
     drift:  [0, 4],    // A, or left bumper
     boost:  [2, 5],    // X, or right bumper
+    item:   [1, 3],    // B or Y — the free face buttons
     brake:  [1],       // B
     accel:  [7],       // right trigger
     slow:   [6],       // left trigger
@@ -201,6 +207,7 @@ BR.Input = {
       brake: Math.max(slow, this.anyBtn(pad, this.BUTTON.brake) ? 1 : 0),
       drift: this.anyBtn(pad, this.BUTTON.drift),
       boost: this.anyBtn(pad, this.BUTTON.boost),
+      item:  this.anyBtn(pad, this.BUTTON.item),
     };
   },
 
@@ -239,6 +246,7 @@ BR.Input = {
       brake:    down ? 1 : 0,
       drift:    this.down.apply(this, p.drift),
       boost:    this.down.apply(this, p.boost),
+      item:     this.down.apply(this, p.item || []),
     };
   },
 };

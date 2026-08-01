@@ -45,6 +45,15 @@ BR.Vehicle = {
       trackDist: 0,       // distance to the centreline, for the edge test
       lastSafeIdx: -1,    // last centreline index reached while ON the road
       recovered: 0,       // how many times this car has been put back
+
+      // ── items (item races only) ─────────────────────────────────────────
+      item: null,         // the one held item, or null. No stacking.
+      itemHeld: false,    // edge trigger on the fire button
+      windUp: 0,          // acceleration boost, seconds left
+      shield: 0,          // absorbs one hit, seconds left
+      shieldPopped: 0,    // brief flash after a shield eats something
+      stunTime: 0,        // control lost, capped at Items.MAX_STUN
+
       roll: 0,            // how far round a ride the car is — diagnostics
       /* Which way is up for THIS car — render only, and the simulation never
          reads it. A vector rather than an angle because a loop pitches and a
