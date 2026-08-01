@@ -1,11 +1,11 @@
 # 07 — World: Plastic Stunt Track
 
-> **DRAFT — not designed.** The source GDD contains a concept sentence and a feature
-> wishlist for this world, nothing more. What follows is scaffolding plus the design
-> problems that need solving. **Do not build from this document.**
+> **STARTED (Phase 7).** The elevation model is decided, built and measured, and
+> one track ships on it — Dresser Drop. Loops, corkscrews and track-switching
+> gates are **not** built.
 >
-> This world is Phase 6 at the earliest. It should not be designed until the town rug
-> is complete and shipped.
+> Source: `src/data/tracks/stunt-dresser-drop.js`, plus `resolveElevation` and
+> `trackAt` in `TrackManager.js`.
 
 ## Concept
 
@@ -64,21 +64,78 @@ features. Option 2 is likely a rewrite disguised as a feature.
 
 This must be decided **before** any stunt-track content is authored.
 
+### RESOLVED — option 1, and it cost far less than "the largest technical question"
+
+Discrete levels with a **continuous render height**. Two properties per
+centreline point: `level`, an integer deciding what can collide with what, and
+`z`, a height deciding where it draws. `level` steps at each authored key; `z`
+eases between them with a smoothstep so a climb has no kink at the top.
+
+**The simulation did not change at all.** Grip, steering, drift, gravity and
+every `clearAt` threshold are the numbers they were on the bedroom rug. That is
+entirely down to keeping `v.z` meaning *height above the track surface* and
+adding a separate `v.roadZ` for the deck — so a car parked on a raised section
+still has `z === 0` and every existing height test keeps its meaning.
+
+What it actually took:
+
+| | |
+| --- | --- |
+| `Collision.resolveWalls` | one condition: skip walls on another deck |
+| `TrackManager.surfaceAt` | one filter: only segments on the car's own deck |
+| `TrackManager.trackAt` | **new** — which deck a car is on, windowed (see below) |
+| `Renderer.drawRoad` | quads sorted back to front instead of one even-odd fill |
+| everything else | passed a `z` it previously hardcoded to 0 |
+
+Option 3 (rail sections for loops) is still unbuilt and still the right answer
+for loops. Nothing here forecloses it.
+
+### Two things that were not obvious
+
+**A car's deck cannot be found by nearest centreline point.** At a crossover the
+two nearest points are on different levels and a global search picks whichever
+is geometrically closer — so a car on the upper deck gets told it is on the road
+below. `trackAt` searches a window around the car's *own* last index instead,
+following its progress round the lap. Measured over a three-lap race: exactly
+two deck changes per lap, at the two authored transitions, with no flicker at
+the crossing.
+
+**A crossover needs a figure-eight, not a ring.** On a convex loop the raised
+stretch and the floor stretch are on opposite sides of the circuit and never
+meet, so there is nothing to pass over and the level index is never exercised.
+The first draft of Dresser Drop was a ring and tested none of this.
+
 ## Open questions
 
-1. Which elevation model? (Above — blocking.)
-2. Does the vehicle model survive, or does this world need its own?
-3. Are the racing lines in `04_AI.md` sufficient for AI on multi-level track, or does
-   AI need level-aware waypoints?
-4. What does falling off do here? Under-track recovery is a whole subsystem.
-5. Is this actually the right second world? Sandbox Speedway (`08`) is flat and
-   reuses the existing model almost entirely — it may be a far cheaper expansion.
+1. ~~Which elevation model?~~ **Resolved: option 1, above.**
+2. ~~Does the vehicle model survive?~~ **Resolved: yes, untouched.** Not one
+   constant in `03_Driving_Physics.md` moved.
+3. ~~Are the racing lines in `04_AI.md` sufficient on multi-level track?~~
+   **Resolved: yes, unmodified.** The line is an ordered loop, so following it by
+   index is level-correct for free — an AI cannot cut from the upper deck to the
+   lower because the indices between them are the ramp. `advanceWaypoint`
+   already searched a narrow window forward, for an unrelated reason, and that
+   turns out to be the same defence `trackAt` needed.
+4. **What does falling off do here?** Still open, and now the most pressing one.
+   Dresser Drop has continuous side rails on the raised deck, so it is dodged
+   rather than answered — you cannot currently leave the upper deck except by
+   driving down it. A track with a gap in the rail needs a real answer: does the
+   car fall to the floor and rejoin, or is it a reset?
+5. ~~Is this the right second world?~~ **Resolved: no, and it was right not to
+   be.** Sandbox Speedway went first and proved the modular-world architecture,
+   which is why this one cost a track file and a few dozen lines. Attempted
+   first, with no evidence the architecture held, it would have been the rewrite
+   the draft feared.
 
-## Recommendation
+## Still unbuilt
 
-Ship the town rug. Then build **Sandbox Speedway** as the first expansion, because it
-proves the modular-world architecture at low technical risk. Come back to the stunt
-track once there is real evidence the architecture holds.
+Loops, corkscrews, magnetic boosters, track-switching gates, falling track
+sections and wall-mounted routes. Loops and corkscrews want option 3 (rail
+sections); the rest are content on top of what now exists.
+
+The **legal note above still binds** every one of them. Dresser Drop uses violet
+and teal rather than the obvious orange and blue, and draws no connector
+geometry at all.
 
 ## Related
 

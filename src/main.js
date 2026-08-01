@@ -494,10 +494,22 @@ BR.Game = {
         input = { steer: 0, throttle: 0, brake: 0, drift: false, boost: false };
       }
 
+      /* Which deck the car is on, tracked by following its own progress round
+         the lap. Must be resolved BEFORE the surface and the walls: on a track
+         that crosses over itself both of those answer differently depending on
+         the level, and getting it after the fact means a frame of driving on
+         the wrong road. */
+      if (this.arena.elevated) {
+        const tr = BR.TrackManager.trackAt(this.arena, v.x, v.y, v.lineIdx);
+        v.lineIdx = tr.idx;
+        v.level = tr.level;
+        v.roadZ = tr.z;
+      }
+
       // Surface under the wheels, read BEFORE stepping so grip, top speed and
       // acceleration all reflect where the car actually is. This is what makes
       // cutting a corner across the rug cost something.
-      v.surface = BR.TrackManager.surfaceAt(this.arena, v.x, v.y);
+      v.surface = BR.TrackManager.surfaceAt(this.arena, v.x, v.y, v.level);
       v.surfaceMod = BR.TrackManager.surfaceModsAt(this.arena, v.x, v.y, v.surface);
 
       BR.VehicleController.step(v, input, dt);

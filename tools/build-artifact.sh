@@ -39,6 +39,7 @@ FILES=(
   "src/data/tracks/sandbox-big-dig.js"
   "src/data/tracks/sandbox-bucket-brigade.js"
   "src/data/tracks/sandbox-tide-pool.js"
+  "src/data/tracks/stunt-dresser-drop.js"
   "src/entities/Vehicle.js"
   "src/systems/VehicleController.js"
   "src/systems/Collision.js"

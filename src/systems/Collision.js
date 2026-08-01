@@ -34,6 +34,11 @@ BR.Collision = {
       // cleared any barrier regardless of how high it went.
       if (v.z >= w.clearAt) continue;
 
+      // A barrier on another deck is not in this car's world at all — it is the
+      // kerb of a road passing overhead or underneath. Flat tracks leave
+      // w.level undefined and every wall applies to everyone, as before.
+      if (w.level !== undefined && w.level !== v.level) continue;
+
       // Closest point on the segment to the circle centre.
       const abx = w.bx - w.ax, aby = w.by - w.ay;
       const apx = v.x  - w.ax, apy = v.y  - w.ay;
@@ -47,9 +52,16 @@ BR.Collision = {
 
       if (d >= r) continue;
 
-      // Degenerate: centre exactly on the segment. Pick an arbitrary normal
-      // rather than dividing by zero.
-      if (d < 1e-6) { dx = 1; dy = 0; d = 1e-6; }
+      /* Degenerate: centre exactly on the segment. Pick an arbitrary normal
+         rather than dividing by zero.
+
+         d MUST be set to 1, not to the epsilon. The next line divides by it to
+         normalise, so an epsilon of 1e-6 produced a "unit" normal 1,000,000
+         long and the depenetration below threw the car eleven million units
+         across the world. It survived this long because a centre landing
+         exactly on a segment is rare — but it is reachable, and the failure is
+         total when it happens. */
+      if (d < 1e-6) { dx = 1; dy = 0; d = 1; }
 
       const nx = dx / d, ny = dy / d;
 

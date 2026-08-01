@@ -67,19 +67,67 @@ BR.TrackManager = {
     return [dx / len, dy / len];
   },
 
+  /**
+   * Height and level for every centreline point.
+   *
+   * DISCRETE LEVELS, CONTINUOUS HEIGHT — 07_World_Stunt_Track.md option 1. The
+   * simulation stays resolutely 2D: `level` is an integer that decides what can
+   * collide with what, and `z` is a render height that decides what it looks
+   * like. Nothing about gravity, grip or steering changes, which is the whole
+   * reason this option was picked over a true height field.
+   *
+   * `level` steps at each key; `z` eases between them, so a climb has no kink
+   * at the top and the track reads as a moulded ramp rather than a folded one.
+   * Author the level change at the key where the climb STARTS, so the ramp
+   * belongs to the level it is heading for and cannot collide with what it
+   * passes over.
+   */
+  resolveElevation(def, n) {
+    const out = new Array(n);
+    const keys = def.elevation;
+    if (!keys || !keys.length) {
+      for (let i = 0; i < n; i++) out[i] = { z: 0, level: 0 };
+      return out;
+    }
+    const k = keys.slice().sort(function (a, b) { return a.t - b.t; });
+
+    for (let i = 0; i < n; i++) {
+      const t = i / n;
+      // Bracketing keys, wrapping round the lap.
+      let a = k[k.length - 1], at = a.t - 1;
+      let b = k[0],            bt = k[0].t;
+      for (let j = 0; j < k.length; j++) {
+        if (k[j].t <= t) {
+          a = k[j]; at = k[j].t;
+          b = k[(j + 1) % k.length];
+          bt = (j + 1 < k.length) ? k[j + 1].t : k[0].t + 1;
+        }
+      }
+      const span = bt - at;
+      let f = span > 1e-6 ? (t - at) / span : 0;
+      f = f * f * (3 - 2 * f);                    // smoothstep
+      out[i] = { z: a.z + (b.z - a.z) * f, level: a.level || 0 };
+    }
+    return out;
+  },
+
   build(def) {
     const self = this;
     const line = this.resample(this.spline(def.control, 24), 80);
     const n = line.length;
     const half = def.roadWidth / 2;
+    const elev = this.resolveElevation(def, n);
+    const elevated = !!(def.elevation && def.elevation.length);
 
     // ── kerbs ──────────────────────────────────────────────────────────────
+    // Edge points carry the road height as a third component, so everything
+    // downstream can draw them without looking the elevation up again.
     const outer = [], inner = [];
     for (let i = 0; i < n; i++) {
       const t = this.tangentAt(line, i);
       const nx = -t[1], ny = t[0];
-      outer.push([line[i][0] + nx * half, line[i][1] + ny * half]);
-      inner.push([line[i][0] - nx * half, line[i][1] - ny * half]);
+      outer.push([line[i][0] + nx * half, line[i][1] + ny * half, elev[i].z]);
+      inner.push([line[i][0] - nx * half, line[i][1] - ny * half, elev[i].z]);
     }
 
     // ── walls ──────────────────────────────────────────────────────────────
@@ -88,7 +136,11 @@ BR.TrackManager = {
       for (let i = 0; i < pts.length; i++) {
         const a = pts[i], b = pts[(i + 1) % pts.length];
         walls.push({ ax: a[0], ay: a[1], bx: b[0], by: b[1],
-                     h: h, clearAt: clearAt });
+                     h: h, clearAt: clearAt,
+                     // Which deck this barrier belongs to. Undefined on flat
+                     // tracks, where every wall applies to everyone.
+                     level: elevated ? elev[i].level : undefined,
+                     z: elev[i].z });
       }
     }
     const kerbH = def.kerbHeight || 22;
@@ -128,7 +180,9 @@ BR.TrackManager = {
       if (inCut(i)) continue;
       const a = inner[i], b = inner[(i + 1) % inner.length];
       walls.push({ ax: a[0], ay: a[1], bx: b[0], by: b[1],
-                   h: kerbH, clearAt: Infinity });
+                   h: kerbH, clearAt: Infinity,
+                   level: elevated ? elev[i].level : undefined,
+                   z: elev[i].z });
     }
 
     /* The cut region: the arc of inner kerb that was removed, closed by the
@@ -154,6 +208,8 @@ BR.TrackManager = {
           ax: a[0] + (b[0] - a[0]) * t0, ay: a[1] + (b[1] - a[1]) * t0,
           bx: a[0] + (b[0] - a[0]) * t1, by: a[1] + (b[1] - a[1]) * t1,
           h: kerbH, clearAt: Infinity,
+          level: elevated ? elev[cutFrom].level : undefined,
+          z: elev[cutFrom].z,
         });
       }
     }
@@ -166,6 +222,7 @@ BR.TrackManager = {
     for (let i = 0; i < props.length; i++) {
       const p = props[i];
       const sides = 8;
+      const pe = elev[this.nearestIndex(line, p.x, p.y)];
       for (let s = 0; s < sides; s++) {
         const a0 = (s / sides) * Math.PI * 2 + p.rot;
         const a1 = ((s + 1) / sides) * Math.PI * 2 + p.rot;
@@ -173,6 +230,8 @@ BR.TrackManager = {
           ax: p.x + Math.cos(a0) * p.r, ay: p.y + Math.sin(a0) * p.r,
           bx: p.x + Math.cos(a1) * p.r, by: p.y + Math.sin(a1) * p.r,
           h: p.h, clearAt: p.clearAt === undefined ? Infinity : p.clearAt,
+          level: elevated ? pe.level : undefined,
+          z: pe.z,
         });
       }
     }
@@ -347,12 +406,52 @@ BR.TrackManager = {
       roadColour:   def.roadColour   || '#403c39',
       weaveColour:  def.weaveColour  || 'rgba(0,0,0,0.055)',
       sandy: !!def.sandy,
+      skirtColour: def.skirtColour || 'rgba(38,32,46,0.85)',
+      elevated: elevated,
+      elevation: elev,
+      levelCount: elev.reduce(function (m, e) { return Math.max(m, e.level); }, 0) + 1,
       bounds: { minX: minX - 400, minY: minY - 400,
                 maxX: maxX + 400, maxY: maxY + 400,
                 w: maxX - minX, h: maxY - minY },
     };
 
     out.strays = this.findStrayRects(out, def);
+
+    /* EVERY wall on an elevated track must know its deck. A wall with no level
+       applies to every car on every level, so it becomes an invisible barrier
+       hanging in the air across whatever passes underneath.
+
+       This is not a hypothetical either: `level` was added to edgeToWalls and
+       three other places push walls directly — the inner kerb, the shortcut
+       chord and the props. The inner kerb of the raised deck stayed a solid
+       wall to cars on the floor below, and the first stunt track simply could
+       not be driven. Nothing pointed at it; the car just stopped. */
+    if (elevated) {
+      const levelless = out.walls.filter(function (w) {
+        return w.level === undefined;
+      }).length;
+      if (levelless && typeof console !== 'undefined') {
+        console.warn('TRACK ' + def.id + ': ' + levelless + ' of ' +
+                     out.walls.length + ' walls have no level and will block ' +
+                     'every deck. Every walls.push must set one.');
+      }
+      out.levellessWalls = levelless;
+    }
+
+    /* Anything sitting ON the road needs the road's height, or it stays on the
+       bedroom floor while the track climbs away above it. Resolved once here
+       rather than per frame — none of it moves. */
+    if (elevated) {
+      const lift = function (item, x, y) {
+        item.z = elev[self.nearestIndex(line, x, y)].z;
+      };
+      out.boostPads.forEach(function (p) { lift(p, p.x + p.w / 2, p.y + p.h / 2); });
+      out.ramps.forEach(function (r) { lift(r, r.x + r.w / 2, r.y + r.h / 2); });
+      out.collectibles.forEach(function (c) { lift(c, c.x, c.y); });
+      out.props.forEach(function (p) { lift(p, p.x, p.y); });
+      out.hazards.forEach(function (h) { lift(h, h.x, h.y); });
+      out.finishZ = elev[self.nearestIndex(line, def.finish[0], def.finish[1])].z;
+    }
     return out;
   },
 
@@ -434,11 +533,44 @@ BR.TrackManager = {
   },
 
   /**
-   * Which surface is this point on?
-   * Distance to the centreline rather than point-in-polygon: the road is built
-   * from that centreline, so the test is exact and far cheaper.
+   * Where on the track is this point, and on which deck?
+   *
+   * Searched in a WINDOW around the last known index rather than globally. On a
+   * track that crosses over itself the two nearest centreline points are on
+   * different levels and a global search picks whichever is geometrically
+   * closer — which is how a car on the upper deck gets told it is on the road
+   * below it. Following the car's own progress round the lap keeps it honest.
+   *
+   * Falls back to a global search when the windowed answer is implausibly far,
+   * which covers a reset, a big shortcut, or the first call of a race.
    */
-  surfaceAt(track, x, y) {
+  trackAt(track, x, y, prevIdx) {
+    const line = track.centreline, n = line.length;
+    const elev = track.elevation;
+    let best = Infinity, bi = 0;
+
+    if (prevIdx !== undefined && prevIdx >= 0) {
+      for (let k = -16; k <= 16; k++) {
+        const i = ((prevIdx + k) % n + n) % n;
+        const d = (line[i][0] - x) * (line[i][0] - x) +
+                  (line[i][1] - y) * (line[i][1] - y);
+        if (d < best) { best = d; bi = i; }
+      }
+    }
+    // Too far to be believable — the car is not where we thought it was.
+    if (best > (track.halfWidth * 6) * (track.halfWidth * 6)) {
+      best = Infinity;
+      for (let i = 0; i < n; i++) {
+        const d = (line[i][0] - x) * (line[i][0] - x) +
+                  (line[i][1] - y) * (line[i][1] - y);
+        if (d < best) { best = d; bi = i; }
+      }
+    }
+    return { idx: bi, level: elev[bi].level, z: elev[bi].z,
+             dist: Math.sqrt(best) };
+  },
+
+  surfaceAt(track, x, y, level) {
     // Explicit zones win — car parks, paper, hardwood patches.
     for (let i = 0; i < track.zones.length; i++) {
       const z = track.zones[i];
@@ -450,9 +582,18 @@ BR.TrackManager = {
       return track.cutSurface;
     }
 
-    const line = track.centreline;
+    /* Distance to the centreline rather than point-in-polygon: the road is
+       built from that centreline, so the test is exact and far cheaper.
+
+       On an elevated track only segments on the CAR'S OWN DECK count. Without
+       that, a car crossing over a lower road is told it is on tarmac when it is
+       actually in mid-air above it — and worse, a car that falls off the upper
+       deck lands on road it should have missed. */
+    const line = track.centreline, elev = track.elevation;
+    const filter = track.elevated && level !== undefined && level !== null;
     let best = Infinity;
     for (let i = 0; i < line.length; i++) {
+      if (filter && elev[i].level !== level) continue;
       const a = line[i], b = line[(i + 1) % line.length];
       const abx = b[0] - a[0], aby = b[1] - a[1];
       const apx = x - a[0], apy = y - a[1];

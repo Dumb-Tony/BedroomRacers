@@ -45,6 +45,7 @@ BR.VehicleController = {
     // Snapshot for render interpolation. The renderer draws between the last
     // two simulation states, so a 144Hz display doesn't stutter on a 60Hz sim.
     v.prevX = v.x; v.prevY = v.y; v.prevZ = v.z; v.prevHeading = v.heading;
+    v.prevRoadZ = v.roadZ;   // the deck moves under the car on a climb
 
     // ── 1. basis vectors from heading (flat world plane) ───────────────────
     const fx = Math.cos(v.heading), fy = Math.sin(v.heading);

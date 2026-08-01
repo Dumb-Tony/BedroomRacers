@@ -22,8 +22,17 @@ BR.Vehicle = {
       vel: { x: 0, y: 0 },
       heading: heading || 0,
 
-      // ── height (jumps only) ─────────────────────────────────────────────
+      /* ── height ────────────────────────────────────────────────────────
+         `z` is height ABOVE THE TRACK SURFACE, not above the world. On a flat
+         track those are the same thing and nothing changed; on an elevated one
+         the deck itself is at `roadZ` and the car draws at roadZ + z.
+
+         Keeping them apart is what leaves the jump physics and every clearAt
+         threshold meaning exactly what they meant before. */
       z: 0, vz: 0, grounded: true,
+      roadZ: 0,           // height of the deck under the car
+      level: 0,           // which deck — only walls on it can be hit
+      lineIdx: -1,        // last known centreline index, for windowed lookup
 
       // ── handling state ──────────────────────────────────────────────────
       retention: BR.PHYSICS.lateralRetentionNormal,  // current lateral slide

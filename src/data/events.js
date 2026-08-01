@@ -271,6 +271,48 @@ BR.EVENTS.push(
   }
 );
 
+/* ── Plastic Stunt Track ───────────────────────────────────────────────────
+   The first world that leaves the floor. Gated well down the ladder: a player
+   meeting a crossover should already know how the car handles, because reading
+   which deck you are on is a new thing to learn on its own. */
+BR.EVENTS.push(
+  {
+    id: 'st-01',
+    name: 'Dresser Drop',
+    blurb: 'Up onto the dresser, along the top, then down and under yourself.',
+    trackId: 'stunt-dresser-drop',
+    mode: 'standard-race',
+    laps: 3,
+    opponents: 4,
+    difficulty: 'normal',
+    platinumTime: 92,           // 0.93 x 99.0, the clean reference run
+    unlockStars: 26,
+    objectives: [
+      { id: 'finish',  label: 'Finish the race' },
+      { id: 'win',     label: 'Win the race' },
+      { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+    ],
+  },
+  {
+    id: 'tt-dresser',
+    name: 'Dresser Drop Time Trial',
+    blurb: 'Three laps of the high road, alone.',
+    trackId: 'stunt-dresser-drop',
+    mode: 'time-trial',
+    laps: 3,
+    opponents: 0,
+    difficulty: 'normal',
+    times: { gold: 94, silver: 103, bronze: 115 },   // clean reference 99.0
+    platinumTime: 88,
+    unlockStars: 29,
+    objectives: [
+      { id: 'finish',  label: 'Set a time' },
+      { id: 'ttGold',  label: 'Beat the gold time' },
+      { id: 'ttPlat',  label: 'Beat the platinum time' },
+    ],
+  }
+);
+
 /* Vehicles are earned with stars. 09_Vehicles.md left open whether the starter
    roster should all be available immediately; two to start and three to earn
    gives progression something to hand out early, which is the whole point of a

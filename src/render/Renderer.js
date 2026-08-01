@@ -253,9 +253,13 @@ BR.Renderer = {
       const c = racers[i];
       const cx = M.lerp(c.prevX, c.x, alpha);
       const cy = M.lerp(c.prevY, c.y, alpha);
-      const cz = M.lerp(c.prevZ, c.z, alpha);
+      // The deck under the car is interpolated too, or a car climbing a ramp
+      // steps up in 60Hz jerks while everything around it moves smoothly.
+      const cdeck = M.lerp(c.prevRoadZ || 0, c.roadZ || 0, alpha);
+      const cz = cdeck + M.lerp(c.prevZ, c.z, alpha);
       const ch = c.prevHeading + M.wrapAngle(c.heading - c.prevHeading) * alpha;
-      drawables.push({ key: Pj.depthAt(cx, cy), car: c, cx: cx, cy: cy, cz: cz, ch: ch });
+      drawables.push({ key: Pj.depthAt(cx, cy), car: c,
+                       cx: cx, cy: cy, cz: cz, ch: ch, deck: cdeck });
     }
     drawables.sort((a, b) => a.key - b.key);
 
@@ -264,7 +268,8 @@ BR.Renderer = {
       if (d.wall)        this.drawWall(ctx, d.wall, arena.wallHeight);
       else if (d.prop)   this.drawProp(ctx, d.prop);
       else if (d.hazard) this.drawHazard(ctx, d.hazard);
-      else               this.drawVehicle(ctx, d.car, d.cx, d.cy, d.cz, d.ch, d.car === v);
+      else               this.drawVehicle(ctx, d.car, d.cx, d.cy, d.cz, d.ch,
+                                          d.car === v, d.deck);
     }
 
     this.drawDust(ctx);
@@ -323,6 +328,7 @@ BR.Renderer = {
   /* Chequered finish line, painted on the ground plane. */
   drawFinishLine(ctx, arena) {
     const Pj = BR.Projection;
+    const fz = arena.finishZ || 0;
     const cps = arena.checkpoints;
     if (!cps || !cps.length) return;
 
@@ -340,10 +346,10 @@ BR.Renderer = {
         const t0 = i / squares, t1 = (i + 1) / squares;
         const o0 = (row - 1) * depth, o1 = row * depth;
         const p = [
-          Pj.project(ax + dx * t0 + nx * o0, ay + dy * t0 + ny * o0, 0),
-          Pj.project(ax + dx * t1 + nx * o0, ay + dy * t1 + ny * o0, 0),
-          Pj.project(ax + dx * t1 + nx * o1, ay + dy * t1 + ny * o1, 0),
-          Pj.project(ax + dx * t0 + nx * o1, ay + dy * t0 + ny * o1, 0),
+          Pj.project(ax + dx * t0 + nx * o0, ay + dy * t0 + ny * o0, fz),
+          Pj.project(ax + dx * t1 + nx * o0, ay + dy * t1 + ny * o0, fz),
+          Pj.project(ax + dx * t1 + nx * o1, ay + dy * t1 + ny * o1, fz),
+          Pj.project(ax + dx * t0 + nx * o1, ay + dy * t0 + ny * o1, fz),
         ];
         ctx.beginPath();
         ctx.moveTo(p[0].sx, p[0].sy);
@@ -394,22 +400,101 @@ BR.Renderer = {
   /* Printed road: a filled ring between the kerbs, with a dashed centre line.
      Road edges must be unmistakable — "never rely on surface texture alone"
      (05_Tracks.md readability rules). */
+  /**
+   * Road that leaves the floor.
+   *
+   * A flat road is one even-odd fill of two loops, which is cheap and exact.
+   * That cannot work once the track crosses over itself: the two loops are a
+   * single path, so the deck passing overhead fills in the same pass as the one
+   * underneath and whichever is drawn second wins regardless of which is
+   * actually on top.
+   *
+   * So an elevated track is drawn as a strip of quads sorted back to front,
+   * each at its own height, with a skirt down the edges for the thickness of
+   * the plastic and a pillar every so often holding the raised sections up.
+   * Quads are stroked in their own fill colour to close the hairline seams that
+   * appear between abutting fills.
+   */
+  drawElevatedRoad(ctx, arena) {
+    const Pj = BR.Projection;
+    const o = arena.outer, ip = arena.inner, n = o.length;
+    const SKIRT = 26;
+
+    const segs = [];
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      segs.push({ i: i, j: j,
+                  key: Math.max(Pj.depthAt(o[i][0], o[i][1]),
+                                Pj.depthAt(ip[j][0], ip[j][1])) });
+    }
+    segs.sort(function (a, b) { return a.key - b.key; });
+
+    const quad = function (a, b, c, d) {
+      ctx.beginPath();
+      const pa = Pj.project(a[0], a[1], a[2]); ctx.moveTo(pa.sx, pa.sy);
+      const pb = Pj.project(b[0], b[1], b[2]); ctx.lineTo(pb.sx, pb.sy);
+      const pc = Pj.project(c[0], c[1], c[2]); ctx.lineTo(pc.sx, pc.sy);
+      const pd = Pj.project(d[0], d[1], d[2]); ctx.lineTo(pd.sx, pd.sy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();                       // seal the seam
+    };
+
+    ctx.lineWidth = 1 / BR.CAMERA.zoom;
+    ctx.lineJoin = 'round';
+
+    for (let s = 0; s < segs.length; s++) {
+      const i = segs[s].i, j = segs[s].j;
+      const oi = o[i], oj = o[j], ii = ip[i], ij = ip[j];
+
+      // Pillars first — they are behind everything they hold up.
+      if (oi[2] > 40 && i % 6 === 0) {
+        const mx = (oi[0] + ii[0]) / 2, my = (oi[1] + ii[1]) / 2;
+        const pTop = Pj.project(mx, my, oi[2] - SKIRT);
+        const pBot = Pj.project(mx, my, 0);
+        ctx.strokeStyle = 'rgba(38,32,46,0.55)';
+        ctx.lineWidth = 9 / BR.CAMERA.zoom;
+        ctx.beginPath();
+        ctx.moveTo(pTop.sx, pTop.sy); ctx.lineTo(pBot.sx, pBot.sy);
+        ctx.stroke();
+        ctx.lineWidth = 1 / BR.CAMERA.zoom;
+      }
+
+      // Skirts: the moulded thickness of the track piece.
+      ctx.fillStyle = arena.skirtColour;
+      ctx.strokeStyle = arena.skirtColour;
+      quad(oi, oj, [oj[0], oj[1], oj[2] - SKIRT], [oi[0], oi[1], oi[2] - SKIRT]);
+      quad(ii, ij, [ij[0], ij[1], ij[2] - SKIRT], [ii[0], ii[1], ii[2] - SKIRT]);
+
+      // The driving surface.
+      ctx.fillStyle = arena.roadColour;
+      ctx.strokeStyle = arena.roadColour;
+      quad(oi, oj, ij, ii);
+    }
+  },
+
   drawRoad(ctx, arena) {
     const Pj = BR.Projection;
 
+    // Edge points carry their height as a third component, so the outline
+    // follows the road up a ramp without knowing anything about elevation.
     function trace(pts) {
       for (let i = 0; i < pts.length; i++) {
-        const p = Pj.project(pts[i][0], pts[i][1], 0);
+        const p = Pj.project(pts[i][0], pts[i][1], pts[i][2] || 0);
         if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
       }
       ctx.closePath();
     }
 
-    ctx.beginPath();
-    trace(arena.outer);
-    trace(arena.inner);
-    ctx.fillStyle = arena.roadColour;
-    ctx.fill('evenodd');
+    if (arena.elevated) {
+      this.drawElevatedRoad(ctx, arena);
+    } else {
+      ctx.beginPath();
+      trace(arena.outer);
+      trace(arena.inner);
+      ctx.fillStyle = arena.roadColour;
+      ctx.fill('evenodd');
+    }
 
     // Compacted sand, drawn over the loose surface. Only touched cells are
     // visited, so this costs nothing on a track nobody has driven yet and stays
@@ -463,8 +548,8 @@ BR.Renderer = {
       if (t < 0.05) continue;
       const r = G.cellRect(list[k]);
       const p = [
-        Pj.project(r.x, r.y, 0), Pj.project(r.x + r.w, r.y, 0),
-        Pj.project(r.x + r.w, r.y + r.h, 0), Pj.project(r.x, r.y + r.h, 0),
+        Pj.project(r.x, r.y, r.z||0), Pj.project(r.x + r.w, r.y, r.z||0),
+        Pj.project(r.x + r.w, r.y + r.h, r.z||0), Pj.project(r.x, r.y + r.h, r.z||0),
       ];
       ctx.beginPath();
       ctx.moveTo(p[0].sx, p[0].sy);
@@ -508,7 +593,7 @@ BR.Renderer = {
         [p.x, p.y], [p.x + p.w, p.y], [p.x + p.w, p.y + p.h], [p.x, p.y + p.h],
       ];
       for (let k = 0; k < 4; k++) {
-        const q = Pj.project(pts[k][0], pts[k][1], 0);
+        const q = Pj.project(pts[k][0], pts[k][1], p.z || 0);
         if (k === 0) ctx.moveTo(q.sx, q.sy); else ctx.lineTo(q.sx, q.sy);
       }
       ctx.closePath();
@@ -540,8 +625,8 @@ BR.Renderer = {
       const bob = 14 + Math.sin(this.bobPhase + i) * 5;
       const spin = this.bobPhase * 0.9 + i;
 
-      // Shadow keeps it anchored to the floor.
-      const g = Pj.project(c.x, c.y, 0);
+      // Shadow keeps it anchored to the deck it is sitting on.
+      const g = Pj.project(c.x, c.y, c.z || 0);
       const k2 = Pj.scaleAt(g.depth);
       ctx.beginPath();
       ctx.ellipse(g.sx, g.sy, 11 * k2, 11 * k2 * Pj.groundTilt, 0, 0, Math.PI * 2);
@@ -556,7 +641,8 @@ BR.Renderer = {
         const a = spin + (k * Math.PI) / 4;
         const r = k % 2 === 0 ? 21 : 8;
         const p = Pj.shrink(
-          Pj.project(c.x + Math.cos(a) * r, c.y + Math.sin(a) * r, bob), g, k2);
+          Pj.project(c.x + Math.cos(a) * r, c.y + Math.sin(a) * r,
+                     (c.z || 0) + bob), g, k2);
         if (k === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
       }
       ctx.closePath();
@@ -586,14 +672,15 @@ BR.Renderer = {
   drawProp(ctx, p) {
     const Pj = BR.Projection;
     const sides = 8;
-    const anchor = Pj.project(p.x, p.y, 0);
+    const pz = p.z || 0;
+    const anchor = Pj.project(p.x, p.y, pz);
     const k = Pj.scaleAt(anchor.depth);
     const base = [], top = [];
     for (let s = 0; s < sides; s++) {
       const a = (s / sides) * Math.PI * 2 + p.rot;
       const wx = p.x + Math.cos(a) * p.r, wy = p.y + Math.sin(a) * p.r;
-      base.push(Pj.shrink(Pj.project(wx, wy, 0), anchor, k));
-      top.push(Pj.shrink(Pj.project(wx, wy, p.h), anchor, k));
+      base.push(Pj.shrink(Pj.project(wx, wy, pz), anchor, k));
+      top.push(Pj.shrink(Pj.project(wx, wy, pz + p.h), anchor, k));
     }
 
     ctx.beginPath();
@@ -687,10 +774,12 @@ BR.Renderer = {
     // a glance what they are meant to fly over rather than avoid.
     const jumpable = isFinite(w.clearAt);
 
-    const a0 = Pj.project(w.ax, w.ay, 0);
-    const b0 = Pj.project(w.bx, w.by, 0);
-    let a1 = Pj.project(w.ax, w.ay, H);
-    let b1 = Pj.project(w.bx, w.by, H);
+    // Barriers stand on their own deck, not on the bedroom floor.
+    const wz = w.z || 0;
+    const a0 = Pj.project(w.ax, w.ay, wz);
+    const b0 = Pj.project(w.bx, w.by, wz);
+    let a1 = Pj.project(w.ax, w.ay, wz + H);
+    let b1 = Pj.project(w.bx, w.by, wz + H);
 
     // Height shrinks with depth, computed PER ENDPOINT. Scaling the segment as
     // a whole would step the top edge between neighbouring segments; per
@@ -799,7 +888,10 @@ BR.Renderer = {
 
   // ── vehicle ──────────────────────────────────────────────────────────────
 
-  drawVehicle(ctx, v, x, y, z, heading, isPlayer) {
+  drawVehicle(ctx, v, x, y, z, heading, isPlayer, deckZ) {
+    // `z` is absolute height; `deckZ` is the track surface under the car. On a
+    // flat track both the shadow and the anchor sit at 0 exactly as before.
+    const ground = deckZ || 0;
     const Pj = BR.Projection;
     const spec = v.spec;
 
@@ -821,18 +913,21 @@ BR.Renderer = {
 
     // Everything about this car shrinks with distance, about the point where
     // it meets the floor — so it stays planted while getting smaller.
-    const anchor = Pj.project(x, y, 0);
+    const anchor = Pj.project(x, y, ground);
     const shrinkK = Pj.scaleAt(anchor.depth);
     const PT = function (wx, wy, wz) {
       return Pj.shrink(Pj.project(wx, wy, wz), anchor, shrinkK);
     };
 
-    // ── shadow: always at z=0. The GAP between car and shadow is the only
-    //    height cue there is (03_Driving_Physics.md).
-    const lift = BR.M.clamp(z / 90, 0, 1);
+    /* ── shadow: on the deck the car is driving on, not on the floor.
+       The GAP between car and shadow is the only height cue there is
+       (03_Driving_Physics.md) — so it has to mean JUMP height. Casting it on
+       the floor of the room would make a car parked on a raised section look
+       permanently airborne and destroy the cue everywhere it matters. */
+    const lift = BR.M.clamp((z - ground) / 90, 0, 1);
     ctx.beginPath();
     for (let i = 0; i < 4; i++) {
-      const p = PT(world[i][0], world[i][1], 0);
+      const p = PT(world[i][0], world[i][1], ground);
       if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
     }
     ctx.closePath();

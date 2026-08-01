@@ -184,9 +184,21 @@ centres when the format anchors at the corner — three ramps that could not fir
 a boost pad in the sand, two puddles beside the road. `TrackManager` now reports
 strays on every build.
 
+**Also done: the plastic stunt track has started** (`07`). The elevation model —
+called "the single largest technical question in the project" — is decided,
+built and measured: discrete levels for collision, continuous height for render.
+The simulation did not change at all, because `v.z` still means height above the
+track surface and the deck height lives separately in `v.roadZ`. One track ships
+on it, Dresser Drop, which climbs onto the dresser and crosses back under itself.
+
+Fourteen events across four worlds now.
+
 Remaining candidates:
-- **The plastic stunt track** (`07`), which needs the elevation model decided
-  first and is the largest remaining technical risk in the project.
+- **What falling off a raised deck does** (`07` open question 4). Dresser Drop
+  dodges it with continuous side rails; any track with a gap in them needs a
+  real answer, and it is a whole subsystem.
+- **Loops and corkscrews** via rail sections (`07` option 3) — the other half of
+  the stunt world, and the half the box art is actually about.
 - **Items** (`10_Items.md` open question 4) — still undecided whether the
   flagship mode should have them at all.
 
