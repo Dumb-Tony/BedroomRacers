@@ -37,8 +37,12 @@ BR.Vehicle = {
       // ── loops ───────────────────────────────────────────────────────────
       rail: null,         // the ride currently carrying this car, if any
       railIndex: -1,      // edge trigger, so a loop cannot immediately re-board
-      roll: 0,            // rotation about the travel axis — render only
-      prevRoll: 0,
+      roll: 0,            // how far round a ride the car is — diagnostics
+      /* Which way is up for THIS car — render only, and the simulation never
+         reads it. A vector rather than an angle because a loop pitches and a
+         corkscrew rolls, and one number cannot say which. */
+      up: { x: 0, y: 0, z: 1 },
+      prevUp: { x: 0, y: 0, z: 1 },
 
       // ── handling state ──────────────────────────────────────────────────
       retention: BR.PHYSICS.lateralRetentionNormal,  // current lateral slide

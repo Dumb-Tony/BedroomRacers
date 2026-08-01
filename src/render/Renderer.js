@@ -27,6 +27,9 @@ BR.Renderer = {
   // Matches the hurdle height, so the ramp visibly lifts you exactly enough.
   RAMP_HEIGHT: 20,
 
+  // Shared upright, for every car not on a ride.
+  UP: { x: 0, y: 0, z: 1 },
+
   init(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
@@ -271,11 +274,14 @@ BR.Renderer = {
       const cdeck = M.lerp(c.prevRoadZ || 0, c.roadZ || 0, alpha);
       const cz = cdeck + M.lerp(c.prevZ, c.z, alpha);
       const ch = c.prevHeading + M.wrapAngle(c.heading - c.prevHeading) * alpha;
-      // Roll runs 0..2PI through a loop and must NOT be wrapped — wrapping
-      // turns the last few degrees of the ride into a backflip.
-      const cr = M.lerp(c.prevRoll || 0, c.roll || 0, alpha);
+      // Interpolating the up VECTOR rather than an angle: it never wraps, so
+      // the last few degrees of a ride cannot come out as a backflip.
+      const pu = c.prevUp || this.UP, nu = c.up || this.UP;
+      const cu = { x: M.lerp(pu.x, nu.x, alpha),
+                   y: M.lerp(pu.y, nu.y, alpha),
+                   z: M.lerp(pu.z, nu.z, alpha) };
       drawables.push({ key: Pj.depthAt(cx, cy), car: c,
-                       cx: cx, cy: cy, cz: cz, ch: ch, deck: cdeck, roll: cr });
+                       cx: cx, cy: cy, cz: cz, ch: ch, deck: cdeck, up: cu });
     }
     drawables.sort((a, b) => a.key - b.key);
 
@@ -286,7 +292,7 @@ BR.Renderer = {
       else if (d.prop)   this.drawProp(ctx, d.prop);
       else if (d.hazard) this.drawHazard(ctx, d.hazard);
       else               this.drawVehicle(ctx, d.car, d.cx, d.cy, d.cz, d.ch,
-                                          d.car === v, d.deck, d.roll);
+                                          d.car === v, d.deck, d.up);
     }
 
     this.drawDust(ctx);
@@ -795,11 +801,11 @@ BR.Renderer = {
     const Pj = BR.Projection;
     const t0 = s / this.RING_SEGS, t1 = (s + 1) / this.RING_SEGS;
 
+    // Side rails stand off along the SURFACE NORMAL, which on a corkscrew
+    // points sideways through the middle of the ride, not upwards.
     const P = function (t, side, lift) {
-      const p = BR.Rails.ringPoint(R, t, side);
-      // The side rails stand off the surface, along the loop's own radius.
-      const a = t * Math.PI * 2;
-      return Pj.project(p[0], p[1], p[2] + (lift || 0) * Math.cos(a));
+      const p = BR.Rails.ringPoint(R, t, side, lift);
+      return Pj.project(p[0], p[1], p[2]);
     };
 
     // Driving surface.
@@ -949,11 +955,11 @@ BR.Renderer = {
 
   // ── vehicle ──────────────────────────────────────────────────────────────
 
-  drawVehicle(ctx, v, x, y, z, heading, isPlayer, deckZ, roll) {
+  drawVehicle(ctx, v, x, y, z, heading, isPlayer, deckZ, up) {
     // `z` is absolute height; `deckZ` is the track surface under the car. On a
     // flat track both the shadow and the anchor sit at 0 exactly as before.
     const ground = deckZ || 0;
-    const rl = roll || 0;
+    const U = up || this.UP;
     const Pj = BR.Projection;
     const spec = v.spec;
 
@@ -1014,23 +1020,20 @@ BR.Renderer = {
       ctx.stroke();
     }
 
-    /* ── roll ──────────────────────────────────────────────────────────────
-       Upright, "up" is (0,0,1) and this is the extrusion it has always been.
-       Through a loop the car turns about its own travel axis, so up swings out
-       sideways and then all the way over: at PI the body is below its own
-       footprint and the car is genuinely upside down.
+    /* ── which way is up ───────────────────────────────────────────────────
+       Upright, up is (0,0,1) and this is the extrusion it has always been.
+       On a ride it comes from the rail: a loop swings it backwards through the
+       vertical, a corkscrew swings it out sideways. At either halfway point the
+       body is below its own footprint and the car is genuinely upside down.
 
        Rotation is about the car's MID-HEIGHT, not its floor — pivoting on the
        floor edge would make it heave up and down through the ride instead of
        turning on the spot. */
-    const ux = -Math.sin(heading) * Math.sin(rl);
-    const uy =  Math.cos(heading) * Math.sin(rl);
-    const uz =  Math.cos(rl);
     const base = world.map(function (p) {
-      return PT(p[0] - ux * H / 2, p[1] - uy * H / 2, z + H / 2 - uz * H / 2);
+      return PT(p[0] - U.x * H / 2, p[1] - U.y * H / 2, z + H / 2 - U.z * H / 2);
     });
     const top = world.map(function (p) {
-      return PT(p[0] + ux * H / 2, p[1] + uy * H / 2, z + H / 2 + uz * H / 2);
+      return PT(p[0] + U.x * H / 2, p[1] + U.y * H / 2, z + H / 2 + U.z * H / 2);
     });
 
     // ── sides, nearer edges last so they overdraw correctly ────────────────

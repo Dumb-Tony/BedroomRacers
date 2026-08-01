@@ -75,18 +75,61 @@ BR.Rails = {
         t: 0,
         speed: speed,
         // Where the ride started, so the ground track is exact rather than
-        // integrated — a loop must put you back on the road, every time.
+        // integrated — a ride must put you back on the road, every time.
         x0: v.x, y0: v.y,
       };
+      // A ride on a raised deck starts from the deck, not the bedroom floor.
+      R.deckZ = v.roadZ || 0;
       v.railIndex = inside;
       v.grounded = false;
       v.vz = 0;
     }
   },
 
-  /** Arc length of one circuit, including the forward lean. */
+  /** Arc length of the whole ride, including the forward travel. */
   arcLength(R) {
-    return Math.hypot(2 * Math.PI * R.radius, R.length);
+    return Math.hypot(2 * Math.PI * R.radius * (R.turns || 1), R.length);
+  },
+
+  /**
+   * The complete frame at a point along a ride: where the surface is, which way
+   * is up, and which way is across.
+   *
+   * A LOOP AND A CORKSCREW DIFFER ONLY IN WHICH AXIS THEY TURN ABOUT.
+   *
+   *   loop      — turns about the LATERAL axis. The car pitches: nose up, over
+   *               the top on its back, nose down. Displacement is purely
+   *               vertical, so it comes back down where it went up.
+   *   corkscrew — turns about the TRAVEL axis. The car rolls, and the track
+   *               spirals sideways as well as up, so it is displaced laterally
+   *               through the middle and returns to the line at the end.
+   *
+   * Everything else — entry, capture, constant speed, release — is shared, so a
+   * corkscrew cost this function and a `kind` flag rather than a second system.
+   *
+   * `up` is the car's own up vector. Handing the renderer a vector rather than
+   * an angle is what makes both read correctly: the first version rolled the
+   * car through the loop, which is a barrel roll where a pitch belongs.
+   */
+  frameAt(R, t) {
+    const turns = R.turns || 1;
+    const a = t * Math.PI * 2 * turns;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const fx = R.dir[0], fy = R.dir[1];
+    const nx = -fy, ny = fx;                    // lateral, left of travel
+    const cork = R.kind === 'corkscrew';
+
+    // Offset of the track surface from the straight ground path.
+    const lat = cork ? R.radius * sa : 0;
+
+    return {
+      a: a,
+      off:    { x: nx * lat, y: ny * lat, z: R.radius * (1 - ca) },
+      up:     cork ? { x: -nx * sa, y: -ny * sa, z: ca }
+                   : { x: -fx * sa, y: -fy * sa, z: ca },
+      across: cork ? { x:  nx * ca, y:  ny * ca, z: sa }
+                   : { x:  nx,      y:  ny,      z: 0  },
+    };
   },
 
   /**
@@ -104,11 +147,12 @@ BR.Rails = {
     v.rail.t += (v.rail.speed * dt) / this.arcLength(R);
 
     if (v.rail.t >= 1) {
-      // Released travelling the way the loop points, at the speed it came in.
+      // Released travelling the way the ride points, at the speed it came in.
       v.x = v.rail.x0 + R.dir[0] * R.length;
       v.y = v.rail.y0 + R.dir[1] * R.length;
       v.z = 0;
       v.roll = 0;
+      v.up = { x: 0, y: 0, z: 1 };
       v.heading = Math.atan2(R.dir[1], R.dir[0]);
       v.vel.x = R.dir[0] * v.rail.speed;
       v.vel.y = R.dir[1] * v.rail.speed;
@@ -121,18 +165,20 @@ BR.Rails = {
       return false;
     }
 
-    const a = v.rail.t * Math.PI * 2;
+    const F = this.frameAt(R, v.rail.t);
 
-    // Ground position creeps forward across the loop, so the exit is visibly
-    // past the entry rather than on top of it.
-    v.x = v.rail.x0 + R.dir[0] * R.length * v.rail.t;
-    v.y = v.rail.y0 + R.dir[1] * R.length * v.rail.t;
+    /* Ground position creeps forward across the ride, so the exit is past the
+       entry rather than on top of it. A loop adds nothing sideways; a corkscrew
+       adds the spiral's lateral swing on top. */
+    v.x = v.rail.x0 + R.dir[0] * R.length * v.rail.t + F.off.x;
+    v.y = v.rail.y0 + R.dir[1] * R.length * v.rail.t + F.off.y;
 
-    // Up and over. 1 - cos keeps both feet on the floor at t = 0 and t = 1.
-    v.z = R.radius * (1 - Math.cos(a));
+    // 1 - cos keeps both feet on the deck at t = 0 and t = 1.
+    v.z = F.off.z;
 
-    // The car rotates with the track it is standing on, which is what sells it.
-    v.roll = a;
+    // The car turns with the track it is standing on, which is what sells it.
+    v.roll = F.a;
+    v.up = F.up;
     v.heading = Math.atan2(R.dir[1], R.dir[0]);
     v.vel.x = R.dir[0] * v.rail.speed;
     v.vel.y = R.dir[1] * v.rail.speed;
@@ -140,14 +186,21 @@ BR.Rails = {
     return true;
   },
 
-  /** Geometry of the ribbon, for the renderer. */
-  ringPoint(R, t, side) {
-    const a = t * Math.PI * 2;
-    const nx = -R.dir[1], ny = R.dir[0];       // across the track
-    const cx = R.x + R.w / 2 + R.dir[0] * R.length * t;
-    const cy = R.y + R.h / 2 + R.dir[1] * R.length * t;
+  /**
+   * A point on the ribbon, for the renderer.
+   * @param side  -1 or 1 across the track, 0 for the centre
+   * @param lift  distance out along the surface normal, for the side rails
+   */
+  ringPoint(R, t, side, lift) {
+    const F = this.frameAt(R, t);
     const half = (R.width || 150) / 2;
-    return [cx + nx * half * side, cy + ny * half * side,
-            R.radius * (1 - Math.cos(a))];
+    const L = lift || 0;
+    return [
+      R.x + R.w / 2 + R.dir[0] * R.length * t + F.off.x
+        + F.across.x * half * side + F.up.x * L,
+      R.y + R.h / 2 + R.dir[1] * R.length * t + F.off.y
+        + F.across.y * half * side + F.up.y * L,
+      (R.deckZ || 0) + F.off.z + F.across.z * half * side + F.up.z * L,
+    ];
   },
 };

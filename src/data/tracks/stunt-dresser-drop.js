@@ -132,6 +132,29 @@ BR.TRACKS['stunt-dresser-drop'] = {
       minSpeed: 230,
       exitBoost: 0.35,
     },
+
+    /* ── THE CORKSCREW ────────────────────────────────────────────────────
+       Up on the dresser, along the long northern run — t 0.36, road at
+       (3697,3186) heading west. Two turns over 420 units.
+
+       Where the loop turns about the lateral axis and pitches the car over
+       backwards, this one turns about the travel axis and rolls it, spiralling
+       sideways through the middle and returning to the line at the end. Same
+       rail, same capture, same release; only the axis differs (Rails.frameAt).
+
+       Shorter and lower than the loop because it sits on the raised deck
+       already, and 300 units up is high enough to be reading. */
+    {
+      x: 3627, y: 3086, w: 140, h: 200,
+      dir: [-0.996, 0.087],        // the road's heading at t 0.36
+      kind: 'corkscrew',
+      turns: 2,
+      radius: 82,
+      length: 420,
+      width: 150,
+      minSpeed: 210,
+      exitBoost: 0.3,
+    },
   ],
 
   boostPads: [

@@ -402,6 +402,11 @@ BR.TrackManager = {
         return {
           x: r.x, y: r.y, w: r.w, h: r.h,
           dir: [r.dir[0] / len, r.dir[1] / len],
+          // Listing fields explicitly means a new one has to be added HERE too.
+          // kind and turns were not, so the first corkscrew was silently built
+          // as a single-turn loop and every measurement of it described a loop.
+          kind: r.kind || 'loop',
+          turns: r.turns || 1,
           radius: r.radius || 130,
           length: r.length === undefined ? 150 : r.length,
           width: r.width || 150,

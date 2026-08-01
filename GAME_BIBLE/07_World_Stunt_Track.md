@@ -87,7 +87,7 @@ What it actually took:
 | `Renderer.drawRoad` | quads sorted back to front instead of one even-odd fill |
 | everything else | passed a `z` it previously hardcoded to 0 |
 
-### RESOLVED — option 3 for the loop, exactly as recommended
+### RESOLVED — option 3 for loops AND corkscrews, exactly as recommended
 
 `Rails.js`. The car is captured at the mouth, carried round a vertical circle at
 constant speed, and released travelling the way the loop points. Ground position
@@ -121,6 +121,37 @@ four rides over three laps before `railIndex` was added; three after, one a lap.
 The AI needed **no changes at all**. It drives the racing line, the line goes
 through the mouth, and it gets carried. An opponent taking a loop is an opponent
 that happened to be going fast enough.
+
+### A corkscrew is the same rail turning about a different axis
+
+That is the whole difference, and it is why the second one cost a function and a
+flag rather than a second system:
+
+| | turns about | car does | displacement |
+| --- | --- | --- | --- |
+| **loop** | the lateral axis | pitches — nose up, over on its back, nose down | vertical only |
+| **corkscrew** | the travel axis | rolls | spirals sideways *and* up |
+
+`Rails.frameAt` returns the surface offset, the car's up vector and the ribbon's
+across vector for either kind. Everything else — capture, constant speed,
+release, the edge trigger, the minimum speed — is shared.
+
+Measured, Dresser Drop's corkscrew (radius 82, two turns, 420 units of travel):
+`up` swings fully sideways, lateral swing reaches 82 units at the widest, the
+car passes through fully inverted twice, and it ends upright on the road. Below
+`minSpeed` it is refused exactly as the loop is.
+
+**`up` is a VECTOR, not an angle.** The first version handed the renderer a roll
+angle, which barrel-rolled the car through the *loop* — where a pitch belongs.
+One number cannot say which axis is turning. It also cannot be interpolated
+across the wrap at 2π without producing a backflip in the last few frames.
+
+**The honest cost.** Together the two rides are about 5.6 seconds of a 36.5
+second lap — roughly 15% of the race not being driven. That is the price option 3
+was always going to charge, and the draft above accepted it in advance
+("non-interactive but look spectacular"). It is affordable here because both
+sit on stretches that were otherwise a straight line, and it is the reason a
+third ride on this track would be one too many.
 
 ### Two things that were not obvious
 
@@ -161,11 +192,10 @@ The first draft of Dresser Drop was a ring and tested none of this.
 
 ## Still unbuilt
 
-Corkscrews, magnetic boosters, track-switching gates, falling track sections and
-wall-mounted routes. A corkscrew is the same rail with the circle swept sideways
-along the travel axis rather than kept in the vertical plane — `Rails.ringPoint`
-is where that would go, and it is a small change now the rest exists. The others
-are content on top of what is already here.
+Magnetic boosters, track-switching gates, falling track sections and wall-mounted
+routes. All four are content on top of what now exists rather than new systems —
+a booster is a boost pad with a rail's entry test, and a switching gate is two
+rails sharing a mouth.
 
 The **legal note above still binds** every one of them. Dresser Drop uses violet
 and teal rather than the obvious orange and blue, and draws no connector

@@ -512,7 +512,7 @@ BR.Game = {
          halfway up a vertical circle would push it somewhere absurd. */
       if (v.rail) {
         v.prevX = v.x; v.prevY = v.y; v.prevZ = v.z;
-        v.prevHeading = v.heading; v.prevRoadZ = v.roadZ; v.prevRoll = v.roll;
+        v.prevHeading = v.heading; v.prevRoadZ = v.roadZ; v.prevUp = v.up;
         BR.Rails.step(v, dt);
         continue;
       }

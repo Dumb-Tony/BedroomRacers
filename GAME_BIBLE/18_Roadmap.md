@@ -201,12 +201,19 @@ beneath it, which makes the loop a reward for carrying speed rather than a tax
 on arriving slowly. The AI needed no changes: it drives the line, the line goes
 through the mouth.
 
+**And the corkscrew**, which is the same rail turning about the travel axis
+instead of the lateral one — a function and a flag, not a second system. It also
+forced a fix to the loop: orientation is now a `up` VECTOR rather than a roll
+angle, because one number cannot say which axis is turning, and the loop had
+been barrel-rolling the car where a pitch belongs.
+
 Remaining candidates:
 - **What falling off a raised deck does** (`07` open question 4). Dresser Drop
   dodges it with continuous side rails; any track with a gap in them needs a
   real answer, and it is a whole subsystem.
-- **Corkscrews** — the same rail with the circle swept sideways instead of kept
-  vertical. Small, now that `Rails.js` exists.
+- **A second stunt track.** Dresser Drop is now carrying the loop, the
+  corkscrew, the climb and the crossover on its own, and 15% of its lap is spent
+  on rails. The world needs somewhere to spread out.
 - **Items** (`10_Items.md` open question 4) — still undecided whether the
   flagship mode should have them at all.
 
