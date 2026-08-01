@@ -263,7 +263,7 @@ BR.TrackManager = {
       minY = Math.min(minY, outer[i][1]); maxY = Math.max(maxY, outer[i][1]);
     }
 
-    return {
+    const out = {
       id: def.id,
       name: def.name,
       laps: def.laps || 3,
@@ -351,6 +351,54 @@ BR.TrackManager = {
                 maxX: maxX + 400, maxY: maxY + 400,
                 w: maxX - minX, h: maxY - minY },
     };
+
+    out.strays = this.findStrayRects(out, def);
+    return out;
+  },
+
+  /**
+   * Rectangle features that do not overlap the road, and so can never fire.
+   *
+   * EVERY RECTANGLE IN A TRACK DEFINITION IS ANCHORED AT ITS CORNER, not its
+   * centre — zones, ramps and boost pads all test `x <= p <= x + w`. Authoring
+   * one as though it were centred puts it half a box off the road, and nothing
+   * complains: the ramp simply never launches and the pad never boosts.
+   *
+   * Three of the four ramps and a boost pad on the Sandbox tracks shipped that
+   * way and were only caught by driving a car at them and noticing it stayed on
+   * the ground. Silence is the wrong response to a feature that cannot fire, so
+   * the build now says so.
+   */
+  findStrayRects(out, def) {
+    const line = out.centreline, half = out.halfWidth;
+    const strays = [];
+
+    const check = function (kind, i, r) {
+      for (let k = 0; k < line.length; k++) {
+        const x = line[k][0], y = line[k][1];
+        // The road is a band, so allow anything within half a road width of a
+        // centreline point that falls inside the box.
+        if (x >= r.x - half && x <= r.x + r.w + half &&
+            y >= r.y - half && y <= r.y + r.h + half) {
+          // Tighter test: does the box itself reach the centreline?
+          const cx = Math.max(r.x, Math.min(x, r.x + r.w));
+          const cy = Math.max(r.y, Math.min(y, r.y + r.h));
+          if (Math.hypot(cx - x, cy - y) <= half) return;
+        }
+      }
+      strays.push(kind + '[' + i + '] at ' + Math.round(r.x) + ',' +
+                  Math.round(r.y) + ' ' + r.w + 'x' + r.h +
+                  ' never touches the road');
+    };
+
+    (def.ramps || []).forEach(function (r, i) { check('ramp', i, r); });
+    (def.boostPads || []).forEach(function (r, i) { check('boostPad', i, r); });
+    (def.zones || []).forEach(function (r, i) { check('zone', i, r); });
+
+    if (strays.length && typeof console !== 'undefined') {
+      console.warn('TRACK ' + def.id + ': ' + strays.join('; '));
+    }
+    return strays;
   },
 
   distToSegment(px, py, ax, ay, bx, by) {

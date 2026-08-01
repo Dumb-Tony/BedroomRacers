@@ -175,10 +175,16 @@ line is now something opponents can take off them.
 That work also hardened the target-time method: a single reference run swung 8
 seconds on a time trial, so calibration now takes the quickest of four.
 
-Remaining candidates:
+**Also done:** the three remaining sandbox tracks — The Big Dig, Bucket Brigade
+and Tide Pool. Twelve events across three worlds now. They were meant to be pure
+content and were not: between them they found the missing prop avoidance in the
+AI (`04_AI.md` step 6, specified six phases ago and never built), a `sandReading`
+bug that only appears on narrow roads, and six rectangle features authored as
+centres when the format anchors at the corner — three ramps that could not fire,
+a boost pad in the sand, two puddles beside the road. `TrackManager` now reports
+strays on every build.
 
-- **More sandbox tracks** — The Big Dig, Bucket Brigade, Tide Pool. The world is
-  built; these are content.
+Remaining candidates:
 - **The plastic stunt track** (`07`), which needs the elevation model decided
   first and is the largest remaining technical risk in the project.
 - **Items** (`10_Items.md` open question 4) — still undecided whether the

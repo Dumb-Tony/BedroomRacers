@@ -194,6 +194,80 @@ BR.EVENTS.push(
       { id: 'ttGold',  label: 'Beat the gold time' },
       { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
+  },
+
+  /* The rest of the sandbox. Each track argues with the compaction mechanic
+     from a different side — narrow (Big Dig), vertical (Bucket Brigade), and
+     interrupted (Tide Pool) — so the order below is difficulty, not just the
+     order they were built. */
+  {
+    id: 'sb-02',
+    name: 'The Big Dig',
+    blurb: 'Down in the trenches. One line, no room, and everyone wants it.',
+    trackId: 'sandbox-big-dig',
+    mode: 'standard-race',
+    laps: 3,
+    opponents: 4,
+    difficulty: 'normal',
+    platinumTime: 73,           // 0.93 x 78.1, the clean reference run
+    unlockStars: 14,
+    objectives: [
+      { id: 'finish',  label: 'Finish the race' },
+      { id: 'win',     label: 'Win the race' },
+      { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+    ],
+  },
+  {
+    id: 'sb-03',
+    name: 'Bucket Brigade',
+    blurb: 'Buckets in the road and spades propped against them. Go over.',
+    trackId: 'sandbox-bucket-brigade',
+    mode: 'standard-race',
+    laps: 3,
+    opponents: 4,
+    difficulty: 'normal',
+    platinumTime: 80,           // 0.93 x 86.1
+    unlockStars: 17,
+    objectives: [
+      { id: 'finish',  label: 'Finish the race' },
+      { id: 'win',     label: 'Win the race' },
+      { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+    ],
+  },
+  {
+    id: 'sb-04',
+    name: 'Tide Pool',
+    blurb: 'The hose was left on. You cannot wear a line through water.',
+    trackId: 'sandbox-tide-pool',
+    mode: 'standard-race',
+    laps: 3,
+    opponents: 4,
+    difficulty: 'hard',
+    platinumTime: 83,           // 0.93 x 89.3
+    unlockStars: 20,
+    objectives: [
+      { id: 'win',      label: 'Win the race' },
+      { id: 'spotless', label: 'Win without a single collision' },
+      { id: 'clean',    label: 'Finish with fewer than 4 collisions' },
+    ],
+  },
+  {
+    id: 'tt-tide-pool',
+    name: 'Tide Pool Time Trial',
+    blurb: 'Three laps, seven puddles, and a line that keeps stopping.',
+    trackId: 'sandbox-tide-pool',
+    mode: 'time-trial',
+    laps: 3,
+    opponents: 0,
+    difficulty: 'normal',
+    times: { gold: 87, silver: 95, bronze: 106 },   // clean reference 91.0
+    platinumTime: 81,
+    unlockStars: 23,
+    objectives: [
+      { id: 'finish',  label: 'Set a time' },
+      { id: 'ttGold',  label: 'Beat the gold time' },
+      { id: 'ttPlat',  label: 'Beat the platinum time' },
+    ],
   }
 );
 

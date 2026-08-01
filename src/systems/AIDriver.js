@@ -106,7 +106,8 @@ BR.AIDriver = {
      is eased into ai.lateral anyway. Sampling faster only chases noise. */
   SAND_SAMPLES: [-1, -0.55, 0, 0.55, 1],
   SAND_INTERVAL: 0.125,
-  SAND_MARGIN: 0.06,   // ignore differences this small — flat sand is a tie
+  SAND_MARGIN: 0.06,     // ignore differences this small — flat sand is a tie
+  SAND_CLEARANCE: 45,    // never aim this close to the kerb, whatever the sand
 
   /**
    * Steer toward sand that is already packed.
@@ -119,13 +120,25 @@ BR.AIDriver = {
    *
    * @returns {number} lateral offset in world units, or null for "no opinion"
    */
-  readSand(ai, tgt, la) {
+  readSand(ai, tgt, la, halfWidth) {
     const SG = BR.SandGrid;
     if (!SG || !SG.active) return null;
 
-    // At least one cell either side, or the scan cannot tell two cells apart.
-    // Never wider than the road, or the AI would aim at firm sand past the kerb.
-    const radius = Math.min(Math.max(tgt.width * 0.5, SG.CELL), tgt.width);
+    /* At least one cell either side, or the scan cannot tell two cells apart —
+       but never so far out that aiming there puts a wheel in the kerb.
+
+       The clearance is not optional. Without it the scan asked for a full cell
+       regardless of the road: on The Big Dig, 230 units wide with unjumpable
+       trench walls, the driver aimed 70 units off the line with 115 to play
+       with and spent the race grinding along the wall — 31 impacts and a
+       63-second lap. Wide tracks never showed it. */
+    const room = (halfWidth || tgt.width) - this.SAND_CLEARANCE;
+    const radius = Math.min(Math.max(tgt.width * 0.5, SG.CELL), room);
+
+    // A road too narrow for a full-cell scan cannot resolve one cell from the
+    // next, so there is nothing honest to say. Drive the line.
+    if (radius < SG.CELL * 0.7) return null;
+
     let bestOff = 0, best = -1, flattest = 2;
 
     for (let k = 0; k < this.SAND_SAMPLES.length; k++) {
@@ -139,6 +152,57 @@ BR.AIDriver = {
     // offset there would be the AI inventing a preference out of nothing.
     if (best - flattest < this.SAND_MARGIN) return null;
     return bestOff;
+  },
+
+  /* ── avoiding what is standing in the road ───────────────────────────────
+     Step 6 of the driver loop in 04_AI.md — "checks for obstacles ahead, nudges
+     the lateral offset to avoid" — which was specified and never built. It went
+     unnoticed for six phases because every bedroom track keeps its props at the
+     edges, where an AI on the line never meets one.
+
+     Putting buckets in the road on Bucket Brigade found it immediately: the
+     field drove into them lap after lap, 27 impacts and 2029 ticks stuck
+     against a Dune Dash baseline of zero and 105. */
+  AVOID_AHEAD: 300,      // how far up the road to care about, world units
+  AVOID_BEHIND: -90,     // a little behind the aim point, for props alongside
+  AVOID_MARGIN: 20,      // extra room beyond the two radii
+
+  /**
+   * Shifts a desired lateral offset sideways until it misses every prop ahead.
+   * Picks whichever side needs less movement, so a driver already going round
+   * one way commits rather than dithering across the middle.
+   *
+   * @param {number} want   desired offset from the line
+   * @returns {number}      an offset that clears the obstacles
+   */
+  avoidProps(v, arena, tgt, la, want) {
+    const props = arena.props;
+    if (!props || !props.length) return want;
+
+    const cos = Math.cos(la), sin = Math.sin(la);
+    const limit = arena.halfWidth - v.radius - 8;
+
+    for (let i = 0; i < props.length; i++) {
+      const p = props[i];
+      // Jumpable, and currently being jumped. Let it through.
+      if (p.clearAt !== undefined && p.clearAt !== Infinity && v.z > p.clearAt) {
+        continue;
+      }
+      const dx = p.x - tgt.x, dy = p.y - tgt.y;
+      const along  =  dx * cos + dy * sin;
+      if (along < this.AVOID_BEHIND || along > this.AVOID_AHEAD) continue;
+
+      const across = -dx * sin + dy * cos;
+      const clear  = p.r + v.radius + this.AVOID_MARGIN;
+      const gap    = want - across;
+      if (Math.abs(gap) >= clear) continue;          // already misses it
+
+      // Go round the near side, unless that would put us off the road.
+      const near = across + (gap >= 0 ? clear : -clear);
+      const far  = across + (gap >= 0 ? -clear : clear);
+      want = Math.abs(near) <= limit ? near : far;
+    }
+    return Math.max(-limit, Math.min(limit, want));
   },
 
   /**
@@ -175,12 +239,16 @@ BR.AIDriver = {
     ai.sandTimer -= dt;
     if (ai.sandTimer <= 0) {
       ai.sandTimer = this.SAND_INTERVAL;
-      ai.sandOffset = this.readSand(ai, tgt, la);
+      ai.sandOffset = this.readSand(ai, tgt, la, arena.halfWidth);
     }
     const pull = ai.sandOffset === null ? 0 : ai.p.sandReading;
     ai.lateralTarget = ai.wander * (1 - pull) + (ai.sandOffset || 0) * pull;
 
-    ai.lateral = M.approach(ai.lateral, ai.lateralTarget, 60 * dt);
+    // Whatever the personality and the sand wanted, do not drive into a bucket.
+    ai.lateralTarget = this.avoidProps(v, arena, tgt, la, ai.lateralTarget);
+
+    // Faster than the usual easing — an obstacle is not a preference.
+    ai.lateral = M.approach(ai.lateral, ai.lateralTarget, 130 * dt);
 
     // Deliberate mistakes. An AI that never errs feels unbeatable even when
     // slow; an occasional overshoot is what lets a player pass and enjoy it.

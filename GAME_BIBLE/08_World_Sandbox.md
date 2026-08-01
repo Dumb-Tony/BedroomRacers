@@ -1,9 +1,9 @@
 # 08 — World: Sandbox Speedway
 
-> **BUILT (Phase 6).** One track shipped — Dune Dash. The compaction mechanic is
-> implemented and measured. Three further track concepts remain unbuilt.
+> **BUILT (Phase 6).** All four tracks shipped. The compaction mechanic is
+> implemented and measured, and the AI reads the sand.
 >
-> Source: `src/systems/SandGrid.js`, `src/data/tracks/sandbox-dune-dash.js`.
+> Source: `src/systems/SandGrid.js`, `src/data/tracks/sandbox-*.js`.
 
 ## Concept
 
@@ -105,14 +105,47 @@ the middle of the course. The hose has been left on.
 
 Flowing water and the sprinkler hazard are **not built**.
 
-## Track concepts
+## Tracks — all four built
 
-- **Dune Dash** — **BUILT.** Wide introductory loop, one long southern drag so a
-  worn line has somewhere to pay off. Deliberately open: learning that the ground
-  changes under you is enough to learn at once.
-- **The Big Dig** — a trench circuit through a half-built construction site
-- **Bucket Brigade** — narrow routes over and through upturned buckets and shovels
-- **Tide Pool** — water hazards and a collapsing wet-sand tunnel
+Each one argues with the compaction mechanic from a different side, using only
+rules already in the code. Wear-in measured as *coverage of the racing line /
+number of breaks in it*, by lap:
+
+| Track | Width | L1 | L2 | L3 | The idea |
+| --- | --- | --- | --- | --- | --- |
+| **Dune Dash** | 320 | 0.95/4 | 1.00/0 | 1.00/0 | open — learn that sand packs |
+| **The Big Dig** | 230 | 0.92/6 | 0.97/2 | 0.98/1 | narrow — nowhere else to be |
+| **Bucket Brigade** | 290 | 0.81/7 | 0.92/5 | 0.95/5 | vertical — obstacles on the line |
+| **Tide Pool** | 300 | 0.84/8 | 0.88/6 | 0.88/6 | interrupted — water never packs |
+
+**Dune Dash** — wide and open, one long southern drag so a worn line has
+somewhere to pay off. Learning that the ground changes under you is enough to
+learn at once.
+
+**The Big Dig** — trenches, 230 units across, walls too high to jump. Note the
+measurement corrected the design intent: the line completes *later* here, not
+sooner, because a driver's lateral wander is a bigger fraction of a narrow road.
+The point is not that the groove arrives quickly — it is that there is nowhere
+else to be while you wait for it.
+
+**Bucket Brigade** — buckets in the road, each just past a spade propped up as a
+ramp. Because the ramps sit on the line too, being launched over a bucket is the
+default: 267 of 275 measured encounters go over the top. Going around is what
+happens when you arrive too slowly to trigger the ramp, and it costs you the
+packed sand. Speed keeps you out of trouble, which is a pleasant inversion for a
+track full of obstacles.
+
+> **Emergent, not designed:** a car in the air packs no sand, so every jump
+> leaves a permanent hole in the worn line. Bucket Brigade ends a race at 0.95
+> coverage with 5 breaks where Dune Dash reaches 1.00 with none. The flight paths
+> are visible in the ground. Nobody wrote that; it falls out of the rules.
+
+**Tide Pool** — seven puddles across the line rather than beside it. Compaction
+only happens on `sand`, so water never firms up and never will. The line arrives
+in sections with gaps that are still there at the flag — the only track in the
+game where three laps do not produce a complete groove.
+
+The collapsing wet-sand tunnel from the original wishlist is **not built**.
 
 ## Open questions
 
@@ -145,8 +178,8 @@ Flowing water and the sprinkler hazard are **not built**.
 
 ## Deferred
 
-Buried shortcuts (open question in the original draft — the "visible but not
-obvious" discovery flavour), the sprinkler hazard, and the three unbuilt tracks.
+Buried shortcuts (the "visible but not obvious" discovery flavour), the sprinkler
+hazard, flowing water, and the collapsing wet-sand tunnel on Tide Pool.
 
 ## Related
 

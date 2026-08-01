@@ -107,6 +107,37 @@ exploits it. A validation script should check, before anything ships:
 An automated headless AI lap over each track would catch most of these. Worth building
 once there are three or more tracks.
 
+### Add to that list: every rectangle must touch the road
+
+**Every rectangle in a track definition is anchored at its CORNER, not its centre.**
+Zones, ramps and boost pads all test `x <= p <= x + w`. Authoring one as though the
+coordinate were the middle puts it half a box off the road, and nothing complains —
+the ramp silently never launches, the pad never boosts, the puddle is never entered.
+
+This is not hypothetical. Six of them shipped that way across the three Sandbox
+tracks: three ramps that could not fire, a boost pad in the sand, and two puddles
+beside the road. Every automated check passed. The AI drove clean laps. It was only
+caught by driving a car at a ramp on purpose and noticing it stayed on the ground.
+
+`TrackManager.findStrayRects()` now runs on every build and reports any rectangle
+that never comes within half a road width of the centreline, on `arena.strays` and
+as a console warning. **Silence is the wrong response to a feature that cannot fire.**
+
+### And measure the jumps, don't compute them
+
+A ramp's reach is not obvious from its `launch` number. Measured off Bucket
+Brigade at racing speed:
+
+| launch | apex | lands at | clears a 46-high prop between |
+| --- | --- | --- | --- |
+| 380 | 33 | 119 | never |
+| 470 | 52 | 142 | 51 and 94 |
+| 650 | 100 | 189 | 28 and 165 |
+
+The first guess paired a 470 ramp with a bucket 260 units past it — beyond the whole
+flight, so no jump could have cleared it at any speed. Author the ramp, measure the
+envelope, then place what it is meant to clear at the middle of the window.
+
 ## Open questions
 
 1. ~~Which authoring approach?~~ **Resolved in Phase 5: control points, not

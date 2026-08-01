@@ -568,6 +568,19 @@ BR.Renderer = {
     }
   },
 
+  /* [side, top] per prop type. Was a pair of two-way ternaries on 'crayon',
+     which silently made every unknown type a blue block — and carried a dead
+     variable holding a 7-digit hex that was never a colour.
+
+     Sandbox props are plastic: brighter and flatter than the bedroom's waxy
+     crayons, because moulded plastic in daylight is not painted wood at night. */
+  PROP_COLOURS: {
+    crayon: ['#c8452f', '#e86952'],
+    block:  ['#2f6fd8', '#4f8ef2'],
+    bucket: ['#d1462f', '#f26a4e'],   // red plastic, lighter round the rim
+    spade:  ['#f2b134', '#ffd166'],   // yellow, and low enough to drive over
+  },
+
   /* Extruded octagon. Crayons and blocks are the scale cue — a crayon the size
      of a fallen tree. */
   drawProp(ctx, p) {
@@ -593,9 +606,8 @@ BR.Renderer = {
       (0.32 * Pj.shadowAlphaAt(anchor.depth)).toFixed(3) + ')';
     ctx.fill();
 
-    const body = p.type === 'crayon' ? '#c8452f' : '#2f6fd8';
-    const lid  = p.type === 'crayon' ? '#e869522' : '#4f8ef2';
-    ctx.fillStyle = body;
+    const col = this.PROP_COLOURS[p.type] || this.PROP_COLOURS.block;
+    ctx.fillStyle = col[0];
     for (let s = 0; s < sides; s++) {
       const t = (s + 1) % sides;
       ctx.beginPath();
@@ -612,7 +624,7 @@ BR.Renderer = {
       else ctx.lineTo(top[s].sx, top[s].sy);
     }
     ctx.closePath();
-    ctx.fillStyle = p.type === 'crayon' ? '#e86952' : '#4f8ef2';
+    ctx.fillStyle = col[1];
     ctx.fill();
   },
 
