@@ -274,7 +274,7 @@ BR.Game = {
 
     if (!this.views || this.views.length !== n) {
       this.views = [];
-      for (let i = 0; i < n; i++) this.views.push({ cam: { x: 0, y: 0, yaw: 0 } });
+      for (let i = 0; i < n; i++) this.views.push({ cam: { x: 0, y: 0, yaw: 0, z: 0 } });
     }
 
     // 1 -> full screen. 2 -> side by side, because depth ahead is the scarce

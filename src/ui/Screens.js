@@ -37,6 +37,18 @@ BR.Screens = {
   pieceToastTime: 0,
   garageSlot: 1,          // which player the garage is currently picking for
 
+  /* ── the event list scrolls ───────────────────────────────────────────────
+     It did not, and with fourteen events across four worlds everything past
+     the sixth was drawn off the bottom of the screen with no way to reach it.
+     The whole stunt world was unreachable — you could not race a loop because
+     you could not see that the event existed.
+
+     Regions are rebuilt every frame at their DRAWN position, so offsetting the
+     layout offsets the hit targets with it and nothing else has to know. */
+  eventScroll: 0,
+  eventScrollMax: 0,
+  drag: null,
+
   /* Matches the viewport border colours in main.layoutViews. */
   SLOT_COLOUR: { 1: '#ffd34d', 2: '#69d0ff', 3: '#7fe06a', 4: '#ff9d6b' },
 
@@ -57,10 +69,56 @@ BR.Screens = {
       canvas.style.cursor = self.hover >= 0 ? 'pointer' : 'default';
     });
     canvas.addEventListener('click', function (e) {
+      // A click that ended a drag is a scroll, not a press.
+      if (self.dragMoved) { self.dragMoved = false; return; }
       const p = self.local(e);
       const i = self.hit(p.x, p.y);
       if (i >= 0) self.dispatch(self.regions[i], p);
     });
+
+    canvas.addEventListener('wheel', function (e) {
+      if (self.state !== self.EVENTS) return;
+      e.preventDefault();
+      self.scrollEvents(e.deltaY);
+    }, { passive: false });
+
+    /* Drag to scroll, because the canvas sets touch-action:none and a phone
+       has no wheel. Pointer events cover mouse, touch and pen at once. */
+    canvas.addEventListener('pointerdown', function (e) {
+      if (self.state !== self.EVENTS) return;
+      self.drag = { y: self.local(e).y, from: self.eventScroll };
+      self.dragMoved = false;
+    });
+    canvas.addEventListener('pointermove', function (e) {
+      if (!self.drag) return;
+      const dy = self.local(e).y - self.drag.y;
+      if (Math.abs(dy) > 4) self.dragMoved = true;
+      self.eventScroll = self.drag.from - dy;
+      self.clampEventScroll();
+    });
+    const endDrag = function () { self.drag = null; };
+    canvas.addEventListener('pointerup', endDrag);
+    canvas.addEventListener('pointercancel', endDrag);
+    canvas.addEventListener('pointerleave', endDrag);
+
+    window.addEventListener('keydown', function (e) {
+      if (self.state !== self.EVENTS) return;
+      const step = { ArrowDown: 104, ArrowUp: -104,
+                     PageDown: 420, PageUp: -420 }[e.key];
+      if (step !== undefined) { e.preventDefault(); self.scrollEvents(step); }
+      else if (e.key === 'Home') { self.eventScroll = 0; }
+      else if (e.key === 'End') { self.eventScroll = self.eventScrollMax; }
+    });
+  },
+
+  scrollEvents(dy) {
+    this.eventScroll += dy;
+    this.clampEventScroll();
+  },
+
+  clampEventScroll() {
+    if (this.eventScroll > this.eventScrollMax) this.eventScroll = this.eventScrollMax;
+    if (this.eventScroll < 0) this.eventScroll = 0;
   },
 
   local(e) {
@@ -76,7 +134,12 @@ BR.Screens = {
     return -1;
   },
 
-  set(s) { this.state = s; this.regions = []; this.hover = -1; },
+  set(s) {
+    // Keep the scroll position when returning from a race, so finishing an
+    // event does not throw you back to the top of a fourteen-row list.
+    if (s !== this.EVENTS) this.drag = null;
+    this.state = s; this.regions = []; this.hover = -1;
+  },
 
   say(msg) { this.toast = msg; this.toastTime = 2.6; },
 
@@ -513,11 +576,31 @@ BR.Screens = {
     ctx.textAlign = 'left';
     y += 46;
 
+    /* ── the scrolling viewport ────────────────────────────────────────────
+       Rows are laid out from listTop and shifted up by eventScroll, then
+       clipped. The BACK button sits below the band so it never scrolls away. */
+    const rowH = 92, rowGap = 12, rowStep = rowH + rowGap;
+    const listTop = y;
+    const listBottom = h - 62;
+    const listH = Math.max(rowStep, listBottom - listTop);
+    const contentH = BR.EVENTS.length * rowStep;
+    this.eventScrollMax = Math.max(0, contentH - listH);
+    this.clampEventScroll();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x - 8, listTop, cardW + 16, listH);
+    ctx.clip();
+
+    y = listTop - this.eventScroll;
+
     for (let i = 0; i < BR.EVENTS.length; i++) {
+      // Skip rows entirely outside the band. Not just a saving: a button drawn
+      // off-band would still register a hit region and be clickable.
+      if (y + rowH < listTop - 4 || y > listBottom + 4) { y += rowStep; continue; }
       const ev = BR.EVENTS[i];
       const rec = P.eventRecord(ev.id);
       const open = P.isEventUnlocked(ev);
-      const rowH = 92;
 
       ctx.fillStyle = open ? 'rgba(25,22,20,0.92)' : 'rgba(25,22,20,0.55)';
       this.round(ctx, x, y, cardW, rowH, 10);
@@ -563,10 +646,38 @@ BR.Screens = {
                     ev.unlockStars + ' ★ NEEDED', 'locked', ev.unlockStars);
       }
 
-      y += rowH + 12;
+      y += rowStep;
     }
 
-    this.button(ctx, x, y + 6, 120, 36, '← BACK', 'goto', this.MENU);
+    ctx.restore();
+
+    /* Scrollbar. Not decoration — with the list clipped there is otherwise
+       nothing on screen to say that anything follows the sixth event, which is
+       exactly how a whole world went missing. */
+    if (this.eventScrollMax > 0) {
+      const trackX = x + cardW + 10;
+      ctx.fillStyle = 'rgba(255,255,255,0.10)';
+      this.round(ctx, trackX, listTop, 5, listH, 2.5);
+      ctx.fill();
+
+      const thumbH = Math.max(34, listH * (listH / contentH));
+      const thumbY = listTop +
+        (listH - thumbH) * (this.eventScroll / this.eventScrollMax);
+      ctx.fillStyle = 'rgba(255,211,77,0.7)';
+      this.round(ctx, trackX, thumbY, 5, thumbH, 2.5);
+      ctx.fill();
+
+      // And say it in words, once, for anyone who has not spotted the bar.
+      if (this.eventScroll < 4) {
+        ctx.textAlign = 'center';
+        ctx.font = '700 10px ui-monospace, Consolas, monospace';
+        ctx.fillStyle = 'rgba(255,211,77,0.75)';
+        ctx.fillText('SCROLL FOR MORE EVENTS ↓', x + cardW / 2, listBottom + 16);
+        ctx.textAlign = 'left';
+      }
+    }
+
+    this.button(ctx, x, h - 48, 120, 36, '← BACK', 'goto', this.MENU);
   },
 
   // ── garage ───────────────────────────────────────────────────────────────

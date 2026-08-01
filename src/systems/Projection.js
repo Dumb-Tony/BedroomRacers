@@ -49,6 +49,7 @@ BR.Projection = {
   camX: 0,
   camY: 0,
   camYaw: 0,          // world angle that maps to straight up the screen
+  camZ: 0,            // deck height the camera is following — see setCamera
 
   _cos: 0,
   _sin: -1,
@@ -57,10 +58,17 @@ BR.Projection = {
    * Set the camera. Call once per frame BEFORE any project() call.
    * @param {number} yaw world angle that should point up the screen
    */
-  setCamera(x, y, yaw) {
+  setCamera(x, y, yaw, z) {
     this.camX = x;
     this.camY = y;
     this.camYaw = yaw;
+    /* The DECK the camera is following, not the car's jump height.
+       Heights are drawn relative to this, so a player on a raised section stays
+       framed instead of climbing the screen. Without it a car on the 300-high
+       dresser sat 255px above the anchor, and a corkscrew on top of that put it
+       394px up — off the top of the viewport entirely, along with the ride it
+       was on. Jumps still bounce, because a jump is not a deck. */
+    this.camZ = z || 0;
     // Rotate the world by -(yaw + PI/2) so the yaw direction lands on -y,
     // i.e. up the screen.
     const a = -(yaw + Math.PI / 2);
@@ -79,7 +87,7 @@ BR.Projection = {
     const ry = dx * this._sin + dy * this._cos;
     return {
       sx: rx,
-      sy: ry * this.groundTilt - (z || 0) * this.heightScale,
+      sy: ry * this.groundTilt - ((z || 0) - this.camZ) * this.heightScale,
       depth: ry,
     };
   },

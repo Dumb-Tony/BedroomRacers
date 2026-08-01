@@ -122,19 +122,48 @@ The AI needed **no changes at all**. It drives the racing line, the line goes
 through the mouth, and it gets carried. An opponent taking a loop is an opponent
 that happened to be going fast enough.
 
-### A corkscrew is the same rail turning about a different axis
+### A corkscrew is the same ring, gone round more times over more ground
 
-That is the whole difference, and it is why the second one cost a function and a
-flag rather than a second system:
-
-| | turns about | car does | displacement |
+| | turns | travel | reads as |
 | --- | --- | --- | --- |
-| **loop** | the lateral axis | pitches — nose up, over on its back, nose down | vertical only |
-| **corkscrew** | the travel axis | rolls | spirals sideways *and* up |
+| **loop** | one | short | a ring you go round on the spot |
+| **corkscrew** | two | long | a spiral you travel along |
 
 `Rails.frameAt` returns the surface offset, the car's up vector and the ribbon's
-across vector for either kind. Everything else — capture, constant speed,
-release, the edge trigger, the minimum speed — is shared.
+across vector for both. Everything else — capture, constant speed, release, the
+edge trigger, the minimum speed — is shared.
+
+#### THE CAMERA DECIDES WHICH PLANE THE RING LIVES IN
+
+A real loop's circle lies in the plane containing the direction of travel. **That
+cannot be drawn in this projection.** The camera's yaw follows the direction of
+travel, so it looks straight down that plane's axis; screen-x comes only from
+lateral offset, while depth *and* height both fold into screen-y. A travel-plane
+circle therefore has constant screen-x and collapses to a vertical band. No
+radius rescues it — stretching the circle forward just makes a taller band.
+
+The first loop was built that way. It measured perfectly: full rotation, correct
+apex, correct exit, right ride time, back on the road. **It drew as a flat slab
+of stacked stripes**, and shipped, because every check was a number and nobody
+looked at the screen. It took a player saying "I don't see any loop de loop".
+
+Both rides now put their circle in the **lateral/up** plane, which projects to a
+proper ellipse because lateral feeds screen-x and height feeds screen-y. The car
+rolls through both. A pitching loop is the geometrically honest one and it is
+invisible here, which makes it the wrong answer.
+
+> **The rule this is an instance of:** a stopwatch cannot verify a picture. Any
+> claim about what something *looks like* has to be checked by rendering a frame
+> and looking at it. The same trap took the debug panel in Phase 1 — existence
+> and slider count were checked, computed styles were not.
+
+#### The camera follows the deck
+
+Heights are drawn relative to `Projection.camZ`, which tracks `v.roadZ`. Without
+it a car on the 300-high dresser sat 255px above the anchor and a corkscrew on
+top put it 394px up — off the top of the viewport, along with the ride. It
+follows the deck and never the jump, so the gap between car and shadow still
+means jump height and nothing else.
 
 Measured, Dresser Drop's corkscrew (radius 82, two turns, 420 units of travel):
 `up` swings fully sideways, lateral swing reaches 82 units at the widest, the

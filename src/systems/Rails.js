@@ -119,16 +119,36 @@ BR.Rails = {
     const nx = -fy, ny = fx;                    // lateral, left of travel
     const cork = R.kind === 'corkscrew';
 
-    // Offset of the track surface from the straight ground path.
-    const lat = cork ? R.radius * sa : 0;
+    /* BOTH RIDES PUT THEIR CIRCLE IN THE LATERAL/UP PLANE. That is a decision
+       forced by the camera, and it is worth being plain about why.
+
+       A real loop's circle lies in the plane containing the direction of
+       travel. The camera's yaw follows the direction of travel, so it looks
+       straight down that plane's axis — and in this projection screen-x comes
+       only from lateral offset while both depth and height fold into screen-y.
+       A travel-plane circle therefore has CONSTANT screen-x: it collapses to a
+       vertical band, however large the radius. The first version drew exactly
+       that, a flat slab of stacked stripes, while measuring perfectly — full
+       rotation, correct apex, correct exit. Stretching it forward only makes a
+       taller band; there is no radius that rescues it.
+
+       A circle standing in the lateral/up plane projects to a proper ellipse,
+       because lateral feeds screen-x and height feeds screen-y. So that is what
+       both rides use, and what separates them is how many turns they make and
+       how far they travel while making them:
+
+         loop      one turn, short travel  — a ring you go round on the spot
+         corkscrew two turns, long travel  — a spiral you travel along
+
+       The car rolls through both. A pitching loop is the geometrically honest
+       one and it is invisible here, which makes it the wrong answer. */
+    const swing = R.radius * sa;
 
     return {
       a: a,
-      off:    { x: nx * lat, y: ny * lat, z: R.radius * (1 - ca) },
-      up:     cork ? { x: -nx * sa, y: -ny * sa, z: ca }
-                   : { x: -fx * sa, y: -fy * sa, z: ca },
-      across: cork ? { x:  nx * ca, y:  ny * ca, z: sa }
-                   : { x:  nx,      y:  ny,      z: 0  },
+      off:    { x: nx * swing, y: ny * swing, z: R.radius * (1 - ca) },
+      up:     { x: -nx * sa,   y: -ny * sa,   z: ca },
+      across: { x:  nx * ca,   y:  ny * ca,   z: sa },
     };
   },
 

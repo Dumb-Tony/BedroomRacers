@@ -73,6 +73,7 @@ BR.Renderer = {
       views[i].cam.x = v ? v.x : x;
       views[i].cam.y = v ? v.y : y;
       views[i].cam.yaw = v ? v.heading : (yaw || 0);
+      views[i].cam.z = v ? (v.roadZ || 0) : 0;
     }
   },
 
@@ -114,6 +115,12 @@ BR.Renderer = {
     const k = 1 - Math.exp(-C.followRate * dt);   // frame-rate independent lerp
     cam.x = M.lerp(cam.x, tx, k);
     cam.y = M.lerp(cam.y, ty, k);
+
+    /* Follow the DECK, never the jump. v.roadZ is the ground the car is
+       standing on; v.z is how far it has left it. Tracking the first keeps a
+       raised section framed, tracking the second would undo the gap between car
+       and shadow that every height cue depends on. */
+    cam.z = M.lerp(cam.z || 0, v.roadZ || 0, k);
   },
 
   /**
@@ -216,7 +223,7 @@ BR.Renderer = {
     // Hand the camera to the projection BEFORE anything projects. Everything
     // downstream comes back already camera-relative, so the only transform
     // left is centring.
-    Pj.setCamera(view.cam.x, view.cam.y, view.cam.yaw);
+    Pj.setCamera(view.cam.x, view.cam.y, view.cam.yaw, view.cam.z);
 
     ctx.save();
     // horizonBias pushes the car down the screen so more road is visible
