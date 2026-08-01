@@ -313,6 +313,44 @@ BR.EVENTS.push(
   }
 );
 
+BR.EVENTS.push(
+  {
+    id: 'st-02',
+    name: 'Shelf Run',
+    blurb: 'Three storeys. You drive under the shelf, then over it.',
+    trackId: 'stunt-shelf-run',
+    mode: 'standard-race',
+    laps: 3,
+    opponents: 4,
+    difficulty: 'hard',
+    platinumTime: 99,           // 0.93 x 106.6, the clean reference run
+    unlockStars: 32,
+    objectives: [
+      { id: 'finish',  label: 'Finish the race' },
+      { id: 'win',     label: 'Win the race' },
+      { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+    ],
+  },
+  {
+    id: 'tt-shelf',
+    name: 'Shelf Run Time Trial',
+    blurb: 'The tall one, alone and against the clock.',
+    trackId: 'stunt-shelf-run',
+    mode: 'time-trial',
+    laps: 3,
+    opponents: 0,
+    difficulty: 'normal',
+    times: { gold: 101, silver: 111, bronze: 124 },  // clean reference 106.6
+    platinumTime: 94,
+    unlockStars: 35,
+    objectives: [
+      { id: 'finish',  label: 'Set a time' },
+      { id: 'ttGold',  label: 'Beat the gold time' },
+      { id: 'ttPlat',  label: 'Beat the platinum time' },
+    ],
+  }
+);
+
 /* Vehicles are earned with stars. 09_Vehicles.md left open whether the starter
    roster should all be available immediately; two to start and three to earn
    gives progression something to hand out early, which is the whole point of a

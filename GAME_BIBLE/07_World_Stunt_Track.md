@@ -157,6 +157,21 @@ invisible here, which makes it the wrong answer.
 > and looking at it. The same trap took the debug panel in Phase 1 — existence
 > and slider count were checked, computed styles were not.
 
+### Two tracks, and a division of labour
+
+**Dresser Drop** is the trick track: a loop, a corkscrew, a climb and a
+crossover, with about 15% of its lap on rails. **Shelf Run** is the tall one:
+one ride and everything else is height.
+
+Shelf Run runs **three decks** — floor, dresser at 210, shelf at 440 — so its
+crossing is not one storey but two. Measured, the floor strand passes beneath
+the shelf strand with a **428-unit height gap**, and a race spends 3477 / 1654 /
+1530 ticks on levels 0 / 1 / 2 respectively: all three decks are genuinely
+driven, not decoration.
+
+That split exists because one track carrying every feature is how a world ends
+up with nothing for its second track to do.
+
 #### The camera follows the deck
 
 Heights are drawn relative to `Projection.camZ`, which tracks `v.roadZ`. Without
