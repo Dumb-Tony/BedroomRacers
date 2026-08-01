@@ -46,6 +46,7 @@ FILES=(
   "src/systems/Collision.js"
   "src/systems/Rails.js"
   "src/systems/Recovery.js"
+  "src/systems/Items.js"
   "src/systems/SandGrid.js"
   "src/systems/TrackManager.js"
   "src/systems/AIDriver.js"
