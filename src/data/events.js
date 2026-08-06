@@ -80,7 +80,7 @@ BR.EVENTS = [
     trackId: 'town-rug-loop',
     mode: 'standard-race',
     laps: 5,
-    opponents: 5,
+    opponents: 7,
     difficulty: 'hard',
     platinumTime: 138,
     unlockStars: 5,
@@ -125,7 +125,7 @@ BR.EVENTS.push(
     trackId: 'bedside-boulevard',
     mode: 'standard-race',
     laps: 3,
-    opponents: 4,
+    opponents: 5,
     difficulty: 'normal',
     platinumTime: 101,
     unlockStars: 6,
@@ -207,7 +207,7 @@ BR.EVENTS.push(
     trackId: 'sandbox-big-dig',
     mode: 'standard-race',
     laps: 3,
-    opponents: 4,
+    opponents: 5,
     difficulty: 'normal',
     platinumTime: 73,           // 0.93 x 78.1, the clean reference run
     unlockStars: 14,
@@ -224,7 +224,7 @@ BR.EVENTS.push(
     trackId: 'sandbox-bucket-brigade',
     mode: 'standard-race',
     laps: 3,
-    opponents: 4,
+    opponents: 6,
     difficulty: 'normal',
     platinumTime: 80,           // 0.93 x 86.1
     unlockStars: 17,
@@ -241,7 +241,7 @@ BR.EVENTS.push(
     trackId: 'sandbox-tide-pool',
     mode: 'standard-race',
     laps: 3,
-    opponents: 4,
+    opponents: 7,
     difficulty: 'hard',
     platinumTime: 83,           // 0.93 x 89.3
     unlockStars: 20,
@@ -283,7 +283,7 @@ BR.EVENTS.push(
     trackId: 'stunt-dresser-drop',
     mode: 'standard-race',
     laps: 3,
-    opponents: 4,
+    opponents: 6,
     difficulty: 'normal',
     platinumTime: 103,          // 0.93 x 110.5, the clean reference run
     unlockStars: 26,
@@ -321,7 +321,7 @@ BR.EVENTS.push(
     trackId: 'stunt-shelf-run',
     mode: 'standard-race',
     laps: 3,
-    opponents: 4,
+    opponents: 7,
     difficulty: 'hard',
     platinumTime: 99,           // 0.93 x 106.6, the clean reference run
     unlockStars: 32,
@@ -369,7 +369,7 @@ BR.EVENTS.push(
     mode: 'standard-race',
     items: true,
     laps: 3,
-    opponents: 5,
+    opponents: 7,
     difficulty: 'normal',
     platinumTime: 85,           // 0.93 x 91.0, the clean reference run
     unlockStars: 4,
@@ -387,7 +387,7 @@ BR.EVENTS.push(
     mode: 'standard-race',
     items: true,
     laps: 3,
-    opponents: 5,
+    opponents: 7,
     difficulty: 'hard',
     platinumTime: 83,           // 0.93 x 89.4
     unlockStars: 18,

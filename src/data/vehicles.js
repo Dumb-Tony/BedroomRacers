@@ -109,6 +109,58 @@ BR.VEHICLES = {
     length: 22, width: 13, height: 10,
     colorBody: '#8b4fd8', colorTop: '#a875f2', colorTrim: '#e8d7ff',
   },
+
+  /* ── RIVAL-ONLY CARS ───────────────────────────────────────────────────────
+     Every track has eight grid slots, but the field could only ever supply five
+     cars — and the player takes one of them, so the three events asking for
+     FIVE opponents were quietly fielding four. The grid was never full.
+
+     These three exist to fill it. `aiOnly` keeps them out of the garage: a car
+     you can see but never earn reads as a bug, not as a rival. They are not in
+     BR.UNLOCKS and are never owned.
+
+     Stats sit inside the existing roster's range rather than extending it. The
+     point is more cars to race, not more performance to chase — the player's
+     five remain the whole ladder (09_Vehicles.md). */
+  'orange-tipper': {
+    id: 'orange-tipper',
+    name: 'Orange Tipper',
+    description: 'Site truck. Heavy, stubborn, and hard to move off a line.',
+    aiOnly: true,
+    maxSpeed: 330,
+    acceleration: 176,
+    handling: 0.86,
+    weight: 1.42,
+    boostPower: 0.92,
+    length: 27, width: 15, height: 13,
+    colorBody: '#e07a2f', colorTop: '#f79c52', colorTrim: '#2b2622',
+  },
+  'teal-scout': {
+    id: 'teal-scout',
+    name: 'Teal Scout',
+    description: 'Someone else\'s favourite. Tidy through the quick stuff.',
+    aiOnly: true,
+    maxSpeed: 338,
+    acceleration: 190,
+    handling: 0.97,
+    weight: 0.92,
+    boostPower: 1.02,
+    length: 24, width: 13, height: 11,
+    colorBody: '#2f9e9e', colorTop: '#4fc4c4', colorTrim: '#e8f7f7',
+  },
+  'cream-camper': {
+    id: 'cream-camper',
+    name: 'Cream Camper',
+    description: 'Top heavy and far too keen. Leans on everything.',
+    aiOnly: true,
+    maxSpeed: 326,
+    acceleration: 182,
+    handling: 0.88,
+    weight: 1.18,
+    boostPower: 0.98,
+    length: 28, width: 14, height: 15,
+    colorBody: '#e8dcc0', colorTop: '#f5ecd8', colorTrim: '#8c6b3f',
+  },
 };
 
 /* Collision radius. Cars are circles, not rotated rectangles — deliberate,

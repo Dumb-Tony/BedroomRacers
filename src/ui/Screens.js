@@ -683,7 +683,12 @@ BR.Screens = {
   // ── garage ───────────────────────────────────────────────────────────────
   drawGarage(ctx, w, h) {
     const P = BR.ProgressionManager;
-    const ids = Object.keys(BR.VEHICLES);
+    /* Rival-only cars exist to fill out a grid, not to be driven. Listing them
+       here would show a row that is permanently locked with no way to earn it,
+       which reads as a bug rather than as a rival. */
+    const ids = Object.keys(BR.VEHICLES).filter(function (id) {
+      return !BR.VEHICLES[id].aiOnly;
+    });
     const cardW = Math.min(620, w - 48);
     const x = (w - cardW) / 2;
     let y = Math.max(24, h * 0.09);

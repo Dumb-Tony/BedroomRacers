@@ -204,3 +204,27 @@ because when the player wins the race ends before the rest of the field finishes
 `03_Driving_Physics.md` — how stats become behaviour.
 `12_Art_Guide.md` — how vehicles are drawn, including the rotation problem.
 `15_Save_System.md` — ownership and cosmetic persistence.
+
+## Rival-only cars (Phase 8)
+
+Every track has eight grid slots. The field could only ever supply five cars —
+and the player takes one of them — so **an event asking for five opponents was
+quietly fielding four**, and the grid was never full. Nothing reported it; the
+count is clamped by `Math.min(OPPONENTS, grid.length - humanCount, field.length)`
+and the third term silently won.
+
+Three cars exist purely to fill it: **Orange Tipper**, **Teal Scout**, **Cream
+Camper**. They carry `aiOnly: true`, which keeps them out of the garage — a car
+you can see but never earn reads as a bug, not as a rival. They are not in
+`BR.UNLOCKS` and are never owned.
+
+**Their stats sit inside the existing roster's range rather than extending it.**
+The point is more cars to race, not more performance to chase: the player's five
+remain the whole ladder. Ordered at the back of `FIELD` so the tail of a large
+grid is the slow end — a seven-car grid should stretch out behind you, not stack
+four quick cars into the first corner.
+
+Field sizes now escalate with the ladder: 3 on the shakedown, 4-5 mid-table, 6-7
+on the Grand Prix, Tide Pool, Shelf Run and both item races. Verified: every
+event fields exactly what it asks for, and the closest pair of grid slots is 87
+units against a ~22-unit car radius.

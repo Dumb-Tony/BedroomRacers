@@ -44,6 +44,18 @@ BR.Game = {
     { vehicle: 'blue-buggy',    personality: 'technician', name: 'Blue Buggy' },
     { vehicle: 'purple-micro',  personality: 'speedster',  name: 'Purple Micro' },
     { vehicle: 'red-racer',     personality: 'technician', name: 'Red Racer II' },
+
+    /* The grid has eight slots and the field could only fill five — and the
+       player takes one of those, so an event asking for five opponents fielded
+       four. These three are rival-only cars (vehicles.js) added to make a full
+       grid possible.
+
+       Ordered so the back of a large field is the SLOW end: a seven-car grid
+       should stretch out behind you, not stack four quick cars into the first
+       corner. */
+    { vehicle: 'teal-scout',    personality: 'technician', name: 'Teal Scout' },
+    { vehicle: 'orange-tipper', personality: 'bully',      name: 'Orange Tipper' },
+    { vehicle: 'cream-camper',  personality: 'rookie',     name: 'Cream Camper' },
   ],
 
   playerVehicleId: 'red-racer',
