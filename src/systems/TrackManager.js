@@ -462,6 +462,23 @@ BR.TrackManager = {
                 w: maxX - minX, h: maxY - minY },
     };
 
+    /* Item boxes are generated from the centreline, not authored per track.
+       Items are a MODE, not a property of a place (10_Items.md Q3), so every
+       track has to support an item race without eight files changing. Three
+       lanes across, so which box you take is a small decision of its own. */
+    out.itemBoxes = [];
+    [0.12, 0.28, 0.44, 0.60, 0.76, 0.92].forEach(function (t) {
+      const i = Math.floor(t * n) % n;
+      const tg = self.tangentAt(line, i);
+      [-0.5, 0, 0.5].forEach(function (o) {
+        const off = o * half * 0.8;
+        out.itemBoxes.push({
+          x: line[i][0] - tg[1] * off, y: line[i][1] + tg[0] * off,
+          z: elev[i].z, level: elev[i].level, cooldown: 0,
+        });
+      });
+    });
+
     out.strays = this.findStrayRects(out, def);
 
     /* EVERY wall on an elevated track must know its deck. A wall with no level

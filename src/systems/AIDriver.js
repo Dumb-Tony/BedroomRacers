@@ -28,24 +28,28 @@ BR.AIDriver = {
       targetSpeedMul: 0.80, lineAccuracy: 0.65, cornerCaution: 1.35,
       boostEfficiency: 0.25, mistakeChance: 0.16, driftSkill: 0.4,
       sandReading: 0.15,      // hasn't noticed the ground is different
+      itemSkill: 0.25,        // sits on things and fires them late
     },
     technician: {
       name: 'Technician',
       targetSpeedMul: 0.99, lineAccuracy: 0.95, cornerCaution: 0.95,
       boostEfficiency: 0.90, mistakeChance: 0.03, driftSkill: 0.95,
       sandReading: 0.95,      // reading the surface is the whole personality
+      itemSkill: 0.95,        // waits for a target, then uses it
     },
     speedster: {
       name: 'Speedster',
       targetSpeedMul: 1.08, lineAccuracy: 0.72, cornerCaution: 0.70,
       boostEfficiency: 0.60, mistakeChance: 0.14, driftSkill: 0.6,
       sandReading: 0.45,      // too busy going fast to look down
+      itemSkill: 0.6,         // empties the slot the moment it fills
     },
     bully: {
       name: 'Bully',
       targetSpeedMul: 0.94, lineAccuracy: 0.70, cornerCaution: 1.05,
       boostEfficiency: 0.50, mistakeChance: 0.08, driftSkill: 0.5,
       sandReading: 0.55,      // will happily take the line you just made
+      itemSkill: 0.8,         // saves the offensive ones for company
     },
   },
 
@@ -212,7 +216,8 @@ BR.AIDriver = {
     const M = BR.M;
     const line = arena.racingLine;
     const n = line.length;
-    const input = { steer: 0, throttle: 1, brake: 0, drift: false, boost: false };
+    const input = { steer: 0, throttle: 1, brake: 0, drift: false, boost: false,
+                    item: false };
 
     const speed = Math.hypot(v.vel.x, v.vel.y);
     this.advanceWaypoint(ai, v, line);
@@ -326,6 +331,40 @@ BR.AIDriver = {
       input.boost = false;
     }
 
+    /* Items (10_Items.md Q2). The AI fires through the SAME input field the
+       keyboard uses, so it can do nothing a player cannot. Skill decides how
+       long it will hold something: a Technician waits for a target, a Speedster
+       empties the slot the moment it fills, a Rookie sits on it. The only
+       opponent state read is distance to the nearest car — which is on screen
+       for a player anyway, so it is not privileged information. */
+    if (v.item && BR.Items) {
+      const def = BR.Items.DEFS[v.item];
+      if (def && def.offensive) {
+        ai.itemHold = (ai.itemHold || 0) + dt;
+        if (this.nearestRival(v) < 340 || ai.itemHold > 6 * ai.p.itemSkill) {
+          input.item = true;
+          ai.itemHold = 0;
+        }
+      } else if (Math.random() < ai.p.itemSkill * 1.6 * dt) {
+        input.item = true;
+      }
+    } else {
+      ai.itemHold = 0;
+    }
+
     return input;
+  },
+
+  /** Distance to the closest other car. */
+  nearestRival(v) {
+    const list = (BR.Game && BR.Game.vehicles) || [];
+    let best = Infinity;
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i];
+      if (o === v || o.isGhost) continue;
+      const d = Math.hypot(o.x - v.x, o.y - v.y);
+      if (d < best) best = d;
+    }
+    return best;
   },
 };
