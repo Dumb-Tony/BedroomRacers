@@ -124,11 +124,25 @@ accident while chasing nostalgia, and expensive to unwind later.
 
 ## Open questions
 
-1. Should there be a `CLAUDE.md` at the repo root pointing here? Probably yes, once
-   code exists, so conventions load automatically.
-2. Is there a preferred JS style (semicolons, quotes, formatter)? Worth pinning before
-   there is much code.
-3. Testing expectations — is any automated testing wanted before Phase 4?
+1. ~~Should there be a `CLAUDE.md` at the repo root pointing here?~~
+   **RESOLVED: yes**, written in Phase 8. It carries the rules that have already
+   cost real time when forgotten — corner-anchored rectangles, measured target
+   times, the file that must be registered in two places, the verification traps
+   — and points here for everything else. It exists because this project kept
+   rediscovering its own lessons: the same class of mistake recurred five times
+   in one session before anything wrote them down where a session would look.
+2. ~~Is there a preferred JS style?~~ **RESOLVED:** semicolons, two-space indent,
+   single quotes, and match the surrounding code. No formatter — the project is
+   deliberately toolchain-free (`14_Technical_Architecture.md`), and adding one
+   just to enforce style would be the first dependency.
+3. **Testing expectations.** Still open in the sense the draft meant — there is
+   no test *suite*. What emerged instead is a habit: every feature ships with a
+   throwaway headless harness that measures the claim being made, and the result
+   goes in the commit message and the relevant bible doc. That has caught real
+   defects repeatedly. Whether it should be consolidated into something
+   re-runnable is a genuine open question, and the honest argument against is
+   that a harness written to answer one question is sharper than a suite written
+   to answer all of them.
 
 ## Related
 

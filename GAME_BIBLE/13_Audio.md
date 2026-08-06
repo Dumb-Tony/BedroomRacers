@@ -176,8 +176,12 @@ job.
 
 1. Is the vocal "vrrrooom" a core identity element or a novelty that wears thin?
    Prototype early.
-2. Do opponents get full audio, or a reduced mix? Full audio for six cars is likely
-   unmanageable.
+2. ~~Do opponents get full audio, or a reduced mix?~~ **RESOLVED: a reduced mix,
+   and a drastic one.** Channels are allocated per HUMAN, capped at four. Rivals
+   get no engine of their own — just a single proximity layer mixed into the
+   listener's channel by how near the closest one is. The draft guessed six cars
+   would be unmanageable; the grid now runs eight and it is a non-issue, because
+   opponent count and voice count were never linked.
 3. Music per world, or per track? Per world is cheaper and probably sufficient.
 4. Does the under-bed section (`06_World_Town_Rug.md`) get muffled audio processing?
    It would be a strong effect for one filter.

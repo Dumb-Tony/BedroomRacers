@@ -77,17 +77,20 @@ reason about, and prevents defensive item-holding from dominating.
 
 ## Open questions
 
-1. Position-weighted distribution vs the `04_AI.md` assistance model — which is
-   primary? (Above.)
-2. Do AI drivers use items, and how well? Needs a decision layer in `04_AI.md`.
-3. Are items per-mode configurable in event data? Probably yes — Magnet only makes
-   sense in collection modes.
-4. Should items exist in Standard Race at all, or be reserved for a distinct
-   "Item Race" mode? Keeping the flagship mode item-free protects the pure-racing
-   identity and makes Time Trial comparisons meaningful.
+**All four resolved in Phase 8** — the detail, and the measurements behind each,
+are in the section below.
 
-Question 4 is worth taking seriously. It is a legitimate design position that this
-game does not need items in its main mode.
+1. ~~Position-weighted distribution vs the `04_AI.md` assistance model?~~
+   **RESOLVED:** items are the comeback and the assistance is switched off in
+   item races. Never both.
+2. ~~Do AI drivers use items?~~ **RESOLVED:** yes, `itemSkill` per personality.
+3. ~~Are items per-mode configurable in event data?~~ **RESOLVED:** yes,
+   `items: true` on the event.
+4. ~~Should items exist in Standard Race at all?~~ **RESOLVED: no.** They get
+   their own mode and the flagship stays item-free.
+
+Question 4 was worth taking seriously, and the draft was right to flag it: the
+answer turned out to be that this game does not need items in its main mode.
 
 ## Related
 
