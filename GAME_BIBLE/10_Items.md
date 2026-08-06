@@ -94,3 +94,61 @@ game does not need items in its main mode.
 `01_Game_Loop.md` — modes items would appear in.
 `04_AI.md` — the assistance model items interact with.
 `11_UI.md` — item slot presentation.
+
+---
+
+## RESOLVED (Phase 7) — built, and all four questions answered
+
+Source: `src/systems/Items.js`.
+
+### Q4 — should items exist in Standard Race? **No. They get their own mode.**
+
+The draft called this "a legitimate design position", and by the time there were
+sixteen events the evidence had arrived:
+
+- **Six of them are Time Trials.** A mode built on comparing your line against
+  your own ghost is worth protecting, and so is the standard race it is measured
+  against.
+- The flagship already has four sources of variance that reward *driving* —
+  drift-charged boost, shortcuts, worn sand, and speed-gated loops. It is not
+  short of things to do with a corner.
+- **Local multiplayer** is the one place a flat skill gap makes racing dull, and
+  that is exactly what an item mode is for.
+
+Item races are opt-in per event (`items: true`), which also answers **Q3**: yes,
+per-mode, in event data. Two ship — Toybox Scramble and Sandbox Scrap.
+
+Verified: a flagship race records **zero pickups and zero stun-ticks** with the
+same track and the same eighteen boxes present on it.
+
+### Q1 — weighting vs assistance: **items are the comeback, and the only one**
+
+In an item race `ai.catchUp` is forced to 1, so the invisible speed nudge is off
+entirely. Never both — the draft's own warning, now enforced in one line rather
+than remembered. Measured over 20,000 rolls:
+
+| | leader | last |
+| --- | --- | --- |
+| offensive items | 11.4% | **44.8%** |
+| Boost Battery | 29.6% | 10.1% |
+
+### Q2 — do AI drivers use items? **Yes, through the same input field**
+
+An `itemSkill` per personality: Technician 0.95 waits for a target, Speedster
+0.6 empties the slot, Rookie 0.25 sits on it. Offensive items are held until a
+rival is within 340 units or patience runs out. The only opponent state read is
+distance to the nearest car, which is on screen for a player anyway.
+
+### The design stance, checked rather than hoped for
+
+- **Nothing exceeds the control cap.** `MAX_STUN` is 0.8s, matching
+  `03_Driving_Physics.md`. Asked for 99 seconds, `stun()` returns 0.8.
+- **A shield eats exactly one hit** and is spent.
+- **Nothing is invisible** — boxes and drops are drawn for their whole life.
+
+**A projectile has to be faster than a car.** The Paper Aeroplane was authored at
+330 to be "slow enough to dodge" against a field doing ~350, so fired from behind
+it simply fell away and a full item race produced **exactly zero hits**. At 520
+it closes at ~170/sec: a couple of seconds of warning, which is dodgeable rather
+than unusable. The stance said an item must be avoidable and never said it had to
+be able to *land*. It should have.
