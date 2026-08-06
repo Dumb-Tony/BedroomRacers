@@ -144,6 +144,7 @@ BR.Items = {
     if (!v.shield || v.shield <= 0) return false;
     v.shield = 0;
     v.shieldPopped = 0.5;
+    v.shieldPops = (v.shieldPops || 0) + 1;
     return true;
   },
 
@@ -154,6 +155,9 @@ BR.Items = {
 
   stun(v, seconds) {
     const t = Math.min(seconds, this.MAX_STUN);
+    // Count a NEW hit only — a second item landing mid-stun extends it but is
+    // not a fresh event, and sounding it twice would double up.
+    if (v.stunTime <= 0) v.stunHits = (v.stunHits || 0) + 1;
     if (t > v.stunTime) v.stunTime = t;
   },
 
@@ -171,6 +175,8 @@ BR.Items = {
     const def = this.DEFS[v.item];
     v.item = null;
     if (!def) return false;
+    v.lastItemOffensive = !!def.offensive;
+    v.itemFires = (v.itemFires || 0) + 1;
     def.use(v, game);
     return true;
   },

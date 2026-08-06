@@ -54,6 +54,15 @@ BR.Vehicle = {
       shieldPopped: 0,    // brief flash after a shield eats something
       stunTime: 0,        // control lost, capped at Items.MAX_STUN
 
+      /* Counters, not booleans. Audio edge-detects these once per RENDERED
+         frame — a fixed step can run several times per frame, and firing a
+         sound per sub-step machine-guns it (Audio.js). */
+      itemPickups: 0,
+      itemFires: 0,
+      lastItemOffensive: false,
+      stunHits: 0,
+      shieldPops: 0,
+
       roll: 0,            // how far round a ride the car is — diagnostics
       /* Which way is up for THIS car — render only, and the simulation never
          reads it. A vector rather than an angle because a loop pitches and a

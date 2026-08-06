@@ -242,6 +242,46 @@ BR.Audio = {
   },
   pad(dest) { this.blip(760, 0.09, 'sine', 0.12, 1140, dest); },
 
+  /* ── the quiet features ───────────────────────────────────────────────────
+     Items, loops, corkscrews, falling and recovery all shipped silent. They are
+     the moments that need sound MOST — a loop taken in silence reads as a
+     cutscene, and being hit by something you neither saw nor heard is the exact
+     complaint 10_Items.md's design stance exists to prevent.
+
+     Built from the same primitives as everything else (blip, thud), so none of
+     it needs a sample file — the CSP would block one anyway (13_Audio.md). */
+
+  // Rising two-tone: you have gained something.
+  itemPickup(dest) {
+    this.blip(620, 0.06, 'triangle', 0.11, 880, dest);
+    this.blip(930, 0.09, 'sine', 0.08, 1240, dest);
+  },
+  /* Offensive items get a harder edge than helpful ones, so what left the slot
+     is audible as well as visible — useful to the person being shot at. */
+  itemFire(offensive, dest) {
+    if (offensive) this.blip(300, 0.13, 'sawtooth', 0.16, 140, dest);
+    else           this.blip(700, 0.11, 'triangle', 0.13, 1100, dest);
+  },
+  // Being hit. Deliberately close to collide(), because it costs the same.
+  itemHit(dest) {
+    this.thud(0.20, 150, 0.16, 1.2, dest);
+    this.blip(220, 0.12, 'square', 0.10, 110, dest);
+  },
+  // A shield absorbing something: bright and short, obviously a save.
+  shieldPop(dest) { this.blip(1180, 0.07, 'sine', 0.13, 1760, dest); },
+
+  // Boarding a ride. The pitch climb IS the loop.
+  railBoard(dest) { this.blip(340, 0.34, 'triangle', 0.14, 900, dest); },
+  railExit(dest)  { this.blip(880, 0.12, 'sine', 0.13, 620, dest); },
+
+  /* Going over the edge, and being put back. The fall is a departure; the
+     recovery a small mechanical clunk — you were placed, not rescued. */
+  fall(dest) { this.blip(660, 0.5, 'sine', 0.15, 120, dest); },
+  recover(dest) {
+    this.thud(0.16, 190, 0.1, 1.0, dest);
+    this.blip(480, 0.08, 'triangle', 0.09, 660, dest);
+  },
+
   // Race-wide, so centred rather than on anyone's channel.
   countdownTick() { this.blip(520, 0.13, 'square', 0.13); },
   go()            { this.blip(880, 0.3, 'square', 0.17, 1320); },
@@ -319,7 +359,11 @@ BR.Audio = {
 
     if (!ch.prev) {
       ch.prev = { boost: v.boostMeter, boosting: v.boosting, grounded: v.grounded,
-                  impacts: v.impacts || 0, cps: racer.cpsPassed, lap: racer.lap };
+                  impacts: v.impacts || 0, cps: racer.cpsPassed, lap: racer.lap,
+                  picks: v.itemPickups || 0, fires: v.itemFires || 0,
+                  hits: v.stunHits || 0, pops: v.shieldPops || 0,
+                  onRail: !!v.rail, recovers: v.recovered || 0,
+                  falling: !!v.falling };
     }
     const p = ch.prev;
 
@@ -361,6 +405,24 @@ BR.Audio = {
     const impacts = v.impacts || 0;
     if (impacts > p.impacts) this.collide(v.lastImpact || 0.4, dest);
 
+    /* ── items, rides and falls ───────────────────────────────────────────
+       Edge-detected off counters here rather than called from the fixed step,
+       for the same reason impacts are: a fixed step can run several times in
+       one rendered frame, and firing a sound per sub-step machine-guns it. */
+    const picks = v.itemPickups || 0, fires = v.itemFires || 0;
+    const hits  = v.stunHits || 0,    pops  = v.shieldPops || 0;
+    const recs  = v.recovered || 0;
+    if (picks > p.picks) this.itemPickup(dest);
+    if (fires > p.fires) this.itemFire(v.lastItemOffensive, dest);
+    if (hits  > p.hits)  this.itemHit(dest);
+    if (pops  > p.pops)  this.shieldPop(dest);
+    if (recs  > p.recovers) this.recover(dest);
+
+    const onRail = !!v.rail;
+    if (onRail && !p.onRail)  this.railBoard(dest);
+    if (!onRail && p.onRail)  this.railExit(dest);
+    if (v.falling && !p.falling) this.fall(dest);
+
     // ── this player's own progress ────────────────────────────────────────
     if (racer.cpsPassed > p.cps && racer.lap === p.lap) this.checkpoint(dest);
     if (racer.lap > p.lap) {
@@ -384,6 +446,8 @@ BR.Audio = {
     p.boost = v.boostMeter; p.boosting = v.boosting;
     p.grounded = v.grounded; p.impacts = impacts;
     p.cps = racer.cpsPassed; p.lap = racer.lap;
+    p.picks = picks; p.fires = fires; p.hits = hits; p.pops = pops;
+    p.recovers = recs; p.onRail = onRail; p.falling = !!v.falling;
   },
 
   /* Countdown, GO and the finish fanfare belong to the race, not to a player,

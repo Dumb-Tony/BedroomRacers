@@ -187,3 +187,45 @@ job.
 `02_Mechanics.md` — the verbs audio must communicate.
 `11_UI.md` — callouts and accessibility.
 `12_Art_Guide.md` — matching visual effects.
+
+## The quiet features (Phase 8)
+
+Items, loops, corkscrews, falling and recovery all shipped **silent**. Four
+features, none of which made a sound — on a game whose audio is otherwise fully
+synthesised and per-channel.
+
+They are the moments that need it most. A loop taken in silence reads as a
+cutscene rather than a ride. Being hit by an item you neither saw nor heard is
+the exact complaint `10_Items.md`'s design stance exists to prevent — "nothing
+invisible, instant and unavoidable" is a claim about *perception*, and half of
+perception is sound.
+
+Eight voices added, from the same primitives as everything else — no sample
+files, which the CSP would block anyway:
+
+| voice | |
+| --- | --- |
+| `itemPickup` | rising two-tone: you have gained something |
+| `itemFire` | harder edge for offensive items, so the slot's contents are audible to whoever is about to be hit |
+| `itemHit` | close to `collide()`, because it costs the same |
+| `shieldPop` | bright and short, obviously a save |
+| `railBoard` / `railExit` | the pitch climb *is* the loop |
+| `fall` / `recover` | a departure, then a mechanical clunk — you were placed, not rescued |
+
+### Counters, not booleans
+
+All of it is **edge-detected off counters once per rendered frame**, exactly as
+impacts already were, and never called from inside the fixed step. A fixed step
+can run several times per rendered frame, and firing a sound per sub-step
+machine-guns it.
+
+`stun()` counts a *new* hit only — a second item landing mid-stun extends the
+timer but is not a fresh event, and sounding it twice would double up.
+
+### A voice that never fires is a voice that does not exist
+
+Presence checks are not enough. Counted over real races: 9 pickups, 8 fires, 6
+hits, 6 rail boardings. Three voices fired **zero** times — and one of those was
+the test's fault: falls were measured on Dresser Drop, which has no gap in its
+rail, so falling there is impossible by construction. Shield pops and falls were
+then verified directly instead of hoping a race would reach them.

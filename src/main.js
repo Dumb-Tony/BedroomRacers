@@ -713,6 +713,7 @@ BR.Game = {
       b.cooldown = this.BOX_COOLDOWN;
       const pos = (racer && racer.position) || this.racers.length;
       v.item = BR.Items.roll(pos, this.racers.length);
+      v.itemPickups = (v.itemPickups || 0) + 1;
       return;
     }
   },
