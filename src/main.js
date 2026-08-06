@@ -203,6 +203,18 @@ BR.Game = {
       }
     }
 
+    /* Items are a MODE, never a property of a track (10_Items.md Q3/Q4). The
+       flagship Standard Race stays item-free: the pure-racing identity, and the
+       six Time Trials it is compared against, are worth more than the variety
+       items would add to a mode that already has four sources of it. */
+    this.items = !!(this.event && this.event.items);
+    this.drops = [];
+    if (this.arena.itemBoxes) {
+      for (let i = 0; i < this.arena.itemBoxes.length; i++) {
+        this.arena.itemBoxes[i].cooldown = 0;
+      }
+    }
+
     BR.RaceManager.init(this.arena, this.racers, this.LAPS);
     this.layoutViews();
     BR.Renderer.snapCameraTo(grid[0].x, grid[0].y, grid[0].heading);
@@ -559,6 +571,13 @@ BR.Game = {
       // resolveWalls — a vehicle passes over anything lower than it is.
       BR.Collision.resolveWalls(v, this.arena.walls);
 
+      if (this.items) {
+        BR.Items.tick(v, dt);
+        this.checkItemBoxes(v, r);
+        if (input.item && !v.itemHeld) BR.Items.fire(v, this);
+        v.itemHeld = !!input.item;
+      }
+
       BR.TrackManager.resolveHazards(this.arena, v);
       BR.TrackManager.checkBoostPads(this.arena, v);
       if (act.kind === 'player') this.checkCollectibles(v, act.humanIndex || 0);
@@ -573,6 +592,13 @@ BR.Game = {
       }
     }
 
+    if (this.items) {
+      this.updateDrops(dt);
+      const bx = this.arena.itemBoxes;
+      for (let i = 0; i < bx.length; i++) {
+        if (bx[i].cooldown > 0) bx[i].cooldown -= dt;
+      }
+    }
     BR.TrackManager.updateHazards(this.arena, dt);
     this.resolveCarContacts();
     this.applyAssistance(dt);
@@ -641,7 +667,11 @@ BR.Game = {
       const behind = BR.M.clamp((lead - r.cpsPassed) / 8, 0, 1);
 
       if (r.ai) {
-        r.ai.catchUp = 1 + behind * BR.AIDriver.MAX_CATCHUP;
+        /* NEVER BOTH. 10_Items.md Q1: position-weighted items and invisible
+           speed assistance are two comeback systems, and stacking them is how a
+           race stops being decided by driving. In an item race the items ARE
+           the comeback, so the hidden nudge is switched off entirely. */
+        r.ai.catchUp = this.items ? 1 : (1 + behind * BR.AIDriver.MAX_CATCHUP);
       } else if (behind > 0.2 && !r.finished) {
         // A trailing player earns boost slightly faster. Small enough to be
         // invisible, and it gives them something to fight back with.
@@ -653,6 +683,79 @@ BR.Game = {
 
   /* Car-vs-car: exchange momentum weighted by mass, so the lighter car moves
      more (09_Vehicles.md — weight decides who wins contact). */
+  /* Item boxes respawn, so a box is a PLACE on the track rather than a one-time
+     pickup. Driving over one while already holding something leaves it alone —
+     one slot, no stacking (10_Items.md), which keeps the HUD readable and stops
+     defensive holding from dominating. */
+  BOX_RADIUS: 46,
+  BOX_COOLDOWN: 4.5,
+
+  checkItemBoxes(v, racer) {
+    if (v.item || v.falling || !v.grounded) return;
+    const boxes = this.arena.itemBoxes;
+    for (let i = 0; i < boxes.length; i++) {
+      const b = boxes[i];
+      if (b.cooldown > 0) continue;
+      if (this.arena.elevated && b.level !== v.level) continue;
+      if (Math.hypot(b.x - v.x, b.y - v.y) > this.BOX_RADIUS + v.radius) continue;
+      b.cooldown = this.BOX_COOLDOWN;
+      const pos = (racer && racer.position) || this.racers.length;
+      v.item = BR.Items.roll(pos, this.racers.length);
+      return;
+    }
+  },
+
+  /* Blobs sit still and slow whoever touches them; planes fly and briefly
+     disrupt the first car they reach. Both are VISIBLE for their whole life —
+     the design stance forbids anything invisible, instant and unavoidable. */
+  spawnDrop(kind, x, y, owner, opts) {
+    opts = opts || {};
+    this.drops.push({
+      kind: kind, x: x, y: y, owner: owner,
+      heading: opts.heading || 0,
+      speed: opts.speed || 0,
+      life: opts.life || 12,
+      arm: kind === 'blob' ? 0.4 : 0,      // no instant self-hit on a drop
+      level: owner.level, z: owner.roadZ || 0,
+    });
+  },
+
+  updateDrops(dt) {
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const d = this.drops[i];
+      d.life -= dt;
+      if (d.arm > 0) d.arm -= dt;
+      if (d.speed) {
+        d.x += Math.cos(d.heading) * d.speed * dt;
+        d.y += Math.sin(d.heading) * d.speed * dt;
+      }
+      if (d.life <= 0) { this.drops.splice(i, 1); continue; }
+
+      for (let k = 0; k < this.vehicles.length; k++) {
+        const v = this.vehicles[k];
+        if (v.isGhost || v.falling) continue;
+        if (d.arm > 0 && v === d.owner) continue;
+        if (this.arena.elevated && d.level !== v.level) continue;
+        if (Math.hypot(d.x - v.x, d.y - v.y) > 34 + v.radius) continue;
+
+        // A shield eats it and is spent — the answer to "I was hit at the worst
+        // possible moment".
+        if (!BR.Items.blocked(v)) {
+          if (d.kind === 'blob') {
+            v.vel.x *= 0.35; v.vel.y *= 0.35;
+            BR.Items.stun(v, 0.3);
+          } else {
+            BR.Items.stun(v, 0.5);
+            v.spinTime = Math.max(v.spinTime, 0.3);
+            v.spinVel = 4;
+          }
+        }
+        this.drops.splice(i, 1);
+        break;
+      }
+    }
+  },
+
   resolveCarContacts() {
     const list = this.vehicles;
     for (let i = 0; i < list.length; i++) {
@@ -661,6 +764,8 @@ BR.Game = {
         // A ghost is a replay, not a rival. Letting it push the player would
         // also break its own determinism.
         if (a.isGhost || b.isGhost) continue;
+        // A car on a loop is on rails and cannot be shoved off them.
+        if (a.rail || b.rail) continue;
         // A car on a loop is on rails. It cannot be shoved off them, and it
         // cannot shove — its position is scripted, so a push would either be
         // ignored or tear it off the track.
