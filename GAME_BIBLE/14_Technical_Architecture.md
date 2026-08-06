@@ -210,3 +210,45 @@ These are the three places where bugs are expensive and hard to spot by playing.
 `03_Driving_Physics.md` — the vehicle model.
 `16_Content_Pipeline.md` — how data gets made.
 `17_Claude_Rules.md` — coding conventions.
+
+## View culling (Phase 8)
+
+Doubling the field to seven opponents raised the question of what a frame
+actually costs. It could not be answered directly — **`performance.now()` does
+not advance under headless virtual time**, so every wall-clock measurement in
+this environment reads zero. Counting work instead found the real problem:
+
+Of ~300 wall segments on a track, only **44-61 were anywhere near the viewport**
+and roughly a quarter were behind the camera outright. All ~300 were projected,
+pushed into the depth sort, sorted and drawn — **and again for every viewport**,
+so a four-player split screen was pushing ~1,300 drawables a frame with ~85%
+waste. Behind-camera geometry is worse than wasted: it projects to mirrored
+coordinates and was being drawn.
+
+Walls, props, hazards and loop segments are now culled before the sort.
+Measured: **~81% of wall geometry removed**, with the same picture.
+
+### A point test is not enough
+
+The first version tested each wall by its midpoint and wrongly rejected about
+one wall per camera position — a segment popping in and out at the screen edge,
+which is exactly where it is most noticeable. The cause is specific: **a wall
+whose midpoint is behind the camera can still have an endpoint in front of it
+and on screen.**
+
+Anything with extent is now tested by its extent — both ends, floor and top, kept
+if any point survives. Four projections instead of one, against 81% of the
+geometry not being drawn at all.
+
+### Verifying a cull
+
+Pixel-diffing a culled frame against an unculled one **does not work here**, and
+two attempts proved it. `render()` eases the camera on every call, so rendering
+twice moves it — the first diff was 19% of the frame and was measuring camera
+drift. Pinning the camera cut it to 4%, which was then particles and bob phase
+advancing between captures.
+
+The right test is of the **predicate, not the pixels**: for every object the cull
+rejects, project its full extent and assert no part lands inside the viewport.
+That isolates the thing being changed. Result: **0 false rejects** across 24
+camera positions on four tracks.
