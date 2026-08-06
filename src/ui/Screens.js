@@ -101,14 +101,93 @@ BR.Screens = {
     canvas.addEventListener('pointercancel', endDrag);
     canvas.addEventListener('pointerleave', endDrag);
 
+    /* ── keyboard and gamepad menus (11_UI open question 3) ────────────────
+       The menus were pointer-only, on a game with four-player couch
+       multiplayer and gamepad support. A player holding a pad could drive but
+       could not choose an event, pick a car, or leave the pause menu without
+       somebody reaching for a mouse. */
     window.addEventListener('keydown', function (e) {
-      if (self.state !== self.EVENTS) return;
-      const step = { ArrowDown: 104, ArrowUp: -104,
-                     PageDown: 420, PageUp: -420 }[e.key];
-      if (step !== undefined) { e.preventDefault(); self.scrollEvents(step); }
-      else if (e.key === 'Home') { self.eventScroll = 0; }
-      else if (e.key === 'End') { self.eventScroll = self.eventScrollMax; }
+      if (self.state === self.RACE && !BR.Game.paused) return;
+      switch (e.key) {
+        case 'ArrowDown': case 'ArrowRight':
+          e.preventDefault(); self.moveFocus(1); break;
+        case 'ArrowUp': case 'ArrowLeft':
+          e.preventDefault(); self.moveFocus(-1); break;
+        case 'Enter': case ' ':
+          e.preventDefault(); self.activateFocus(); break;
+        case 'Escape':
+          e.preventDefault(); self.back(); break;
+        case 'PageDown': self.scrollEvents(420); break;
+        case 'PageUp':   self.scrollEvents(-420); break;
+        case 'Home':     self.eventScroll = 0; break;
+        case 'End':      self.eventScroll = self.eventScrollMax; break;
+      }
     });
+  },
+
+  /* Focus is an index into `regions`, which is rebuilt every frame in a
+     deterministic draw order — so the index is stable as long as the screen is.
+     `set()` resets it, which is the only time the order can change. */
+  focusIdx: -1,
+  padPrev: null,
+
+  moveFocus(dir) {
+    const n = this.regions.length;
+    if (!n) return;
+    this.focusIdx = this.focusIdx < 0
+      ? (dir > 0 ? 0 : n - 1)
+      : (this.focusIdx + dir + n) % n;
+    this.hover = this.focusIdx;          // reuse the existing highlight
+    this.revealFocus();
+  },
+
+  activateFocus() {
+    const r = this.regions[this.focusIdx];
+    if (r) this.dispatch(r, { x: r.x + r.w / 2, y: r.y + r.h / 2 });
+  },
+
+  /* Escape / B. Every screen needs somewhere to go, or a pad player can get
+     stranded on a screen with no way out. */
+  back() {
+    if (this.state === this.RACE && BR.Game.paused) { BR.Game.paused = false; return; }
+    if (this.state === this.EVENTS || this.state === this.GARAGE) {
+      this.set(this.MENU);
+    }
+  },
+
+  /* Keep the focused row on screen. Without this, focus walks off the bottom of
+     a fourteen-row event list and the highlight vanishes. */
+  revealFocus() {
+    if (this.state !== this.EVENTS) return;
+    const r = this.regions[this.focusIdx];
+    if (!r) return;
+    const listTop = this.listTop || 0, listBot = this.listBottom || 0;
+    if (r.y < listTop)          this.scrollEvents(r.y - listTop - 8);
+    else if (r.y + r.h > listBot) this.scrollEvents(r.y + r.h - listBot + 8);
+  },
+
+  /* Gamepad, polled once per frame from draw(). Edge-detected, or a held stick
+     scrolls the whole list in three frames. */
+  pollPad() {
+    if (!BR.Input || !BR.Input.padFor) return;
+    const pad = BR.Input.padFor(0);
+    if (!pad) { this.padPrev = null; return; }
+    const B = BR.Input.BUTTON;
+    const ax = pad.axes && pad.axes.length > 1 ? pad.axes[1] : 0;
+    const now = {
+      down: BR.Input.anyBtn(pad, B.dpadD) || ax > 0.5,
+      up:   BR.Input.anyBtn(pad, B.dpadU) || ax < -0.5,
+      go:   BR.Input.anyBtn(pad, B.accel) || BR.Input.anyBtn(pad, B.drift),
+      back: BR.Input.anyBtn(pad, B.brake),
+    };
+    const p = this.padPrev;
+    if (p) {
+      if (now.down && !p.down) this.moveFocus(1);
+      if (now.up   && !p.up)   this.moveFocus(-1);
+      if (now.go   && !p.go)   this.activateFocus();
+      if (now.back && !p.back) this.back();
+    }
+    this.padPrev = now;
   },
 
   scrollEvents(dy) {
@@ -139,6 +218,9 @@ BR.Screens = {
     // event does not throw you back to the top of a fourteen-row list.
     if (s !== this.EVENTS) this.drag = null;
     this.state = s; this.regions = []; this.hover = -1;
+    // Focus is an index into a per-screen region order, so it cannot survive a
+    // screen change.
+    this.focusIdx = -1; this.padPrev = null;
   },
 
   say(msg) { this.toast = msg; this.toastTime = 2.6; },
@@ -225,6 +307,11 @@ BR.Screens = {
 
   draw(ctx, w, h, dt) {
     if (this.pieceToastTime > 0) this.pieceToastTime -= dt;
+
+    /* Polled here rather than on an event, because the Gamepad API has no
+       events — it only reports state when asked. Skipped while actually racing,
+       where the pad is driving the car. */
+    if (this.state !== this.RACE || BR.Game.paused) this.pollPad();
 
     if (this.state === this.RACE) {
       // Drawn full-screen rather than per viewport: pause is one global state,
@@ -580,8 +667,10 @@ BR.Screens = {
        Rows are laid out from listTop and shifted up by eventScroll, then
        clipped. The BACK button sits below the band so it never scrolls away. */
     const rowH = 92, rowGap = 12, rowStep = rowH + rowGap;
-    const listTop = y;
-    const listBottom = h - 62;
+$1
+    this.listTop = listTop;
+$1
+    this.listBottom = listBottom;
     const listH = Math.max(rowStep, listBottom - listTop);
     const contentH = BR.EVENTS.length * rowStep;
     this.eventScrollMax = Math.max(0, contentH - listH);

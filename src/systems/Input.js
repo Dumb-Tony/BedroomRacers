@@ -146,6 +146,9 @@ BR.Input = {
     pause:  [9],       // start
     dpadL:  [14],
     dpadR:  [15],
+    // Menus only — driving never needs up or down on the pad.
+    dpadU:  [12],
+    dpadD:  [13],
   },
 
   padCount: 0,
