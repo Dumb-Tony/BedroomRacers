@@ -235,6 +235,7 @@ BR.Renderer = {
     this.drawRoad(ctx, arena);
     this.drawDecoration(ctx, arena);
     this.drawBoostPads(ctx, arena);
+    if (game.items) this.drawItems(ctx, arena);
     this.drawCollectibles(ctx, arena, dt);
     this.drawFinishLine(ctx, arena);
     this.drawMarks(ctx);
@@ -610,6 +611,47 @@ BR.Renderer = {
       ctx.globalAlpha = 0.85;
       ctx.fill();
       ctx.globalAlpha = 1;
+    }
+  },
+
+  /* Item boxes, and anything an item left on the track. Everything here is
+     drawn for its whole life — the design stance forbids anything invisible,
+     instant and unavoidable (10_Items.md), and a trap you cannot see is all
+     three at once. */
+  drawItems(ctx, arena) {
+    const Pj = BR.Projection;
+
+    for (let i = 0; i < arena.itemBoxes.length; i++) {
+      const b = arena.itemBoxes[i];
+      if (b.cooldown > 0) continue;
+      const p = Pj.project(b.x, b.y,
+                           (b.z || 0) + 18 + Math.sin(this.bobPhase + i) * 4);
+      const k = Pj.scaleAt(p.depth) * 19;
+      ctx.beginPath();
+      ctx.moveTo(p.sx, p.sy - k);
+      ctx.lineTo(p.sx + k, p.sy);
+      ctx.lineTo(p.sx, p.sy + k);
+      ctx.lineTo(p.sx - k, p.sy);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(255,211,77,0.85)';
+      ctx.fill();
+      ctx.strokeStyle = '#ece6da';
+      ctx.lineWidth = 2 / BR.CAMERA.zoom;
+      ctx.stroke();
+    }
+
+    const drops = (BR.Game && BR.Game.drops) || [];
+    for (let i = 0; i < drops.length; i++) {
+      const d = drops[i];
+      const plane = d.kind === 'plane';
+      const p = Pj.project(d.x, d.y, (d.z || 0) + (plane ? 24 : 4));
+      const k = Pj.scaleAt(p.depth) * (plane ? 14 : 24);
+      ctx.beginPath();
+      ctx.ellipse(p.sx, p.sy, k, k * Pj.groundTilt * (plane ? 1 : 1.7),
+                  0, 0, Math.PI * 2);
+      ctx.fillStyle = plane ? 'rgba(236,230,218,0.95)'
+                            : 'rgba(200,139,224,0.8)';
+      ctx.fill();
     }
   },
 

@@ -23,10 +23,52 @@ BR.HUD = {
      compact positions would drift out of sync with the originals. */
   REFERENCE_WIDTH: 900,
 
+  /* One slot, top centre. Held item and nothing else — 10_Items.md wants it
+     simple to read at a glance, and a slot that can only ever contain one thing
+     is the simplest readable thing there is. */
+  drawItemSlot(ctx, view, w, h) {
+    const v = view.vehicle;
+    if (!v) return;
+    const s = Math.min(1, w / this.REFERENCE_WIDTH);
+    const bw = 76 * s, bh = 46 * s;
+    const bx = w / 2 - bw / 2, by = 74 * s;
+
+    ctx.fillStyle = 'rgba(18,16,14,0.78)';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = v.item ? '#ffd34d' : 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx, by, bw, bh);
+
+    if (v.item) {
+      const def = BR.Items.DEFS[v.item];
+      ctx.fillStyle = def ? def.colour : '#ece6da';
+      ctx.beginPath();
+      ctx.arc(bx + bw / 2, by + bh / 2 - 4 * s, 11 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = '700 ' + Math.max(6, Math.round(7 * s)) +
+                 'px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.textAlign = 'center';
+      ctx.fillText((def ? def.name : '').toUpperCase(),
+                   bx + bw / 2, by + bh - 7 * s);
+      ctx.textAlign = 'left';
+    }
+
+    // A shield is worn rather than held, so it gets its own mark beside the slot.
+    if (v.shield > 0) {
+      ctx.strokeStyle = '#69d0ff';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(bx - 18 * s, by + bh / 2, 9 * s, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  },
+
   draw(ctx, view, game, w, h) {
     // Menus render over a live view of the track, so the race HUD must not
     // come with it.
     if (BR.Screens && BR.Screens.state !== BR.Screens.RACE) return;
+    if (game.items) this.drawItemSlot(ctx, view, w, h);
 
     const k = Math.min(1, Math.max(0.55, w / this.REFERENCE_WIDTH));
     if (k < 1) {
