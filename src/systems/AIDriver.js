@@ -25,7 +25,13 @@ BR.AIDriver = {
   PERSONALITIES: {
     rookie: {
       name: 'Rookie',
-      targetSpeedMul: 0.80, lineAccuracy: 0.65, cornerCaution: 1.35,
+      /* 0.80 made the Rookie a rolling roadblock rather than a beginner-
+         friendly opponent: measured solo, 36.1s a lap against the Speedster's
+         29.1 — a 24% deficit that a competent player turns into a full lap
+         inside three. Being the slowest in the field is the point; being
+         seven seconds a lap slower is not a difficulty setting, it is an
+         absence of one. */
+      targetSpeedMul: 0.91, lineAccuracy: 0.65, cornerCaution: 1.35,
       boostEfficiency: 0.25, mistakeChance: 0.16, driftSkill: 0.4,
       sandReading: 0.15,      // hasn't noticed the ground is different
       itemSkill: 0.25,        // sits on things and fires them late
@@ -39,24 +45,32 @@ BR.AIDriver = {
     },
     speedster: {
       name: 'Speedster',
-      targetSpeedMul: 1.08, lineAccuracy: 0.72, cornerCaution: 0.70,
+      targetSpeedMul: 1.10, lineAccuracy: 0.72, cornerCaution: 0.70,
       boostEfficiency: 0.60, mistakeChance: 0.14, driftSkill: 0.6,
       sandReading: 0.45,      // too busy going fast to look down
       itemSkill: 0.6,         // empties the slot the moment it fills
     },
     bully: {
       name: 'Bully',
-      targetSpeedMul: 0.94, lineAccuracy: 0.70, cornerCaution: 1.05,
+      targetSpeedMul: 0.96, lineAccuracy: 0.70, cornerCaution: 1.05,
       boostEfficiency: 0.50, mistakeChance: 0.08, driftSkill: 0.5,
       sandReading: 0.55,      // will happily take the line you just made
       itemSkill: 0.8,         // saves the offensive ones for company
     },
   },
 
+  /* NORMAL IS THE ANCHOR AND MUST NOT MOVE. Every target time in events.js is
+     calibrated against a Technician on normal, so changing either would
+     silently invalidate eighteen events' worth of medals. Difficulty is
+     adjusted at the ends instead.
+
+     Hard was 1.06 — a 6% lift on a field whose fastest car already lapped
+     slower than a competent human, which is to say it was not a hard mode at
+     all. */
   DIFFICULTY: {
-    easy:   { speed: 0.86, mistake: 1.8,  boost: 0.6, forgiveness: 0.55 },
+    easy:   { speed: 0.90, mistake: 1.8,  boost: 0.6, forgiveness: 0.55 },
     normal: { speed: 1.00, mistake: 1.0,  boost: 1.0, forgiveness: 1.0 },
-    hard:   { speed: 1.06, mistake: 0.45, boost: 1.2, forgiveness: 1.0 },
+    hard:   { speed: 1.15, mistake: 0.40, boost: 1.3, forgiveness: 1.0 },
   },
 
   /* Ceiling on dynamic assistance. 04_AI.md: it compresses the field, it does
@@ -283,11 +297,24 @@ BR.AIDriver = {
       const w = line[(ai.wp + k) % n];
       if (w.targetSpeed < limit) limit = w.targetSpeed;
     }
-    // catchUp is >= 1 always. Trailing cars get a nudge; a leading car is never
-    // slowed down, because holding a winning player back is the single most
-    // resented mechanic in arcade racing (04_AI.md).
-    const wantSpeed = v.spec.maxSpeed * limit * ai.p.targetSpeedMul *
-                      ai.d.speed * (ai.catchUp || 1);
+    /* catchUp is >= 1 always. Trailing cars get a nudge; a leading car is never
+       slowed down, because holding a winning player back is the single most
+       resented mechanic in arcade racing (04_AI.md).
+
+       THE PRODUCT IS CAPPED. Personality, difficulty and catch-up all multiply
+       the corner target, and unbounded they ask a driver to carry more speed
+       than the authored line can hold — at which point it overshoots, scrubs,
+       and gets SLOWER. Measured before the cap: the Speedster (1.10) on hard
+       (1.15) lapped 29.5s against 27.8s on normal. A difficulty setting that
+       makes a car slower is not a difficulty setting.
+
+       1.18 is a little above the Technician on hard (0.99 x 1.15 = 1.139), so
+       the cautious drivers still get the full benefit of hard and only the
+       already-overdriving ones are held back. */
+    const AGGRO_CAP = 1.18;
+    const aggro = Math.min(AGGRO_CAP,
+                           ai.p.targetSpeedMul * ai.d.speed * (ai.catchUp || 1));
+    const wantSpeed = v.spec.maxSpeed * limit * aggro;
 
     if (speed > wantSpeed * 1.06) {
       input.brake = 1;
