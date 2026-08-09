@@ -252,12 +252,119 @@ The first draft of Dresser Drop was a ring and tested none of this.
    first, with no evidence the architecture held, it would have been the rewrite
    the draft feared.
 
+## Switching gates — built (Phase 9)
+
+The claim below was that "a switching gate is two rails sharing a mouth". That
+turned out to be true, and cheap, and it was still the least interesting thing
+the feature found.
+
+**The mechanism.** Rails sharing a `gate` name share an entry box. Which branch
+you get is decided by the lane you are in when you reach it — lateral position,
+not a button — so the choice is made on the approach, by the line you take. The
+AI needed no new machinery to express it either: it already steers to a lateral
+offset, and a gate just overrides that offset the way packed sand does.
+
+Two things did have to change, and both are the kind of bug that does not throw:
+
+- **The edge trigger had to key on the GATE, not the rail index.** It exists so
+  a car set down inside the mouth it just left does not board again. With
+  branches sharing a box, a car that rode branch 1 re-enters and matches branch
+  0 first — a different index, so the trigger rearms and it immediately rides
+  the other half of the fork. The round-and-round bug wearing a different hat.
+- **Entering down the middle is a 70-unit jump sideways** onto whichever lane
+  wins, which is three car widths. The ride now eases onto its lane across the
+  first quarter. Measured, the correction never exceeds 3.6 units in a tick
+  against the 5.7 a car covers driving at 340 — slower than the car is already
+  moving, so there is nothing to see.
+
+### What it actually found: every loop in the game was a trap
+
+Building the fork meant measuring what each branch was worth, and the answer was
+that **taking a rail cost more time than skipping it.**
+
+Identical driver, identical track, full laps on Shelf Run:
+
+| | best lap |
+| --- | --- |
+| no rail at all | 32.55s |
+| with the loop | 34.12s (**+1.57s**) |
+| with a two-turn corkscrew | 36.25s (**+3.70s**) |
+
+Rides were paced by the arc length of the ribbon — going round a vertical ring
+really is further than driving past it, so the car was charged for the
+circumference. That is the physically honest reading, and it made the fastest
+line through a loop **arriving too slowly to be allowed on it**: the ride parked
+the car for nearly two seconds and handed back a fifth of a boost meter. The
+exact inverse of the stated design, "a reward you have to be carrying speed to
+collect".
+
+Rides are now paced by **ground distance**, so forward progress is exactly the
+speed the car arrived with and a ride costs nothing. The circle is superimposed
+on that — the car is briefly moving further through the world than its speed
+suggests, which is fine, because it is a scripted ride and the spectacle is the
+point. Charging admission for it was the bug.
+
+Consequences, all measured:
+
+- Rail `length` now sets the ride's duration, so every rail grew to occupy real
+  road: 150 → 380 on Dresser Drop's loop, 150 → 400 on Shelf Run's, against 410
+  and 440 units of measured straight road at those mouths.
+- A ride is 1.17s instead of 4.3s, so the corkscrew's spiral got **3.7× faster**
+  and whipped the car 24.6 units a tick. Shelf Run's corkscrew radius came down
+  115 → 78, putting the swing at 15.0 — matching Dresser Drop's, which is the
+  one that has actually been looked at.
+- Both stunt tracks got quicker and **all four events were recalibrated**:
+  Dresser Drop lost 9.1s a race, Shelf Run 3.0s.
+
+### The fork on Shelf Run
+
+Both branches cover the same 400 units at the same pace, so neither costs time.
+What separates them is what they ask and what they pay:
+
+| | entry speed | boost | lane |
+| --- | --- | --- | --- |
+| low road (loop) | 230 | +0.22 | left |
+| high road (corkscrew) | **320** | **+0.60** | right |
+
+Miss the high road's entry speed and you get **nothing** — not the corkscrew and
+not the loop either, because you committed to a lane. That is the bet.
+
+**Which side each branch sits on is not cosmetic.** They exit 140 units apart
+across the road and a corner follows, so the lane you leave in is worth more
+than the boost you leave with. Built the other way round, the corkscrew measured
+**0.43s a lap slower** than the loop despite paying nearly three times the
+boost. The harder entry now gets the better exit: high road −0.32s a lap against
+no rail at all, low road +0.15s.
+
+### The field disagrees about it
+
+A fork every driver takes the same way is a corner with extra steps. A
+`gateNerve` trait decides how optimistic a driver is about the speed it will
+arrive with:
+
+| | arrives at | aims for |
+| --- | --- | --- |
+| Rookie | 316 | low road |
+| Bully | 335 | high road |
+| Technician | 345 | high road |
+| Speedster | 391 | high road |
+
+The first version had **everyone** taking the high road, because the decision
+was made 620 units out where every car is still accelerating, so the estimate
+needed a fudge large enough to clear the entry fee for anybody. Deciding at 340
+instead — still 180 units more than a car needs to ease 70 across the road —
+judges a speed close to the one it will actually turn up with, and the field
+splits.
+
+The decision is also **committed** rather than re-evaluated every tick: a driver
+that recomputes as the mouth closes straddles the divider at the moment its
+speed crosses the threshold, and arrives in neither lane.
+
 ## Still unbuilt
 
-Magnetic boosters, track-switching gates, falling track sections and wall-mounted
-routes. All four are content on top of what now exists rather than new systems —
-a booster is a boost pad with a rail's entry test, and a switching gate is two
-rails sharing a mouth.
+Magnetic boosters, falling track sections and wall-mounted routes. All three are
+content on top of what now exists rather than new systems — a booster is a boost
+pad with a rail's entry test.
 
 The **legal note above still binds** every one of them. Dresser Drop uses violet
 and teal rather than the obvious orange and blue, and draws no connector

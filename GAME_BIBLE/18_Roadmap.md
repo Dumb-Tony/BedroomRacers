@@ -219,13 +219,8 @@ taking the risk at all.
 a two-storey crossover, and one ride rather than four.
 
 Remaining candidates:
-- **Items** (`10_Items.md` open question 4) — still undecided whether the
-  flagship mode should have them at all, and the oldest unanswered question in
-  the bible.
-- **Track-switching gates and falling track sections** (`07`) — content on the
-  systems that now exist rather than new systems.
-- **Items** (`10_Items.md` open question 4) — still undecided whether the
-  flagship mode should have them at all.
+- **Magnetic boosters, falling track sections and wall-mounted routes** (`07`) —
+  content on the systems that now exist rather than new systems.
 
 ---
 
@@ -340,3 +335,49 @@ pending write bail entirely. The save system was correct the whole time.
 
 Worth saying plainly, because a failing check that turns out to be a bad test is
 the most expensive kind: it looks exactly like a real defect until you look.
+
+---
+
+## Phase 9 — Switching gates, and the trap they uncovered
+
+**Track-switching gates are built** (`07`). Rails sharing a `gate` name share a
+mouth, and the lane you are in on the approach decides which branch you ride —
+lateral position, not a button. Shelf Run's single rail is now a fork: a cheap
+loop on the left, a corkscrew on the right that asks for 320 at the mouth and
+pays nearly three times the boost. Miss the entry speed and you get neither,
+because you committed to a lane.
+
+The doc's guess that this would be cheap — "two rails sharing a mouth" — was
+right. **It was also the least interesting thing the work found.**
+
+Measuring what each branch was worth showed that **taking a rail cost more time
+than skipping it**: 1.57s a lap for the loop and 3.70s for a corkscrew, against
+not being there at all. Rides were paced by the arc length of the ribbon, so the
+car was charged for the circumference of a vertical circle, and the fastest line
+through a loop was to arrive too slowly to be allowed on it. Every loop in the
+game was a trap. Every check passed the whole time, because nothing had ever
+compared a lap with a rail against a lap without one.
+
+Rides are now paced by ground distance. A ride costs nothing, the boost is a
+clean reward, rail lengths grew to occupy real road, and all four stunt events
+were recalibrated — Dresser Drop lost 9.1 seconds a race.
+
+Two harness bugs on the way, both of which produced confident wrong answers:
+
+- **The arena is cached and reused.** The control run set `arena.rails = []`,
+  which mutated the cached track — so every later run raced a Shelf Run with no
+  rails at all, and the harness reported that the rail made no difference.
+- **A 0.43s gap between the branches was assumed to be noise** and re-run
+  quickest-of-four. It came back identical. It was systematic: the branches exit
+  140 units apart and a corner follows, so which side a branch sits on is worth
+  more than the boost it pays.
+
+### Needs a human
+
+- [~] Does a 1.17s ride still read as a loop? It was 4.3s, and the change that
+  fixed the timing necessarily sped the rotation up. The corkscrew's radius was
+  cut to hold its sideways swing to the rate of the one already shipped, but
+  whether the spectacle survives being three times quicker is an eye question,
+  not a stopwatch one.
+- [~] Is the fork *legible* at racing speed — can a player see two routes and
+  pick one, or does it read as one wide loop?

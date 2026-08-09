@@ -285,7 +285,10 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 6,
     difficulty: 'normal',
-    platinumTime: 103,          // 0.93 x 110.5, the clean reference run
+    /* 0.93 x 101.9. RE-MEASURED after rides were re-paced by ground distance
+       (Rails.js): this track lost 9.1 seconds a race, because its loop had been
+       parking the car for nearly two seconds every lap. */
+    platinumTime: 95,
     unlockStars: 26,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -302,8 +305,8 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 0,
     difficulty: 'normal',
-    times: { gold: 106, silver: 116, bronze: 130 },  // clean reference 111.9
-    platinumTime: 99,
+    times: { gold: 98, silver: 107, bronze: 120 },   // clean reference 102.8
+    platinumTime: 91,
     unlockStars: 29,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
@@ -323,7 +326,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 7,
     difficulty: 'hard',
-    platinumTime: 99,           // 0.93 x 106.6, the clean reference run
+    platinumTime: 95,           // 0.93 x 101.8, re-measured after the gate
     unlockStars: 32,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -340,8 +343,8 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 0,
     difficulty: 'normal',
-    times: { gold: 101, silver: 111, bronze: 124 },  // clean reference 106.6
-    platinumTime: 94,
+    times: { gold: 98, silver: 108, bronze: 121 },   // clean reference 103.6
+    platinumTime: 92,
     unlockStars: 35,
     objectives: [
       { id: 'finish',  label: 'Set a time' },

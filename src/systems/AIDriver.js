@@ -35,6 +35,7 @@ BR.AIDriver = {
       boostEfficiency: 0.25, mistakeChance: 0.16, driftSkill: 0.4,
       sandReading: 0.15,      // hasn't noticed the ground is different
       itemSkill: 0.25,        // sits on things and fires them late
+      gateNerve: 0.55,        // wants a big margin before trying the high road
     },
     technician: {
       name: 'Technician',
@@ -42,6 +43,7 @@ BR.AIDriver = {
       boostEfficiency: 0.90, mistakeChance: 0.03, driftSkill: 0.95,
       sandReading: 0.95,      // reading the surface is the whole personality
       itemSkill: 0.95,        // waits for a target, then uses it
+      gateNerve: 1.00,        // knows exactly what it will be carrying
     },
     speedster: {
       name: 'Speedster',
@@ -49,6 +51,7 @@ BR.AIDriver = {
       boostEfficiency: 0.60, mistakeChance: 0.14, driftSkill: 0.6,
       sandReading: 0.45,      // too busy going fast to look down
       itemSkill: 0.6,         // empties the slot the moment it fills
+      gateNerve: 1.35,        // takes the high road it cannot always make
     },
     bully: {
       name: 'Bully',
@@ -56,6 +59,7 @@ BR.AIDriver = {
       boostEfficiency: 0.50, mistakeChance: 0.08, driftSkill: 0.5,
       sandReading: 0.55,      // will happily take the line you just made
       itemSkill: 0.8,         // saves the offensive ones for company
+      gateNerve: 0.90,        // goes where the traffic isn't
     },
   },
 
@@ -88,6 +92,8 @@ BR.AIDriver = {
       wander: 0,          // the personality half of lateralTarget
       sandOffset: null,   // the packed-sand half, null when the sand is uniform
       sandTimer: 0,
+      gateOffset: null,   // lane of the gate branch being aimed at, if any
+      gateKey: null,      // which gate that decision belongs to
       mistakeTimer: 0,    // seconds left of a deliberate error
       stuckTimer: 0,
       recoverTimer: 0,
@@ -185,6 +191,87 @@ BR.AIDriver = {
   AVOID_BEHIND: -90,     // a little behind the aim point, for props alongside
   AVOID_MARGIN: 20,      // extra room beyond the two radii
 
+  /* ── switching gates ──────────────────────────────────────────────────────
+     A gate is only a choice if the field disagrees about it. If every driver
+     took the same branch it would be a corner with extra steps.
+
+     The decision is COMMITTED, not re-evaluated every tick. A driver that
+     recomputes as it closes on the mouth ends up straddling the divider when
+     its speed crosses the threshold mid-approach, and arrives in neither lane.
+     Once a gate is picked the choice is held until the car is past it. */
+  /* How far ahead a gate registers.
+     Deliberately not far. At 620 every driver is still climbing towards its
+     terminal speed, so the arrival estimate needed a fudge large enough that
+     everyone — including the Rookie — cleared the high road's entry fee, and
+     the whole field took the same branch. Measured, a driver needs about 180
+     units to ease 70 across the road, so 340 leaves room to move while judging
+     a speed close to the one it will actually turn up with. */
+  GATE_LOOK: 340,
+
+  /**
+   * Choose a branch, once, on the approach.
+   *
+   * The bet is on ARRIVAL speed, not current speed — a driver 600 units out is
+   * usually still accelerating, and judging the high road on what it is doing
+   * now makes everyone too timid. `gateNerve` is how optimistic that bet is:
+   * the Speedster overestimates itself and sometimes drives under the loop it
+   * aimed at, which is the correct failure for that personality to have.
+   *
+   * @returns {number|null} lane to aim for, or null when no gate is ahead
+   */
+  readGate(v, ai, arena) {
+    const rails = arena.rails;
+    if (!rails || !rails.length) return null;
+
+    const speed = Math.hypot(v.vel.x, v.vel.y);
+    const hx = Math.cos(v.heading), hy = Math.sin(v.heading);
+
+    // Nearest gate mouth ahead of us.
+    let bestKey = null, bestDist = this.GATE_LOOK;
+    for (let i = 0; i < rails.length; i++) {
+      const R = rails[i];
+      if (!R.gate) continue;                        // lone rails are not choices
+      const dx = (R.x + R.w / 2) - v.x, dy = (R.y + R.h / 2) - v.y;
+      if (dx * hx + dy * hy <= 0) continue;         // behind us
+      const dist = Math.hypot(dx, dy);
+      if (dist > bestDist) continue;
+      bestKey = R.gate; bestDist = dist;
+    }
+    if (!bestKey) { ai.gateKey = null; return null; }
+
+    // Already decided for this gate — hold it.
+    if (ai.gateKey === bestKey) return ai.gateOffset;
+
+    // Every branch of it, including any the nearest-mouth scan skipped past.
+    const group = [];
+    for (let i = 0; i < rails.length; i++)
+      if (rails[i].gate === bestKey) group.push(rails[i]);
+
+    /* Still a bet on arrival rather than current speed — a car this close is
+       usually still gaining — but a much smaller one, spanning the entry fee
+       across the roster instead of clearing it for everybody. */
+    const arriving = speed * (0.95 + 0.20 * ai.p.gateNerve);
+
+    /* Best reward we believe we can reach. Ties go to the branch already
+       nearer the line, so a driver does not cross the road for nothing. */
+    let pick = null, pickScore = -Infinity;
+    for (let i = 0; i < group.length; i++) {
+      const R = group[i];
+      if (arriving < R.minSpeed) continue;
+      const score = (R.exitBoost || 0) * 100 - Math.abs(R.lane || 0) * 0.02;
+      if (score > pickScore) { pickScore = score; pick = R; }
+    }
+    // Nothing looks reachable: take the one asking least of us.
+    if (!pick) {
+      for (let i = 0; i < group.length; i++)
+        if (!pick || group[i].minSpeed < pick.minSpeed) pick = group[i];
+    }
+
+    ai.gateKey = bestKey;
+    ai.gateOffset = pick ? (pick.lane || 0) : null;
+    return ai.gateOffset;
+  },
+
   /**
    * Shifts a desired lateral offset sideways until it misses every prop ahead.
    * Picks whichever side needs less movement, so a driver already going round
@@ -262,6 +349,12 @@ BR.AIDriver = {
     }
     const pull = ai.sandOffset === null ? 0 : ai.p.sandReading;
     ai.lateralTarget = ai.wander * (1 - pull) + (ai.sandOffset || 0) * pull;
+
+    /* A gate overrides both. Wander and sand are preferences about where on the
+       road to be; a gate is a decision about which road to take, and a driver
+       that splits the difference between two branches takes neither. */
+    const gateLane = this.readGate(v, ai, arena);
+    if (gateLane !== null) ai.lateralTarget = gateLane;
 
     // Whatever the personality and the sand wanted, do not drive into a bucket.
     ai.lateralTarget = this.avoidProps(v, arena, tgt, la, ai.lateralTarget);

@@ -103,21 +103,73 @@ BR.TRACKS['stunt-shelf-run'] = {
 
   zones: [],
 
-  /* One ride, on the floor stretch where there is room to have built speed.
+  /* One ride, and it is a FORK — the track's switching gate.
+
+     Both branches share the mouth at t 0.13, on the floor stretch where there
+     is room to have built speed and well clear of the crossing. Which one you
+     get is decided by the lane you are in when you reach it, so the choice is
+     made on the approach, by the line you take, rather than by a button.
+
+     THE TRADE IS A BET, not a toll. Both branches cover the same stretch of
+     road at the speed you were already doing (see the pacing note in Rails.js),
+     so neither costs time. What separates them is what they ask and what they
+     pay:
+
+       low road   — 230 at the mouth, +0.22 boost. The sure thing.
+       high road  — 320 at the mouth, +0.60 boost. Nearly three times as much.
+
+     Miss the high road's entry speed and you get NOTHING — not the corkscrew,
+     and not the low road either. You drive along the floor underneath, which is
+     what a lone loop already does to anyone who arrives slowly. Committing to
+     the left lane and arriving at 310 is the whole risk, and it is what makes
+     this a decision rather than a skill check.
+
      Placed against a measured centreline point — see the note in
-     16_Content_Pipeline.md about corner-anchored rectangles. */
+     16_Content_Pipeline.md about corner-anchored rectangles. Lanes are ±70 on a
+     300-wide road, so each 150-wide ribbon sits inside the kerbs. Length 400
+     against 440 units of measured straight road at this mouth. */
   rails: [
     {
-      // t 0.13, road at (3597,2677) heading east, on the floor and well clear
-      // of the crossing — a ring under the shelf would fight it for space.
+      /* HIGH ROAD — right lane. Road at (3597,2677) heading east.
+
+         WHICH SIDE IS NOT COSMETIC. The branches exit 140 units apart across
+         the road, and what follows is a corner, so the lane you leave in is
+         worth more than the boost you leave with. Built the other way round —
+         high road on the left — the corkscrew measured 0.43s a lap SLOWER than
+         the loop despite paying nearly three times the boost, because it spat
+         the car out on the wrong side for what came next. The harder entry gets
+         the better exit; the cheap one takes the long way round. */
+      gate: 'shelf-fork', lane: -70,
       x: 3527, y: 2577, w: 140, h: 200,
       dir: [0.944, 0.331],
+      kind: 'corkscrew',
+      turns: 2,
+      /* Tighter than it looks like it wants to be. Pacing a ride by ground
+         distance made it 1.17s rather than 4.3s, and two turns in that time at
+         radius 115 whips the car sideways 24.6 units a tick — four times what
+         driving at 340 covers. 78 puts the swing at 13.9 a tick, matching
+         Dresser Drop's corkscrew, which is the one that has actually been
+         looked at. */
+      radius: 78,
+      length: 400,
+      width: 150,
+      minSpeed: 320,
+      exitBoost: 0.60,
+      colour: '#37a8b8', altColour: '#2b8593', railColour: '#b6e6ee',
+    },
+    {
+      // LOW ROAD — left lane. Same mouth, same heading, cheaper entry.
+      gate: 'shelf-fork', lane: 70,
+      x: 3527, y: 2577, w: 140, h: 200,
+      dir: [0.944, 0.331],
+      kind: 'loop',
+      turns: 1,
       radius: 120,
-      length: 150,
+      length: 400,
       width: 150,
       minSpeed: 230,
-      exitBoost: 0.35,
-      colour: '#37a8b8', altColour: '#2b8593', railColour: '#b6e6ee',
+      exitBoost: 0.22,
+      colour: '#5c7a8c', altColour: '#465e6d', railColour: '#a8c2d1',
     },
   ],
 

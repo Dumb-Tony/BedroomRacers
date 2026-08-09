@@ -432,6 +432,12 @@ BR.TrackManager = {
           // as a single-turn loop and every measurement of it described a loop.
           kind: r.kind || 'loop',
           turns: r.turns || 1,
+          /* Switching gates. Rails sharing a `gate` name share a mouth and are
+             chosen between by which lane the car is in on the approach.
+             Undefined on a lone rail — which is what every loop and corkscrew
+             built before this was. */
+          gate: r.gate,
+          lane: r.lane || 0,
           radius: r.radius || 130,
           length: r.length === undefined ? 150 : r.length,
           width: r.width || 150,

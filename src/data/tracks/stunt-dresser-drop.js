@@ -126,8 +126,12 @@ BR.TRACKS['stunt-dresser-drop'] = {
     {
       x: 2985, y: 1743, w: 140, h: 200,
       dir: [0.89, -0.45],          // the road's heading at t 0.08
-      radius: 115,                 // 230 tall; ~2.1s at racing speed
-      length: 150,                 // ground covered, so the exit clears the entry
+      radius: 115,                 // 230 tall
+      /* Ground covered, which is now also what PACES the ride (Rails.js). At
+         150 the loop parked the car for 1.8 seconds and was a net time loss, so
+         the fastest line through here was to arrive too slow to be allowed on
+         it. 380 against 410 units of measured straight road at this mouth. */
+      length: 380,
       width: 150,
       minSpeed: 230,
       exitBoost: 0.35,
