@@ -191,10 +191,59 @@ independently.
    which silently recorded at 8.7Hz instead of 10 because `6 * (1/60)` is
    `0.09999999999999999` — just under the threshold, so every sample waited an
    extra tick. The ghost drifted steadily out of sync. Count ticks, not seconds.
-4. Does the game need a manual "reset progress" option? Probably yes, in settings,
-   with confirmation.
+4. ~~Does the game need a manual "reset progress" option?~~ **Resolved in
+   Phase 8: yes — on the main menu, two-step, and it keeps settings.** Not "in
+   settings": this game has no settings screen, and inventing one to hold a
+   single button would be worse than the button. See the section below.
 
 ## Related
 
 `14_Technical_Architecture.md` — SaveManager placement.
 `01_Game_Loop.md` — what progression means.
+
+## Reset progress — resolved (Phase 8)
+
+The only destructive action in the game, so it is the only one built to resist
+being taken by accident.
+
+**Three things guard it, and none of them is a modal.**
+
+1. **It only exists when there is something to lose.** With a fresh save the
+   control is not drawn at all — no region, nothing to click. An offer to erase
+   nothing is noise, and it is the one button whose absence nobody notices.
+2. **Two presses, and the second one is not "are you sure".** Arming swaps the
+   button for a line that names the actual numbers: *"Erase 14 stars, 6 medals,
+   12 pieces and every lap record?"* A player who has forgotten what they have
+   deserves to be told before the press, not after. The alternative — a generic
+   confirmation — trains people to click through it.
+3. **Walking away disarms it.** Any screen change clears the armed flag, so a
+   stray click cannot leave a destructive button primed for whoever sits down
+   next. On a game meant for a shared living room that matters more than it
+   would elsewhere.
+
+**Settings survive the reset.** Volume, difficulty, minimap size and
+auto-accelerate are how someone has set the game up to be *played* — not
+something they earned. Wiping progress should not also turn the sound back up
+and undo an accessibility choice. Stars, medals, objectives, records, toy pieces
+and vehicle ownership all go.
+
+Written through `saveNow()` rather than the 400ms debounce: the player has just
+confirmed a destructive action and a refresh one tick later must not resurrect
+it.
+
+### The layout bug this found
+
+The control was first anchored to `h - 52`. At 1280x800 and 1024x640 that is
+fine; at 820x420 and below it landed **on top of the difficulty buttons**, and
+because `hit()` takes the last matching region the reset won. Pressing
+DIFFICULTY would have armed a progress wipe.
+
+It is now anchored to `Math.max(h - 52, by + 70)` — pinned low on a normal
+window, below the content on a cramped one. Verified across five viewport sizes:
+no reset region overlaps any other region at any of them.
+
+That check also surfaced something **pre-existing and unrelated**: the main menu
+already overflows its canvas at 820x420 and below, because the block starts at
+`h * 0.44` and then advances in fixed pixels. At 600x360 the difficulty row
+draws at y=336 on a 360-tall canvas. Proportional start, fixed gaps — it cannot
+hold. Not fixed here; noted so it is not rediscovered as a reset bug.

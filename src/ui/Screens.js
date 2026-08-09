@@ -221,6 +221,9 @@ BR.Screens = {
     // Focus is an index into a per-screen region order, so it cannot survive a
     // screen change.
     this.focusIdx = -1; this.padPrev = null;
+    // Leaving the screen disarms the reset. A destructive action must never sit
+    // primed while the player is somewhere else.
+    this.resetArmed = false;
   },
 
   say(msg) { this.toast = msg; this.toastTime = 2.6; },
@@ -272,6 +275,31 @@ BR.Screens = {
         BR.SaveManager.save();
         BR.Audio.checkpoint();
         break;
+      /* ── reset progress ──────────────────────────────────────────────────
+         15_Save_System.md open question 4: "probably yes, in settings, with
+         confirmation."
+
+         TWO STEPS, and the second one is not a generic "are you sure". The
+         first press arms it and the button changes to say exactly what will be
+         destroyed; only a second press on the armed button does it. Arming
+         clears itself if you go anywhere else, so a stray click cannot leave it
+         primed for later.
+
+         There is no undo. Nothing else in this game destroys anything, which is
+         precisely why this one needs the friction. */
+      case 'resetArm':
+        this.resetArmed = true;
+        break;
+      case 'resetConfirm': {
+        BR.SaveManager.reset();
+        BR.ProgressionManager.applyUnlocks();
+        G.refreshPlayerVehicles();
+        this.resetArmed = false;
+        this.say('Progress reset');
+        this.set(this.MENU);
+        break;
+      }
+
       case 'goto':    this.set(r.value); break;
       case 'start':   G.startEvent(BR.eventById(r.value)); break;
       case 'slot':
@@ -350,19 +378,23 @@ BR.Screens = {
 
     ctx.fillStyle = opts.primary
       ? (hot ? '#ffdf72' : '#ffd34d')
-      : (hot ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.08)');
+      : opts.danger
+        ? (hot ? 'rgba(255,107,107,0.30)' : 'rgba(255,107,107,0.15)')
+        : (hot ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.08)');
     this.round(ctx, x, y, w, h, 8);
     ctx.fill();
     if (!opts.primary) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = opts.danger ? '#ff6b6b' : 'rgba(255,255,255,0.18)';
+      ctx.lineWidth = opts.danger ? 2 : 1;
       ctx.stroke();
     }
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '700 13px ui-monospace, Consolas, monospace';
-    ctx.fillStyle = opts.primary ? '#221e1b' : '#ece6da';
+    ctx.font = (opts.small ? '700 10px ' : '700 13px ') +
+               'ui-monospace, Consolas, monospace';
+    ctx.fillStyle = opts.primary ? '#221e1b'
+                  : (opts.danger ? '#ffb3b3' : '#ece6da');
     ctx.fillText(label, x + w / 2, y + h / 2 + 1);
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
@@ -627,6 +659,59 @@ BR.Screens = {
     ctx.fillStyle = 'rgba(255,255,255,0.34)';
     ctx.fillText(this.DIFF_BLURB[cur] || '', cx, by + 44);
     ctx.textAlign = 'left';
+
+    /* ── reset progress ────────────────────────────────────────────────────
+       15_Save_System.md open question 4. Deliberately the smallest, dimmest
+       control on the screen — it must be findable, not inviting.
+
+       Only appears once there is something to lose. Offering to erase an empty
+       save is noise, and it is the one button whose absence nobody misses. */
+    const save = BR.SaveManager.get();
+    const stars = P.stars();
+    const evs = save.progression.events || {};
+    let medals = 0;
+    for (const k in evs) if (evs[k] && evs[k].medal) medals++;
+    const pieces = (save.collection.piecesFound || []).length;
+
+    if (stars > 0 || medals > 0 || pieces > 0) {
+      /* Pinned near the bottom, but NEVER above the end of the flowed content.
+         Bottom-anchoring alone put it straight on top of the difficulty buttons
+         at 820x420 and below — and because hit() takes the last matching region,
+         the reset won: a press aimed at DIFFICULTY armed a destructive control.
+         Taking the max keeps it low on a normal window and clear of everything
+         on a short one.
+
+         `by` is the difficulty row; its blurb ends around by + 52, and the armed
+         state needs two lines above the buttons, so by + 70 is the first safe y. */
+      const ry = Math.max(h - 52, by + 70);
+      if (!this.resetArmed) {
+        this.button(ctx, cx - 70, ry, 140, 24, 'RESET PROGRESS',
+                    'resetArm', null, { small: true });
+      } else {
+        /* Armed. The confirm names the actual numbers rather than asking "are
+           you sure" — a player who has forgotten they have 14 stars deserves to
+           be told before they press it, not after. */
+        const bits = [];
+        if (stars)  bits.push(stars  + (stars  === 1 ? ' star'  : ' stars'));
+        if (medals) bits.push(medals + (medals === 1 ? ' medal' : ' medals'));
+        if (pieces) bits.push(pieces + (pieces === 1 ? ' piece' : ' pieces'));
+
+        ctx.textAlign = 'center';
+        ctx.font = '700 11px ui-monospace, Consolas, monospace';
+        ctx.fillStyle = '#ff8f8f';
+        ctx.fillText('Erase ' + bits.join(', ') + ' and every lap record?',
+                     cx, ry - 16);
+        ctx.font = '600 10px ui-monospace, Consolas, monospace';
+        ctx.fillStyle = 'rgba(255,255,255,0.38)';
+        ctx.fillText('This cannot be undone. Settings are kept.', cx, ry - 3);
+        ctx.textAlign = 'left';
+
+        this.button(ctx, cx - 150, ry + 6, 144, 26, 'YES, ERASE IT ALL',
+                    'resetConfirm', null, { small: true, danger: true });
+        this.button(ctx, cx + 6, ry + 6, 144, 26, 'KEEP MY PROGRESS',
+                    'goto', this.MENU, { small: true });
+      }
+    }
 
     if (!BR.SaveManager.storageOk) {
       ctx.textAlign = 'center';

@@ -177,6 +177,26 @@ BR.SaveManager = {
     }, 400);
   },
 
+  /**
+   * Wipe progress back to a fresh save.
+   *
+   * SETTINGS SURVIVE. Volume, difficulty, map size and auto-accelerate are how
+   * the player has set the game up to be played, not something they earned —
+   * resetting progress should not also turn the sound back up and undo their
+   * control preferences. Everything else goes: stars, medals, objectives,
+   * records, owned vehicles.
+   *
+   * Written immediately rather than through the 400ms debounce, because the
+   * player has just confirmed a destructive action and expects it to be done.
+   */
+  reset() {
+    const keepSettings = this.get().settings;
+    this.data = this.defaults();
+    this.data.settings = keepSettings;
+    this.saveNow();
+    return this.data;
+  },
+
   saveNow() {
     this.dirty = false;
     if (!this.storageOk || !this.data) return false;
