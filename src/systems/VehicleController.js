@@ -100,7 +100,12 @@ BR.VehicleController = {
 
     // Effective ceiling, raised while boosting.
     const boostMul = v.boosting ? 1 + (P.boostMaxSpeedMul - 1) * spec.boostPower : 1;
-    const maxForward = spec.maxSpeed * S.maxSpeed * boostMul;
+    /* Scraping a wall lowers the ceiling for as long as it lasts. See
+       Collision.resolveWalls: a velocity scrub is bought straight back by the
+       engine, a ceiling is not. */
+    if (v.wallContact > 0) v.wallContact -= dt;
+    const wallMul = v.wallContact > 0 ? P.wallContactMaxSpeed : 1;
+    const maxForward = spec.maxSpeed * S.maxSpeed * boostMul * wallMul;
 
     // The engine does not push at or above the ceiling. Without this gate a
     // strong engine simply overruns the cap: the cap only decayed overspeed at

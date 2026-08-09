@@ -88,6 +88,9 @@ BR.Vehicle = {
       // Which ramp last launched us. Stops a ramp re-firing when the car lands
       // back inside its trigger box.
       rampIndex: -1,
+      // Seconds of lowered top speed left after scraping a wall. See
+      // Collision.resolveWalls — a ceiling the engine cannot out-accelerate.
+      wallContact: 0,
 
       // Impact counter and severity. Audio edge-detects the counter once per
       // rendered frame rather than being called from inside the fixed step —

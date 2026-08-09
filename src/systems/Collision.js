@@ -94,6 +94,28 @@ BR.Collision = {
       v.vel.x *= loss;
       v.vel.y *= loss;
 
+      /* ── the cost of leaning ──────────────────────────────────────────────
+         Only the NORMAL component is damped, which is correct physics and is
+         what makes a glancing blow slide off instead of catching. It also made
+         leaning on a wall completely free: measured, holding a car lightly
+         against a wall for 115 contact ticks cost 0.3% of its speed and 0% of
+         its distance, so the wall was a better racing line than the road and any
+         target time could be beaten by using one.
+
+         A TANGENTIAL VELOCITY SCRUB DOES NOT FIX THIS, and it is worth recording
+         why: the engine re-accelerates toward the speed cap every tick, so
+         scrubbing speed the car can immediately buy back nets out to nothing.
+         Measured, a per-tick scrub of 0.9955 — 24% a second on paper — moved the
+         real cost from 0.3% to 2.9%.
+
+         What the engine cannot out-accelerate is a lower CEILING. Contact marks
+         the car, VehicleController reads the mark and drops its top speed while
+         it lasts, and the mark decays in a few ticks. A glance is over before it
+         bites; leaning through a corner is capped for the whole corner. The two
+         differ by duration, not force, which is exactly the axis this separates
+         them on. */
+      v.wallContact = P.wallContactTime;
+
       // Notable hits only. Counting every grazing contact would machine-gun
       // the collision sound while sliding along a kerb.
       if (squareness * speedBefore > 55) {

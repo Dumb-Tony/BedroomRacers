@@ -429,3 +429,51 @@ props only. Do not migrate the vehicle model.
 `02_Mechanics.md` — the player-facing description of these systems.
 `09_Vehicles.md` — stat definitions.
 `14_Technical_Architecture.md` — where this code lives.
+
+## Wall riding — resolved (Phase 8)
+
+Open question 6, raised in Phase 1 as "needs a decision before Phase 3". It
+needed one, and the concern was correct.
+
+Measured on a long straight wall, holding a car against it at varying pressure
+for ~110 ticks of continuous contact:
+
+| steer into wall | contacts | speed cost | distance cost |
+| --- | --- | --- | --- |
+| 0.02 | 103 | **1.7%** | 0.5% |
+| 0.05 | 115 | **0.3%** | **0%** |
+| 0.10 | 122 | 21.7% | 3.2% |
+| 0.35 | 148 | 95.7% | 49.8% |
+
+Grinding hard was punished. **Leaning lightly was free** — which is the exploit:
+the wall becomes a better racing line than the road, holding the car through a
+corner at no cost, and every target time in the game is beatable by using one.
+
+### A tangential scrub does not work, and the reason is worth keeping
+
+The obvious fix — damp the component of velocity along the wall — barely moved
+it: **0.3% to 2.9%**. The engine re-accelerates toward the speed cap every tick,
+so speed scrubbed off is bought straight back. Any per-tick velocity penalty on a
+car sitting at its ceiling nets out to nothing.
+
+### A ceiling cannot be out-accelerated
+
+Contact now marks the car (`v.wallContact`), and `VehicleController` drops top
+speed to `wallContactMaxSpeed` (0.82) while the mark lasts. It decays in 0.12s.
+
+| | before | after |
+| --- | --- | --- |
+| light lean, ~110 contacts | 0.3% speed, 0% distance | **19% speed, 10% distance** |
+| brief scrape, 22 contacts | 103% kept | 87% kept |
+
+**A glance and a lean differ by duration, not force**, which is the axis this
+separates them on: a touch is over before the mark bites, a corner spent against
+the wall is capped for the whole corner.
+
+Calibration checked afterwards, because this changes physics and every target
+time is measured: rug-route-01 91.6 against 92.3, The Big Dig 78.7 against 78.1,
+Shelf Run 106.3 against 106.2 — all inside noise. No retune needed.
+
+> Whether 87% on a brief scrape is too harsh for "glancing blows feel good" is a
+> **feel judgement**, not a measurement. It joins the list in `18_Roadmap.md`
+> that needs a human.

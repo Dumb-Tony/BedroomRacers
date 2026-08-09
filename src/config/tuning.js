@@ -128,6 +128,21 @@ BR.PHYSICS = {
                                // barely register
   spinRecoveryTime:      0.6,  // HARD CAP on lost control, seconds
   spinTriggerDot:       0.75,  // how square a hit must be to cause a spin
+
+  /* Leaning on a wall used to be free: 115 contact ticks cost 0.3% of speed and
+     0% of distance, so the wall was a better racing line than the road
+     (03_Driving_Physics.md open question 6, raised in Phase 1).
+
+     Contact caps top speed rather than scrubbing velocity, because the engine
+     re-accelerates every tick and simply buys scrubbed speed back — a per-tick
+     tangential scrub of 0.9955 moved the real cost only from 0.3% to 2.9%. A
+     ceiling cannot be out-accelerated.
+
+     0.82 is a real cost without being a punishment, and it decays in 0.12s so a
+     glancing blow is over before it bites. A glance and a lean differ by
+     DURATION, not force. */
+  wallContactMaxSpeed: 0.82,
+  wallContactTime:     0.12,
 };
 
 /* ── SURFACES ──────────────────────────────────────────────────────────────
