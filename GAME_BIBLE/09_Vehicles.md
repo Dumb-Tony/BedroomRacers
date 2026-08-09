@@ -193,8 +193,11 @@ because when the player wins the race ends before the rest of the field finishes
    at 9. Handing out a vehicle early is the clearest possible demonstration that
    progression does something, and Yellow Rocket last means the fastest car is
    the reward rather than the trap a new player falls into.
-2. Is `boostPower` a real fifth stat or noise? It may be more legible folded into
-   acceleration.
+2. ~~Is `boostPower` a real fifth stat or noise?~~ **RESOLVED: real, and one of
+   the strongest.** A 46.6% spread in boost distance from that stat alone, and a
+   72.1% spread across the roster against `maxSpeed`'s 35%. Not folded into
+   acceleration — see the section below for why that would delete a design axis
+   rather than simplify one.
 3. Do vehicles have per-surface modifiers (Blue Buggy's off-road strength), or is that
    emergent from handling and weight? Explicit modifiers are clearer but add a data
    dimension.
@@ -228,3 +231,39 @@ Field sizes now escalate with the ladder: 3 on the shakedown, 4-5 mid-table, 6-7
 on the Grand Prix, Tide Pool, Shelf Run and both item races. Verified: every
 event fields exactly what it asks for, and the closest pair of grid slots is 87
 units against a ~22-unit car radius.
+
+## `boostPower` — resolved (Phase 8): a real stat, and a strong one
+
+Open question 2 asked whether it is a real fifth stat or noise, and suggested it
+might be more legible folded into acceleration. Measured, it is neither noise nor
+foldable.
+
+**Isolated** — one car, every other stat held identical, only `boostPower` swept
+across the roster's range:
+
+| boostPower | distance gained by a boost |
+| --- | --- |
+| 0.92 | 109 |
+| 1.00 | 121 |
+| 1.10 | 136 |
+| 1.15 | 140 |
+| 1.30 | 160 |
+
+A **46.6% spread** from one stat, cleanly monotonic. Across the real roster the
+boost gain spreads **72.1%**, against `maxSpeed`'s 35% — it separates the cars
+*more than top speed does*.
+
+### It acts through force, not the ceiling
+
+Worth knowing before anyone tunes it: top speed during the boost measured
+346-350 **regardless of `boostPower`**. The raised ceiling
+(`boostMaxSpeedMul × boostPower`) is barely reached inside the boost window, so
+almost the entire effect comes from `boostForce × boostPower` — it is
+acceleration, applied only while boosting.
+
+**That is exactly why it should not be folded into `acceleration`.** The two are
+the same kind of quantity on different triggers, and keeping them apart is what
+lets a car be sluggish out of a corner but explosive on a boost, or the reverse.
+Folding them would delete a design axis rather than simplify one.
+
+No code change. The stat earns its place.
