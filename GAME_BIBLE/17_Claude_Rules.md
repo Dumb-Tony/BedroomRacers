@@ -184,6 +184,60 @@ was reintroduced on purpose. That exposed two faults in the harness itself:
 Both were found only by making it fail on purpose. **Run a new check against a
 known-broken build before trusting a green one.**
 
+## The second blunt instrument (Phase 9) — `tools/pays.sh`
+
+The smoke test asks whether anything throws. It cannot ask whether a feature is
+worth using, and that turned out to matter: **loops were a net time loss for
+three phases while every check passed.** A rail was paced by the arc length of
+its ribbon, so the fastest line through a loop was to arrive too slowly to be
+allowed on one. Nothing caught it because nothing had ever compared a lap with
+the feature against a lap without it — every check asked whether the feature
+*worked*, and it did, perfectly and expensively.
+
+```bash
+./tools/pays.sh           # when rails, ramps, pads or the driving model change
+```
+
+Strips ramps, boost pads and rails in turn from all six time trials and reports
+what each is worth. **Slow — about 72 races — so it is not a pre-commit check.**
+
+### A number without an error bar is how the loop survived
+
+The most important thing in it is the **control column**: an identical
+configuration that changes nothing, measured exactly like everything else.
+Whatever it differs from baseline by is the measurement's own noise.
+
+It nearly was not there, and adding it changed the conclusion twice.
+
+1. **Without a control**, the check reported that Tide Pool's boost pads cost
+   0.37s a lap. Plausible, actionable, and entirely false.
+2. **With a control**, that track showed ±0.87s of noise and the same pads
+   measured **+1.20s**. On the next run the loud track was Rug Loop instead —
+   the tell that this was the method's floor, not a property of any track.
+3. **The check then failed at random**, because a bar derived from one noisy
+   control estimate is itself noisy. A check that fails at random gets ignored,
+   which is worse than not having one.
+
+### The fix was to remove the randomness, not to widen the bar
+
+The noise is not incidental: the AI wanders and makes deliberate mistakes
+because an opponent that never errs feels unbeatable (`04_AI.md`). That is right
+for the game and ruinous for a measurement.
+
+`pays.html` installs a **seeded** `Math.random` and runs a fixed set of three
+seeds against every configuration. Runs are now reproducible, the control column
+reads **exactly 0.00 on all six tracks**, and it has become a *determinism*
+check rather than a noise estimate — if it ever reads non-zero, something in the
+game is still random and every number in the table is worth less than it looks.
+
+The bar is a flat 0.60s: enough to catch traps of the kind this exists for (the
+loop cost 1.57s), and deliberately not fine enough to adjudicate tenths, which
+still depend on which line a seed happens to take. **Under-claim rather than cry
+wolf.**
+
+Proved the same way as the smoke test: reverting the pacing to the old model
+made it fail immediately — Dresser Drop rails −3.63s, Shelf Run −1.62s.
+
 ### Flakiness is worse than absence
 
 The first budget of 45 simulated seconds per race failed The Big Dig

@@ -1,0 +1,218 @@
+<!-- =============================================================================
+     DOES EACH TRACK FEATURE EARN ITS PLACE?
+     =============================================================================
+     Appended to a built dist/play.html by tools/pays.sh.
+
+     This exists because loops were a NET TIME LOSS for three phases and every
+     check passed. A rail was paced by the arc length of its ribbon, so the car
+     was charged for the circumference of a vertical circle: 1.57s a lap for a
+     loop, 3.70s for a corkscrew, against not being there at all. The fastest
+     line through a loop was to arrive too slowly to be allowed on one.
+
+     Nothing caught it because nothing had ever compared a lap WITH the feature
+     against a lap WITHOUT it. Every other check asked whether the feature
+     worked, and it did — perfectly, expensively.
+
+     So this asks the only question that would have caught it, of every feature
+     that interrupts driving: remove it, and does the lap get slower?
+
+     ── the control column is the point ────────────────────────────────────────
+     `(control)` changes NOTHING and is measured exactly like the others. What
+     it differs from baseline by is this measurement's own noise, and no delta
+     smaller than that means anything.
+
+     It is not decoration. The first version of this check ran without one and
+     reported that Tide Pool's boost pads cost 0.37s a lap. Re-run with a
+     control, the same track's noise was 0.87s and the pads measured +1.20s.
+     The "finding" was the random number generator, and acting on it would have
+     meant redesigning a track to fix nothing.
+
+     SLOW — around 72 races. Run it when rails, ramps, boost pads or the driving
+     model change, not on every commit. That is what tools/smoke.sh is for.
+     ========================================================================= -->
+<pre id="pays">running…</pre>
+<script>
+(function () {
+  var L = [], FAIL = [];
+  function ok(name, cond, detail) {
+    L.push((cond ? '  ok   ' : '  FAIL ') + name + (detail ? '  [' + detail + ']' : ''));
+    if (!cond) FAIL.push(name);
+  }
+  function note(s) { L.push(s); }
+  window.addEventListener('error', function (e) {
+    FAIL.push('uncaught: ' + (e.message || e.error));
+  });
+
+  var G = BR.Game;
+  // Pools are allocated at boot, which starting an event directly skips.
+  BR.Particles.init();
+
+  /* ── SEEDED, because the noise is not incidental ─────────────────────────
+     The AI wanders and makes deliberate mistakes on purpose (04_AI.md) — an
+     opponent that never errs feels unbeatable. That is right for the game and
+     ruinous for a measurement: unseeded, this check's own noise floor reached
+     0.87s a lap, drifted between tracks run to run, and failed at random. A
+     check that fails randomly is worse than no check (17_Claude_Rules.md).
+
+     Replacing Math.random with a seeded generator makes a run reproducible, so
+     baseline and control come out IDENTICAL and any difference left is the
+     feature. Three seeds rather than one, quickest taken, so the verdict is not
+     hostage to a single lucky or unlucky line. */
+  var seed = 1;
+  Math.random = function () {
+    // mulberry32 — small, fast, good enough for wander and mistake rolls.
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  function reseed(s) { seed = s; }
+
+  /* THE ARENA IS CACHED AND REUSED (TrackManager.getTrack). Emptying a list on
+     it mutates the cached track for every later run — which is how an earlier
+     harness concluded a rail made no difference, having quietly deleted every
+     rail in the game first. Snapshot once, restore on every run. */
+  var SNAP = {};
+  function snapshot(a, id) {
+    if (!SNAP[id]) {
+      SNAP[id] = { ramps: a.ramps.slice(), boostPads: a.boostPads.slice(),
+                   rails: (a.rails || []).slice() };
+    }
+    return SNAP[id];
+  }
+
+  function once(eventId, strip, s) {
+    reseed(s);
+    var ev = BR.eventById(eventId);
+    G.startEvent(ev);
+    var a = G.arena, s = snapshot(a, ev.trackId);
+    a.ramps     = strip === 'ramps' ? [] : s.ramps.slice();
+    a.boostPads = strip === 'pads'  ? [] : s.boostPads.slice();
+    a.rails     = strip === 'rails' ? [] : s.rails.slice();
+
+    // A consistent AI in the player's seat: a human stand-in that never tires.
+    var me = G.racers[0];
+    me.ai = BR.AIDriver.create('technician', 'normal');
+    for (var i = 0; i < G.actors.length; i++)
+      if (G.actors[i].racer === me) G.actors[i].kind = 'ai';
+
+    var t = 0, air = 0, launches = 0, rides = 0, wasAir = false, wasRail = false;
+    var v = me.vehicle;
+    while (t < 60 * 400 && !me.finished) {
+      G.step(1 / 60);
+      t++;
+      var flying = !v.grounded && !v.rail && !v.falling;
+      if (flying && !wasAir) launches++;
+      if (flying) air++;
+      wasAir = flying;
+      if (v.rail && !wasRail) rides++;
+      wasRail = !!v.rail;
+    }
+    return { best: me.bestLap || 0, finished: me.finished,
+             air: air / 60, launches: launches, rides: rides };
+  }
+
+  /* Quickest across a FIXED set of seeds. Same seeds for every configuration,
+     so the comparison is like for like: three specific drivers, each driving
+     each version of the track. */
+  var SEEDS = [1, 2, 3];
+  function bestOf(eventId, strip) {
+    var b = null;
+    for (var i = 0; i < SEEDS.length; i++) {
+      var r = once(eventId, strip, SEEDS[i]);
+      if (r.finished && (!b || r.best < b.best)) b = r;
+    }
+    return b;
+  }
+
+  var TTS = [
+    ['tt-rug-route', 'Rug Loop'],   ['tt-bedside',   'Bedside Blvd'],
+    ['tt-sandbox',   'Dune Dash'],  ['tt-tide-pool', 'Tide Pool'],
+    ['tt-dresser',   'Dresser Drop'], ['tt-shelf',   'Shelf Run'],
+  ];
+
+  try {
+    note('  track          baseline  (control)  no ramps   no pads  no rails |' +
+         ' noise   ramp    pad   rail');
+    note('  ' + '-'.repeat(96));
+
+    var rows = [];
+
+    TTS.forEach(function (row) {
+      var id = row[0], name = row[1];
+      var base    = bestOf(id, null);
+      var ctrl    = bestOf(id, null);
+      var noRamps = bestOf(id, 'ramps');
+      var noPads  = bestOf(id, 'pads');
+      var noRails = bestOf(id, 'rails');
+      if (!base || !ctrl || !noRamps || !noPads || !noRails) {
+        FAIL.push(name + ' did not finish');
+        return;
+      }
+
+      // Positive = the feature earns its place: removing it costs time.
+      var r = {
+        name: name,
+        noise: Math.abs(ctrl.best - base.best),
+        ramp: noRamps.best - base.best,
+        pad:  noPads.best  - base.best,
+        rail: noRails.best - base.best,
+        launches: base.launches, air: base.air, rides: base.rides,
+      };
+      rows.push(r);
+
+      note('  ' + name.padEnd(14) +
+           base.best.toFixed(2).padStart(8) + ctrl.best.toFixed(2).padStart(11) +
+           noRamps.best.toFixed(2).padStart(10) + noPads.best.toFixed(2).padStart(10) +
+           noRails.best.toFixed(2).padStart(10) + '  |' +
+           r.noise.toFixed(2).padStart(6) + r.ramp.toFixed(2).padStart(7) +
+           r.pad.toFixed(2).padStart(7) + r.rail.toFixed(2).padStart(7));
+    });
+
+    note('');
+    note('  positive = the feature earns its place (removing it costs time)');
+    note('');
+    note('  as it ships:');
+    rows.forEach(function (r) {
+      note('    ' + r.name.padEnd(14) + r.launches + ' launches (' +
+           r.air.toFixed(2) + 's airborne), ' + r.rides + ' rides');
+    });
+    note('');
+
+    /* THE CONTROL IS NOW A DETERMINISM CHECK. Seeded, it must be exactly zero;
+       anything else means something in the game is still random and every
+       number in the table above is worth less than it looks. That is worth
+       failing on, because a silently non-reproducible measurement is how the
+       loop survived three phases. */
+    var drift = rows.filter(function (r) { return r.noise > 0.001; });
+    ok('runs are reproducible (control matches baseline exactly)',
+       drift.length === 0,
+       drift.map(function (r) { return r.name + ' ±' + r.noise.toFixed(3); }).join(', ')
+         || 'all six identical');
+
+    /* A flat bar, now that runs repeat. It is set to catch traps of the kind
+       this exists for — the loop cost 1.57s and a corkscrew 3.70s — and not to
+       adjudicate tenths, which depend on the line a given seed happens to take.
+       Under-claiming beats a check that cries wolf: a check that fails at
+       random gets ignored, which is worse than not having one. */
+    var BAR = 0.60;
+    var traps = [];
+    rows.forEach(function (r) {
+      ['ramp', 'pad', 'rail'].forEach(function (k) {
+        if (r[k] < -BAR) traps.push(r.name + ' ' + k + 's ' + r[k].toFixed(2) + 's');
+      });
+    });
+    note('  a feature must not cost more than ' + BAR.toFixed(2) + 's a lap');
+    ok('no feature is a trap', traps.length === 0, traps.join('; ') || 'none');
+
+  } catch (e) {
+    FAIL.push('threw: ' + (e && e.message ? e.message : e) + ' | ' +
+              (e && e.stack ? e.stack.split('\n')[1] : ''));
+  }
+
+  document.getElementById('pays').textContent =
+    L.join('\n') + '\n\n' +
+    (FAIL.length ? 'PAYS FAIL (' + FAIL.length + '): ' + FAIL.join(' | ')
+                 : 'PAYS PASS');
+})();
+</script>

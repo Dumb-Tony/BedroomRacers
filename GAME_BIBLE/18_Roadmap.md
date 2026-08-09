@@ -381,3 +381,53 @@ Two harness bugs on the way, both of which produced confident wrong answers:
   not a stopwatch one.
 - [~] Is the fork *legible* at racing speed — can a player see two routes and
   pick one, or does it read as one wide loop?
+
+### Generalising it: `tools/pays.sh`
+
+The loop was a trap for three phases and **every check passed**, because nothing
+had ever compared a lap with a feature against a lap without it. Every existing
+check asked whether the feature *worked*. It did — perfectly, expensively.
+
+That is a class of bug, not one bug, so it now has a permanent check.
+`tools/pays.sh` strips ramps, boost pads and rails in turn from all six time
+trials and reports what each is worth. Slow — about 72 races — so it runs when
+those systems change, not per commit.
+
+**Ramps and boost pads came back clean.** Nothing else is a trap; the loop was
+genuinely exceptional.
+
+| | ramps | pads | rails |
+| --- | --- | --- | --- |
+| Rug Loop | −0.13 | +0.18 | — |
+| Bedside Blvd | −0.03 | +0.32 | — |
+| Dune Dash | −0.08 | +0.43 | — |
+| Tide Pool | −0.10 | +0.40 | — |
+| Dresser Drop | −0.18 | +0.12 | −0.23 |
+| Shelf Run | — | +0.15 | +0.25 |
+
+Positive means the feature earns its place. **Boost pads pay everywhere.**
+Ramps cost around a tenth of a second and buy about two seconds of air a race —
+spectacle at a fair price, not the loop's 1.57s.
+
+### Getting to numbers worth printing took three tries
+
+1. **No control.** Reported that Tide Pool's boost pads cost 0.37s a lap. That
+   would have been acted on.
+2. **With a control** — an identical run that changes nothing — the same track
+   showed ±0.87s of noise and the pads came out at **+1.20s**. The finding was
+   the random number generator. Next run the loud track was Rug Loop instead,
+   which is the tell: not a property of a track, but the floor of what the
+   method could resolve.
+3. **Then it failed at random**, because a bar derived from one noisy control is
+   itself noisy. A check that cries wolf gets ignored.
+
+The fix was to remove the randomness rather than widen the bar. The AI wanders
+and errs on purpose, which is right for the game and ruinous for a measurement,
+so the check seeds `Math.random` and runs three fixed seeds against every
+configuration. **The control column now reads exactly 0.00 on all six tracks**
+and has become a determinism check: non-zero means something is still random and
+the whole table is worth less than it looks.
+
+**Verified by breaking it on purpose.** A regression check nobody has watched
+fail is not known to work. Reverting the pacing made it fail immediately:
+Dresser Drop rails −3.63s, Shelf Run −1.62s, against a 0.60s bar.
