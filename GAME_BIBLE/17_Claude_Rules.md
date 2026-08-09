@@ -135,16 +135,60 @@ accident while chasing nostalgia, and expensive to unwind later.
    single quotes, and match the surrounding code. No formatter — the project is
    deliberately toolchain-free (`14_Technical_Architecture.md`), and adding one
    just to enforce style would be the first dependency.
-3. **Testing expectations.** Still open in the sense the draft meant — there is
-   no test *suite*. What emerged instead is a habit: every feature ships with a
-   throwaway headless harness that measures the claim being made, and the result
-   goes in the commit message and the relevant bible doc. That has caught real
-   defects repeatedly. Whether it should be consolidated into something
-   re-runnable is a genuine open question, and the honest argument against is
-   that a harness written to answer one question is sharper than a suite written
-   to answer all of them.
+3. ~~Testing expectations — is any automated testing wanted?~~ **RESOLVED: no
+   suite, but yes to a smoke test.** Keep the per-feature harnesses, which are
+   sharp because each answers one question; add one blunt instrument that
+   notices when something is on fire. See the section below.
 
 ## Related
 
 `14_Technical_Architecture.md` — the technical rules referenced here.
 `18_Roadmap.md` — phase boundaries.
+
+## The smoke test (Phase 8) — answering open question 3
+
+Open question 3 asked whether the throwaway-harness habit should be consolidated
+into a suite. **The answer is no suite, but yes to a smoke test**, and a commit
+that shipped the events screen throwing on every frame is what settled it.
+
+The per-feature harnesses in this project are sharp but **narrow**: each is
+written to answer one question and is blind to everything else. Six of them ran
+in one session without noticing that `drawEvents` could not draw. So:
+
+```bash
+./tools/smoke.sh          # run before every commit
+```
+
+Builds, loads the bundle in headless Chrome, and answers exactly one question —
+**does anything throw?** — across every track, every screen at three viewport
+sizes, every event, split screen at 2/3/4 players, and menu navigation. 43
+checks. It makes no claims about behaviour: not lap times, not feel, not
+appearance. Exits non-zero, so it can gate anything.
+
+It is deliberately blunt. The sharp harnesses stay; this is the thing that
+notices when something is on fire.
+
+### Proving a smoke test
+
+A smoke test that cannot catch the bug that motivated it is theatre, so the bug
+was reintroduced on purpose. That exposed two faults in the harness itself:
+
+- **The uncaught-error handler flooded.** The game runs its own animation loop,
+  so a screen that throws while drawing throws every frame — hundreds of
+  identical entries buried the real failure. Now deduped.
+- **The result extraction could not read a failure.** A PASS report is one line
+  and a `sed` matched it; a FAIL report is many lines and the same `sed` silently
+  dropped it, so a genuine failure surfaced as "the page did not finish". The
+  harness was discarding the very thing it exists to show. Now an `awk` range.
+
+Both were found only by making it fail on purpose. **Run a new check against a
+known-broken build before trusting a green one.**
+
+### Flakiness is worse than absence
+
+The first budget of 45 simulated seconds per race failed The Big Dig
+intermittently — the narrow trench track, where one bad start against a wall
+costs several seconds and the margin was thin enough for ordinary variance to
+tip it. It is now 90 seconds with an early exit, roughly double what any lap
+needs, because a smoke test that cries wolf gets ignored. Verified stable across
+three consecutive runs.

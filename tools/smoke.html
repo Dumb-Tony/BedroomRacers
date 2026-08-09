@@ -1,0 +1,179 @@
+<!-- =============================================================================
+     SMOKE TEST — does anything throw?
+     =============================================================================
+     Appended to a built dist/play.html by tools/smoke.sh.
+
+     This makes NO claims about behaviour. It does not know what a good lap time
+     is, whether a drift feels right, or what a loop should look like. It answers
+     one question: can every screen be drawn, every track be built, and every
+     event be raced without throwing?
+
+     It exists because a commit shipped `drawEvents` throwing "$1 is not defined"
+     on every frame — the event list could not be drawn at all — and nothing
+     caught it. The feature harnesses in this project are sharp but narrow: each
+     is written to answer one question and sees nothing else. This is the
+     opposite: broad, shallow, and cheap enough to run before every commit.
+
+     17_Claude_Rules.md open question 3 asked whether the throwaway-harness habit
+     should be consolidated into a suite. The answer this encodes: no suite, but
+     yes to a smoke test. Keep the sharp per-feature harnesses; add one blunt
+     instrument that notices when something is on fire.
+     ========================================================================= -->
+<pre id="smoke">running…</pre>
+<script>
+(function () {
+  var FAIL = [];
+  var CHECKS = 0;
+
+  /* Anything thrown outside our own try/catch — a bad rAF callback, say.
+
+     DEDUPED, and that is not tidiness. The game runs its own animation loop, so
+     a screen that throws while drawing throws again every frame: several hundred
+     identical entries before the report is even written, which buried the actual
+     failure and left the harness looking like it had crashed rather than caught
+     something. */
+  var seen = {};
+  window.addEventListener('error', function (e) {
+    var msg = 'uncaught: ' + (e.message || e.error);
+    if (seen[msg]) { seen[msg]++; return; }
+    seen[msg] = 1;
+    FAIL.push(msg);
+  });
+
+  function check(name, fn) {
+    CHECKS++;
+    try { fn(); }
+    catch (e) {
+      FAIL.push(name + ': ' + e.message +
+                ' @' + ((e.stack || '').split('\n')[1] || '').trim());
+    }
+  }
+
+  setTimeout(function () {
+    var G = BR.Game, RM = BR.RaceManager, S = BR.Screens, Re = BR.Renderer;
+    BR.Audio.enabled = false;
+
+    // Unlocked, so every screen has real content rather than a wall of locks.
+    check('save', function () {
+      var sv = BR.SaveManager.get();
+      sv.progression.stars = 999;
+      BR.SaveManager.saveNow();
+      BR.ProgressionManager.applyUnlocks();
+    });
+
+    // ── every track builds ──────────────────────────────────────────────────
+    for (var id in BR.TRACKS) {
+      (function (tid) {
+        check('build ' + tid, function () {
+          var A = BR.TrackManager.build(BR.TRACKS[tid]);
+          if (!A.checkpoints.length) throw new Error('no checkpoints');
+          if (!A.grid.length) throw new Error('no grid slots');
+          if (A.strays && A.strays.length) {
+            throw new Error('stray rects: ' + A.strays.join('; '));
+          }
+          if (A.elevated && A.levellessWalls) {
+            throw new Error(A.levellessWalls + ' walls with no level');
+          }
+        });
+      })(id);
+    }
+
+    // ── every screen draws, at several sizes ────────────────────────────────
+    var SIZES = [[1280, 800], [375, 812], [900, 500]];
+    var SCREENS = ['MENU', 'EVENTS', 'GARAGE'];
+    SIZES.forEach(function (wh) {
+      var ow = Re.w, oh = Re.h, oW = Re.canvas.width, oH = Re.canvas.height;
+      Re.w = wh[0]; Re.h = wh[1];
+      Re.canvas.width = wh[0]; Re.canvas.height = wh[1];
+      SCREENS.forEach(function (name) {
+        check('draw ' + name + ' @' + wh[0] + 'x' + wh[1], function () {
+          S.set(S[name]);
+          Re.render(G, 0.5, 1 / 60);
+          S.draw(Re.ctx, Re.w, Re.h, 1 / 60);
+          // Twice — the second frame catches state left behind by the first.
+          Re.render(G, 0.5, 1 / 60);
+          S.draw(Re.ctx, Re.w, Re.h, 1 / 60);
+        });
+      });
+      Re.w = ow; Re.h = oh; Re.canvas.width = oW; Re.canvas.height = oH;
+    });
+
+    // ── the pause menu and results card ─────────────────────────────────────
+    check('draw PAUSE', function () {
+      S.set(S.RACE); G.paused = true;
+      Re.render(G, 0.5, 1 / 60);
+      S.draw(Re.ctx, Re.w, Re.h, 1 / 60);
+      G.paused = false;
+    });
+
+    // ── every event starts, runs, and renders ───────────────────────────────
+    var real = BR.Input.sample;
+    BR.EVENTS.forEach(function (ev) {
+      check('race ' + ev.id, function () {
+        G.startEvent(ev);
+        var ai = BR.AIDriver.create('technician', 'normal');
+        BR.Input.sample = function () {
+          return BR.AIDriver.drive(ai, G.vehicle, G.arena, 1 / 60);
+        };
+        /* 90 simulated seconds. The longest lap in the game is about 35s and
+           the countdown eats three, so this is roughly double what is needed —
+           deliberately.
+
+           At 45s The Big Dig failed intermittently: it is the narrow trench
+           track, one bad start against a wall costs several seconds, and the
+           margin was thin enough that ordinary variance tipped it over. A smoke
+           test that cries wolf gets ignored, which is worse than not having one.
+           The budget is generous because this checks that a lap CAN be
+           completed, not how quickly. */
+        for (var i = 0; i < 60 * 90; i++) {
+          G.step(1 / 60);
+          if (RM.player().lapTimes.length) break;   // done, stop early
+        }
+        BR.Input.sample = real;
+        Re.render(G, 0.5, 1 / 60);
+        S.draw(Re.ctx, Re.w, Re.h, 1 / 60);
+        if (!RM.player().lapTimes.length) {
+          throw new Error('no lap completed in 90s');
+        }
+      });
+      BR.Input.sample = real;
+    });
+
+    // ── split screen, up to four ────────────────────────────────────────────
+    [2, 3, 4].forEach(function (n) {
+      check('split ' + n, function () {
+        G.players = n;
+        G.startEvent(BR.eventById('rug-route-01'));
+        for (var i = 0; i < 240; i++) G.step(1 / 60);
+        Re.render(G, 0.5, 1 / 60);
+        S.draw(Re.ctx, Re.w, Re.h, 1 / 60);
+      });
+    });
+    G.players = 1;
+
+    // ── menu navigation reaches something on every screen ───────────────────
+    SCREENS.forEach(function (name) {
+      check('navigate ' + name, function () {
+        S.set(S[name]);
+        Re.render(G, 0.5, 1 / 60);
+        S.draw(Re.ctx, Re.w, Re.h, 1 / 60);
+        if (!S.regions.length) throw new Error('no focusable regions');
+        S.moveFocus(1);
+        if (S.focusIdx < 0) throw new Error('focus did not move');
+      });
+    });
+
+    /* Park on a screen that is known to draw. Leaving the state on whichever
+       screen failed means the game's own loop keeps throwing behind us, and the
+       page can die before the report is written. */
+    try { S.set(S.MENU); } catch (e) { /* nothing left to do */ }
+
+    var out = FAIL.length
+      ? 'SMOKE FAIL (' + FAIL.length + ' distinct, ' + CHECKS + ' checks)\n' +
+        FAIL.slice(0, 20).join('\n') +
+        (FAIL.length > 20 ? '\n...and ' + (FAIL.length - 20) + ' more' : '')
+      : 'SMOKE PASS (' + CHECKS + ' checks)';
+    document.getElementById('smoke').textContent = out;
+  }, 900);
+})();
+</script>
