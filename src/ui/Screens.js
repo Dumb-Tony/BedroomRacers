@@ -667,9 +667,11 @@ BR.Screens = {
        Rows are laid out from listTop and shifted up by eventScroll, then
        clipped. The BACK button sits below the band so it never scrolls away. */
     const rowH = 92, rowGap = 12, rowStep = rowH + rowGap;
-$1
+    const listTop = y;
+    const listBottom = h - 62;
+    // Published for revealFocus, which scrolls the keyboard-focused row into
+    // this band.
     this.listTop = listTop;
-$1
     this.listBottom = listBottom;
     const listH = Math.max(rowStep, listBottom - listTop);
     const contentH = BR.EVENTS.length * rowStep;
