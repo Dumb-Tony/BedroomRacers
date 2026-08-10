@@ -239,6 +239,14 @@ BR.Renderer = {
     ctx.translate(W / 2, H * BR.CAMERA.horizonBias);
     ctx.scale(BR.CAMERA.zoom, BR.CAMERA.zoom);
 
+    /* Cull bounds for THIS viewport, computed once and hung on the renderer so
+       everything drawn before the depth sort can use them too. They used to be
+       locals declared further down, which meant the road — the single most
+       expensive thing on screen — was drawn above them and could not be culled
+       at all. Measured: a phone viewport with 28% of a desktop's area was
+       costing 92-98% as much to draw. */
+    this.setCullBounds(view);
+
     this.drawGround(ctx, arena);
     this.drawRoad(ctx, arena);
     this.drawDecoration(ctx, arena);
@@ -263,13 +271,9 @@ BR.Renderer = {
        and a segment is ~80 units long standing up to 60 high, so a tight bound
        would pop the ends of walls in and out at the screen edge. `CULL_PAD`
        costs a few extra draws and removes the entire class of bug. */
-    const view0 = view;
-    const halfW = view0.w / 2 / BR.CAMERA.zoom;
-    const top   = -view0.h * BR.CAMERA.horizonBias / BR.CAMERA.zoom;
-    const bot   =  view0.h * (1 - BR.CAMERA.horizonBias) / BR.CAMERA.zoom;
-    const PAD   = this.CULL_PAD;
-
-    const cullOn = this.CULL;
+    const B = this.cullBounds;
+    const halfW = B.halfW, top = B.top, bot = B.bot, PAD = B.pad;
+    const cullOn = B.on;
 
     /* A point test is not enough, and the failure is specific: a wall whose
        MIDPOINT is behind the camera can still have an endpoint in front of it
@@ -281,11 +285,24 @@ BR.Renderer = {
        point is in front of the camera and inside the padded viewport. Four
        projections instead of one, against 82% of the geometry not being drawn
        at all. */
+    /* NO DEPTH TEST. There used to be one — `if (p.depth < 0) continue;`,
+       commented "behind the camera" — and it was backwards.
+
+       `depth` is documented in Projection.js as camera-space distance where
+       LARGER MEANS NEARER, so everything IN FRONT of the car has NEGATIVE depth.
+       The test therefore threw away the road ahead and the walls beside it,
+       which is the entire half of the screen a driver is looking at. Measured
+       on Rug Loop: of the 81 wall segments actually inside the viewport, the
+       test kept 28. **Two thirds of the visible walls were being discarded.**
+
+       There is no near plane to reject against anyway. The projection is
+       axonometric — no divide by depth, so no singularity behind the eye — and
+       the sx/sy box is an exact visibility test on its own. Dropping the depth
+       line makes culling correct, and it still removes half the geometry. */
     const anyVisible = function (pts) {
       if (!cullOn) return true;
       for (let k = 0; k < pts.length; k++) {
         const p = Pj.project(pts[k][0], pts[k][1], pts[k][2] || 0);
-        if (p.depth < 0) continue;              // behind the camera
         if (p.sx < -halfW - PAD || p.sx > halfW + PAD) continue;
         if (p.sy < top - PAD || p.sy > bot + PAD) continue;
         return true;
@@ -565,6 +582,94 @@ BR.Renderer = {
     }
   },
 
+  /* Cull bounds for the viewport being drawn. Kept on the renderer so anything
+     drawn before the depth sort can reach them. */
+  setCullBounds(view) {
+    this.cullBounds = {
+      halfW: view.w / 2 / BR.CAMERA.zoom,
+      top:  -view.h * BR.CAMERA.horizonBias / BR.CAMERA.zoom,
+      bot:   view.h * (1 - BR.CAMERA.horizonBias) / BR.CAMERA.zoom,
+      pad:   this.CULL_PAD,
+      on:    this.CULL,
+    };
+  },
+
+  // No depth test — see the note on `anyVisible`. In an axonometric projection
+  // the sx/sy box is the whole of visibility.
+  onScreen(x, y, z) {
+    const B = this.cullBounds;
+    if (!B || !B.on) return true;
+    const p = BR.Projection.project(x, y, z || 0);
+    if (p.sx < -B.halfW - B.pad || p.sx > B.halfW + B.pad) return false;
+    if (p.sy < B.top - B.pad || p.sy > B.bot + B.pad) return false;
+    return true;
+  },
+
+  /**
+   * Contiguous runs of road that are worth drawing, as [start, end] index pairs
+   * into the edge arrays.
+   *
+   * A ring cannot simply have its off-screen segments skipped — the fill needs
+   * a closed shape. But a RUN of consecutive segments can be closed on itself:
+   * outer[a..b] followed by inner[b..a] reversed is a ribbon that fills exactly
+   * like the corresponding slice of the full ring.
+   *
+   * Runs, not one span, because a figure-eight crosses itself: two separate
+   * stretches of road are on screen at once and drawing the arc between them
+   * would put the whole far side back in.
+   *
+   * One segment of padding either side, so a partially-visible segment at the
+   * edge of the screen is never clipped short.
+   */
+  /* Road culling on its own switch, separate from CULL. Toggling CULL turns off
+     wall, prop and hazard culling too, so it cannot answer "did the ROAD change"
+     — which is the only question that matters when the road is what was
+     rewritten. Harnesses flip this one. */
+  CULL_ROAD: true,
+
+  roadRuns(outer, inner) {
+    const n = outer.length;
+    if (!this.CULL_ROAD || !this.cullBounds || !this.cullBounds.on) {
+      return [[0, n - 1]];
+    }
+
+    const keep = new Array(n);
+    let any = false;
+    for (let i = 0; i < n; i++) {
+      // Either edge visible keeps the segment: on a wide road the inner kerb
+      // can be on screen while the outer one is not.
+      keep[i] = this.onScreen(outer[i][0], outer[i][1], outer[i][2]) ||
+                this.onScreen(inner[i][0], inner[i][1], inner[i][2]);
+      if (keep[i]) any = true;
+    }
+    if (!any) return [];
+
+    const grown = new Array(n);
+    for (let i = 0; i < n; i++) {
+      grown[i] = keep[i] || keep[(i + n - 1) % n] || keep[(i + 1) % n];
+    }
+
+    // Walk from a gap so a run spanning index 0 is not split into two.
+    let start = 0;
+    while (start < n && grown[start]) start++;
+    if (start === n) return [[0, n - 1]];          // everything visible
+
+    const runs = [];
+    let i = 0, cur = null;
+    while (i < n) {
+      const idx = (start + i) % n;
+      if (grown[idx]) {
+        if (cur === null) cur = [idx, idx];
+        else cur[1] = idx;
+      } else if (cur) {
+        runs.push(cur); cur = null;
+      }
+      i++;
+    }
+    if (cur) runs.push(cur);
+    return runs;
+  },
+
   drawRoad(ctx, arena) {
     const Pj = BR.Projection;
 
@@ -578,14 +683,55 @@ BR.Renderer = {
       ctx.closePath();
     }
 
+    /* Walk a run forwards, wrapping. `[a, b]` where b < a means it crosses the
+       end of the array. */
+    const n = arena.outer.length;
+    const runLen = function (r) {
+      return (r[1] - r[0] + n) % n + 1;
+    };
+    // The ribbon for one run: out along the outer edge, back along the inner.
+    const traceRun = function (r) {
+      const len = runLen(r);
+      for (let k = 0; k < len; k++) {
+        const p = arena.outer[(r[0] + k) % n];
+        const q = Pj.project(p[0], p[1], p[2] || 0);
+        if (k === 0) ctx.moveTo(q.sx, q.sy); else ctx.lineTo(q.sx, q.sy);
+      }
+      for (let k = len - 1; k >= 0; k--) {
+        const p = arena.inner[(r[0] + k) % n];
+        const q = Pj.project(p[0], p[1], p[2] || 0);
+        ctx.lineTo(q.sx, q.sy);
+      }
+      ctx.closePath();
+    };
+    // One edge of a run, for the kerbs — open, so it is not closed back on
+    // itself across the screen.
+    const traceEdge = function (pts, r) {
+      const len = runLen(r);
+      for (let k = 0; k < len; k++) {
+        const p = pts[(r[0] + k) % n];
+        const q = Pj.project(p[0], p[1], p[2] || 0);
+        if (k === 0) ctx.moveTo(q.sx, q.sy); else ctx.lineTo(q.sx, q.sy);
+      }
+    };
+
+    const runs = this.roadRuns(arena.outer, arena.inner);
+    const whole = runs.length === 1 && runLen(runs[0]) === n;
+
     if (arena.elevated) {
       this.drawElevatedRoad(ctx, arena);
-    } else {
+    } else if (whole) {
+      // Everything on screen: the original ring, which is the cheapest form.
       ctx.beginPath();
       trace(arena.outer);
       trace(arena.inner);
       ctx.fillStyle = arena.roadColour;
       ctx.fill('evenodd');
+    } else {
+      ctx.beginPath();
+      for (let i = 0; i < runs.length; i++) traceRun(runs[i]);
+      ctx.fillStyle = arena.roadColour;
+      ctx.fill();
     }
 
     // Compacted sand, drawn over the loose surface. Only touched cells are
@@ -593,11 +739,23 @@ BR.Renderer = {
     // bounded by the line people actually take.
     if (arena.sandy && BR.SandGrid.active) this.drawCompaction(ctx);
 
-    // Kerbs, drawn light so the road reads as the brightest path.
+    /* Kerbs, drawn light so the road reads as the brightest path. Culled the
+       same way as the fill — these are two more full traces of the track
+       outline, so together with it the whole ring was being walked THREE times
+       a frame regardless of what the camera could see. */
     ctx.lineWidth = 3 / BR.CAMERA.zoom;
     ctx.strokeStyle = 'rgba(236,230,218,0.55)';
-    ctx.beginPath(); trace(arena.outer); ctx.stroke();
-    ctx.beginPath(); trace(arena.inner); ctx.stroke();
+    if (whole) {
+      ctx.beginPath(); trace(arena.outer); ctx.stroke();
+      ctx.beginPath(); trace(arena.inner); ctx.stroke();
+    } else {
+      ctx.beginPath();
+      for (let i = 0; i < runs.length; i++) {
+        traceEdge(arena.outer, runs[i]);
+        traceEdge(arena.inner, runs[i]);
+      }
+      ctx.stroke();
+    }
 
     // The shortcut chord gets its own marking so the alternate route is
     // visible but not shouted about — findable on lap two (05_Tracks.md).

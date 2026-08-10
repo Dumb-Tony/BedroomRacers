@@ -252,3 +252,73 @@ The right test is of the **predicate, not the pixels**: for every object the cul
 rejects, project its full extent and assert no part lands inside the viewport.
 That isolates the thing being changed. Result: **0 false rejects** across 24
 camera positions on four tracks.
+
+## The cull was throwing away two thirds of what you could see (Phase 9)
+
+Everything above is wrong in one specific, expensive way — and the section
+immediately above it is *why that survived*.
+
+The predicate contained `if (p.depth < 0) continue;`, commented "behind the
+camera". `depth` is documented in `Projection.js` as camera-space distance where
+**LARGER MEANS NEARER**, so everything **in front** of the car has *negative*
+depth. The test discarded the half of the screen a driver is looking at.
+
+Measured on Rug Loop at one camera position: of the **81** wall segments actually
+inside the viewport, the cull kept **28**. Dresser Drop, 34 of 74. Roughly **two
+thirds of the visible walls were never drawn.**
+
+The celebrated "81% of wall geometry removed, with the same picture" was mostly
+removing geometry that belonged on screen. "A quarter behind the camera outright"
+was the same misreading: in an axonometric projection **nothing** is behind the
+camera. There is no divide by depth, so no singularity and no near plane — the
+sx/sy box is a complete visibility test by itself, and the depth line is simply
+deleted.
+
+### How a verified check verified nothing
+
+The predicate test asked: *for everything the cull rejects, does any part land
+inside the viewport?* — and computed "inside the viewport" from the same model of
+visibility the predicate used. Both agreed that things in front of the camera
+were behind it. **A check built on the assumption it is testing will confirm that
+assumption.** It reported 0 false rejects and was, on its own terms, right.
+
+What catches this is comparing against the *picture*, because the picture has no
+opinions: render with culling off, render with it on, require them to match.
+
+### Pixel-diffing a culled frame does work — with `dt = 0`
+
+The section above concluded it "does not work here" after camera drift and
+particles spoiled two attempts. Those were the same cause with the same fix:
+**render with `dt = 0`.** The camera ease, the particles and every other
+time-driven animation are functions of `dt`; hand it zero and they freeze,
+leaving only what actually changed.
+
+The residue is a few dozen isolated pixels, one level apart, in a single channel
+— the rasteriser composing identical geometry through a different path. Never
+two adjacent, no shape to them. **Missing geometry cannot look like that**: it is
+a contiguous block of hundreds of pixels differing by tens. Judge on magnitude
+and structure, not on a count of pixels that differ at all.
+
+Across all six tracks, four camera positions each: worst channel difference
+**5 of 255**, on **0.028%** of the frame.
+
+### The road was never culled at all
+
+`drawRoad` traced the entire track outline **three times a frame** — once to fill
+and once for each kerb — wherever the camera was. It was the most expensive thing
+on screen and it was drawn in full on every device.
+
+It is now drawn as visible **runs**. A ring cannot simply have segments skipped,
+because the fill needs a closed shape, but a run of consecutive segments closes
+on itself: `outer[a..b]` followed by `inner[b..a]` reversed is a ribbon that
+fills exactly like that slice of the ring. Runs plural, because a figure-eight
+crosses itself and two separate stretches are on screen at once — joining them
+would put the whole far side back in.
+
+**Culling now scales with the screen, which it never did.** A phone viewport is
+28% of a desktop's area and was costing 92-98% as much to draw; it is now 78-87%.
+Per-frame work is 42% below drawing everything.
+
+Absolute cost went *up* against the shipped build — Rug Loop 1,565 to 2,332
+operations a frame — and that is the honest trade. The old number was cheap
+because the game was not drawing two thirds of the walls in front of you.
