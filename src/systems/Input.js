@@ -113,11 +113,22 @@ BR.Input = {
   },
 
   LABELS: {
+    /* The one seat that had no label — because labels were only ever drawn in
+       split screen, so the SOLO player, who is the one most likely to be seeing
+       this game for the first time, was told nothing at all.
+
+       Its bindings are NOT p1's: solo drifts on Space and boosts on Shift,
+       where p1 drifts on R-Shift and boosts on Enter. Borrowing p1's label
+       would have taught the wrong keys, which is worse than silence. */
+    solo: '← →  or  A D   ·   SPACE drift   ·   SHIFT boost   ·   E item',
     p1: '← →  ·  R-SHIFT drift  ·  ENTER boost',
     p2: 'A  D  ·  L-SHIFT drift  ·  SPACE boost',
     p3: 'J  L  ·  U drift  ·  O boost',
     p4: 'F  H  ·  R drift  ·  Y boost',
   },
+
+  /* Same line for a pad, wherever a keyboard label would be shown. */
+  PAD_LABEL: 'GAMEPAD   ·   stick   ·   A drift   ·   X boost',
 
   /* Profile order is also seating order, left to right across the keyboard. */
   PROFILE_ORDER: ['p2', 'p4', 'p3', 'p1'],

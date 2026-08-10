@@ -553,6 +553,20 @@ BR.Screens = {
     ctx.fillText(P.stars() + ' / ' + P.maxStars() + ' STARS   ·   ' +
                  P.piecesFound().length + ' / ' + P.piecesTotal() + ' TOY PIECES',
                  cx, h * 0.22 + 82);
+
+    /* The controls, on the front page. In-race the hint fades after a couple of
+       seconds, which is right for a countdown and useless to somebody who has
+       already forgotten which key drifts — so they are also somewhere you can
+       go and look, without a screen to open or a menu to find.
+
+       Multi-player seats are told their own keys under their own half of the
+       split screen, so this shows the one-player scheme it belongs to. */
+    if (BR.Game.players === 1) {
+      ctx.font = '600 10px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.34)';
+      ctx.fillText(BR.Input.padFor(0) ? BR.Input.PAD_LABEL : BR.Input.LABELS.solo,
+                   cx, h * 0.22 + 104);
+    }
     ctx.textAlign = 'left';
 
     const bw = 240, bx = cx - bw / 2;
