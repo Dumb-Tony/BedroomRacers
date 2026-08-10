@@ -244,6 +244,9 @@ BR.HUD = {
       return;                      // finished, paused — nothing to teach
     }
 
+    // On a touch device the pads are on screen with their own labels, so a list
+    // of keys that do not exist is worse than nothing.
+    if (BR.Touch && BR.Touch.capable) return;
     const onPad = BR.Input.padFor(0);
     const text = onPad ? BR.Input.PAD_LABEL : BR.Input.LABELS.solo;
     if (!text) return;

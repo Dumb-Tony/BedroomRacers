@@ -31,6 +31,7 @@ FILES=(
   "src/systems/MathUtil.js"
   "src/systems/Projection.js"
   "src/systems/Input.js"
+  "src/systems/Touch.js"
   "src/data/vehicles.js"
   "src/data/events.js"
   "src/data/tracks/town-rug-loop.js"

@@ -564,19 +564,47 @@ BR.Screens = {
     if (BR.Game.players === 1) {
       ctx.font = '600 10px ui-monospace, Consolas, monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.34)';
-      ctx.fillText(BR.Input.padFor(0) ? BR.Input.PAD_LABEL : BR.Input.LABELS.solo,
-                   cx, h * 0.22 + 104);
+      // Telling a phone to press SHIFT is worse than saying nothing. The
+      // on-screen pads carry their own labels, so touch needs no key list.
+      const line = BR.Touch && BR.Touch.capable ? 'ON-SCREEN CONTROLS  ·  tap and hold'
+                 : BR.Input.padFor(0) ? BR.Input.PAD_LABEL
+                 : BR.Input.LABELS.solo;
+      ctx.fillText(line, cx, h * 0.22 + 104);
     }
     ctx.textAlign = 'left';
 
+    /* ── vertical rhythm ──────────────────────────────────────────────────
+       The stack STARTS proportionally (h * 0.44) and then advanced in FIXED
+       pixels, which cannot hold as the screen shortens: on a phone in landscape
+       at 812x375 the difficulty row drew past the bottom edge, so difficulty
+       could not be changed at all. Proportional start, fixed gaps — it was
+       always going to break somewhere, and a public link put phones in scope.
+
+       The gaps now shrink, but ONLY when they have to: on anything with room
+       the scale is 1 and the layout is pixel-for-pixel what it was, so nothing
+       that has been looked at on a desktop moves. Button heights are left alone
+       because they are touch targets, and shrinking those to win space is how
+       a menu becomes unusable on exactly the devices it was shrunk for. */
+    const headerBottom = h * 0.22 + 110;   // stars line, plus the controls hint
+    const tail = 50;                       // difficulty row and its blurb
+    const natural = 58 + 58 + 62;
+    const s = Math.max(0.62, Math.min(1, (h - headerBottom - tail - 12) / natural));
+    const gButton = Math.round(58 * s);
+    const gSection = Math.round(62 * s);
+
     const bw = 240, bx = cx - bw / 2;
     let by = h * 0.44;
+    // Pull the stack up if it would otherwise run off the bottom, but never up
+    // into the header.
+    const maxBy = h - (gButton * 2 + gSection + tail) - 12;
+    if (by > maxBy) by = Math.max(headerBottom + 8, maxBy);
+
     this.button(ctx, bx, by, bw, 46, 'RACE', 'goto', this.EVENTS, { primary: true });
-    by += 58;
+    by += gButton;
     this.button(ctx, bx, by, bw, 42, 'GARAGE', 'goto', this.GARAGE);
 
     // ── players ───────────────────────────────────────────────────────────
-    by += 58;
+    by += gButton;
     ctx.textAlign = 'center';
     ctx.font = '600 10px ui-monospace, Consolas, monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.42)';
@@ -636,7 +664,7 @@ BR.Screens = {
     // ── difficulty ────────────────────────────────────────────────────────
     // 11_UI.md lists this under accessibility, not options, so it lives where
     // it can be found rather than buried behind a settings screen.
-    by += 62;
+    by += gSection;
     ctx.textAlign = 'center';
     ctx.font = '600 10px ui-monospace, Consolas, monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.42)';

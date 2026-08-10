@@ -104,6 +104,9 @@ BR.Game = {
     BR.Input.init();
     BR.Particles.init();
     BR.Renderer.init(document.getElementById('game'));
+    // After the renderer, because Touch measures the canvas to map a finger's
+    // client coordinates onto it.
+    BR.Touch.init(document.getElementById('game'));
 
     // Browsers block audio until the user interacts, and 13_Audio.md is
     // explicit that this must be handled at first contact rather than
@@ -435,8 +438,12 @@ BR.Game = {
       // Escape PAUSES rather than quitting. It used to abandon the race
       // outright with no confirmation, which is a lot of lost progress for a
       // mistyped key — quitting now lives in the pause menu.
+      /* The on-screen pause button matters more than it looks. A phone has no
+         Escape key, so without it a race could only be left by finishing it or
+         reloading the page. */
       if (BR.Input.tapped('KeyP') || BR.Input.tapped('Escape') ||
-          BR.Input.padPauseTapped()) {
+          BR.Input.padPauseTapped() ||
+          (BR.Touch && BR.Touch.tappedPause())) {
         this.paused = !this.paused;
       }
     }
@@ -468,6 +475,10 @@ BR.Game = {
     // Viewport rects follow the window; cameras persist on the view objects.
     this.layoutViews();
     BR.Renderer.render(this, alpha, dt);
+    /* Touch pads BEFORE the screens layer, so the pause card and the menus draw
+       over the top of them rather than the other way round — a thumb pad
+       floating above a paused game reads as still being live. */
+    BR.Touch.draw(BR.Renderer.ctx, BR.Renderer.w, BR.Renderer.h);
     BR.Screens.draw(BR.Renderer.ctx, BR.Renderer.w, BR.Renderer.h, dt);
 
     // Once per RENDERED frame, never from inside the fixed step — see Audio.js.

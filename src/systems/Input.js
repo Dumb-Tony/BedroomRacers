@@ -247,10 +247,29 @@ BR.Input = {
     if (pad) return this.samplePad(pad);
 
     const p = this.PROFILES[profileId] || this.PROFILES.solo;
-    const left  = this.down.apply(this, p.left);
-    const right = this.down.apply(this, p.right);
+    let left  = this.down.apply(this, p.left);
+    let right = this.down.apply(this, p.right);
     const up    = this.down.apply(this, p.up);
     const down  = this.down.apply(this, p.down);
+    let drift = this.down.apply(this, p.drift);
+    let boost = this.down.apply(this, p.boost);
+    let item  = this.down.apply(this, p.item || []);
+
+    /* On-screen buttons, ORed in for SEAT ONE ONLY. Touch produces the same
+       booleans a key does and goes through this same struct, so the vehicle
+       controller, the AI and every measured target time see no difference —
+       the alternative, a separate touch driving model, would have been a
+       second game to tune. Four thumbs on one phone is not a thing, so the
+       split-screen seats stay on keys and pads. */
+    const T = BR.Touch;
+    if (T && T.active && (seat || 0) === 0) {
+      const t = T.state;
+      left  = left  || t.left;
+      right = right || t.right;
+      drift = drift || t.drift;
+      boost = boost || t.boost;
+      item  = item  || t.item;
+    }
 
     return {
       steer:    (right ? 1 : 0) - (left ? 1 : 0),
@@ -258,9 +277,9 @@ BR.Input = {
       // Drift doubles as brake in the simple scheme (02_Mechanics.md). Drift
       // only bites while moving; at low speed it reads as braking.
       brake:    down ? 1 : 0,
-      drift:    this.down.apply(this, p.drift),
-      boost:    this.down.apply(this, p.boost),
-      item:     this.down.apply(this, p.item || []),
+      drift:    drift,
+      boost:    boost,
+      item:     item,
     };
   },
 };
