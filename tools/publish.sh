@@ -41,54 +41,62 @@ cd "$PUBLISH_DIR" || exit 2
 branch="$(git rev-parse --abbrev-ref HEAD)"
 [ "$branch" = "main" ] || { echo "publish repo is on '$branch', not main" >&2; exit 2; }
 
+nochange=0
 if git diff --quiet -- index.html; then
+  # Nothing new to send — but still confirm the URL is serving it, because
+  # "the file here is unchanged" and "the link your friend opens is current"
+  # are different claims and only the second one matters.
+  nochange=1
   echo
-  echo "no change — the live build is already current"
-  echo "$URL"
-  exit 0
-fi
-
-git add index.html
-git commit -q -m "Update the playable build
+  echo "build unchanged — checking the live link is serving it"
+else
+  git add index.html
+  git commit -q -m "Update the playable build
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
-git push -q origin main || { echo "push failed" >&2; exit 1; }
+  git push -q origin main || { echo "push failed" >&2; exit 1; }
+fi
 want="$(git rev-parse HEAD)"
 
-echo
-echo "pushed ${want:0:7}. Waiting for GitHub Pages…"
+[ "$nochange" = "1" ] || { echo; echo "pushed ${want:0:7}. Waiting for GitHub Pages…"; }
 
-# WAIT FOR *THIS* COMMIT, not merely for a build to be green.
-# `pages/builds/latest` still describes the PREVIOUS build for a while after a
-# push, so polling it for status == built reports success against the build
-# before yours — which is exactly what happened once: the check went green and
-# the site was still serving a bundle with no touch controls in it.
-if command -v gh >/dev/null 2>&1; then
+# ── WAIT FOR THE URL TO SERVE THIS BUILD ─────────────────────────────────────
+# Poll the CONTENT, not the build API. Two ways the API misleads, both observed:
+#
+#   1. `pages/builds/latest` describes the PREVIOUS build for a while after a
+#      push, so "status == built" reports success against the build before
+#      yours. That happened: the check went green while the site was still
+#      serving a bundle with no touch controls in it.
+#   2. It also goes stale the other way — it sat on an older commit long after
+#      the new content was live, so waiting for the sha to appear times out on
+#      a deploy that already worked.
+#
+# What the URL actually returns settles both. Compared by git's own content
+# hash rather than by byte count, because the working copy here has CRLF line
+# endings while git stores and serves LF — a byte comparison is off by one per
+# line and can never match. The first version of this check reported 473,664
+# against 463,193 and called a perfectly good deploy a failure.
+want_blob="$(git rev-parse "HEAD:index.html")"
+
+if command -v curl >/dev/null 2>&1; then
   for i in $(seq 1 24); do
-    line="$(gh api repos/Dumb-Tony/bedroom-racers-play/pages/builds/latest \
-              --jq '.commit + " " + .status' 2>/dev/null)"
-    sha="${line%% *}"; status="${line##* }"
-    if [ "$sha" = "$want" ] && [ "$status" = "built" ]; then
-      # And confirm the bytes actually changed hands, rather than trusting the
-      # build API — a CDN can still be serving the old copy.
-      if command -v curl >/dev/null 2>&1; then
-        live="$(curl -sS "$URL?cb=$want" | wc -c | tr -d ' ')"
-        local_bytes="$(wc -c < index.html | tr -d ' ')"
-        if [ "$live" = "$local_bytes" ]; then
-          echo "live and serving the new build ($live bytes)"
-        else
-          echo "built, but the URL is serving $live bytes against $local_bytes local" >&2
-          echo "give the CDN a minute: $URL" >&2
-          exit 1
-        fi
-      fi
+    live="$(curl -sS "$URL?cb=$want-$i" 2>/dev/null | git hash-object --stdin)"
+    if [ "$live" = "$want_blob" ]; then
+      echo "live and serving this exact build"
       echo "$URL"
       exit 0
     fi
-    [ "$status" = "errored" ] && { echo "Pages build FAILED" >&2; exit 1; }
+    # Surface a genuine build failure rather than waiting out the clock.
+    if command -v gh >/dev/null 2>&1; then
+      st="$(gh api repos/Dumb-Tony/bedroom-racers-play/pages/builds/latest \
+             --jq '.status' 2>/dev/null)"
+      [ "$st" = "errored" ] && { echo "Pages build FAILED" >&2; exit 1; }
+    fi
     sleep 10
   done
-  echo "still building after four minutes — check $URL shortly" >&2
+  echo "four minutes on and the URL is still serving the old build" >&2
+  echo "  expected ${want_blob:0:12}, serving ${live:0:12}" >&2
+  echo "  $URL" >&2
   exit 1
 fi
 
