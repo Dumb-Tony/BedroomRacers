@@ -194,6 +194,38 @@ BR.CAMERA = {
                         // Pulled back from 1.45 to compensate for the low
                         // groundTilt, which compresses how much ground fits
                         // on screen
+
+  /* ── SENSE OF SPEED ──────────────────────────────────────────────────────
+     The projection is axonometric: nothing shrinks with distance, so there is
+     no perspective flow to tell you how fast you are going. 12_Art_Guide calls
+     this "the flatness problem". Toy cars at 350 units/sec can read as sliding
+     rather than driving, and the fix has to come from the camera because it
+     cannot come from the projection.
+
+     Every value here is RENDER-ONLY. Nothing below is visible to the
+     simulation, the AI or any measured time — the flat-plane rule (17_Claude_
+     Rules.md) cuts both ways, and the camera is on the render side of it. */
+  speedZoom:     0.16,  // how far the view pulls back at top speed, as a
+                        // fraction of `zoom`. Too much and the car shrinks to
+                        // a dot on a straight; too little and nothing reads
+  zoomRate:       2.2,  // how fast the pull-back eases. SLOW on purpose: this
+                        // should feel like the world opening up, not like the
+                        // camera reacting to the throttle
+  boostKick:     0.10,  // instant punch IN when a boost fires, released over
+                        // boostKickDecay. Zooming in on acceleration is
+                        // backwards from the speed pull-back, and that is the
+                        // point — the contrast is what sells the shove
+  boostKickDecay: 3.4,  // per second
+
+  shakePerImpact:  11,  // screen-space pixels of shake at severity 1
+  shakeMax:        18,  // ceiling, so a pile-up cannot make the screen useless
+  shakeDecay:     7.0,  // per second. Fast — a lingering shake reads as a
+                        // broken camera rather than as a hit
+  shakeHz:         38,  // oscillation rate. High enough to read as an impact
+                        // rather than as a wobble
+
+  streakSpeed:    240,  // speed at which motion streaks start to appear
+  streakMax:     0.34,  // opacity ceiling
   followRate:     7.0,  // positional catch-up. Low = laggy and cinematic,
                         // high = locked to the car and can feel jittery
   yawRate:        4.5,  // how fast the view swings round to follow travel.

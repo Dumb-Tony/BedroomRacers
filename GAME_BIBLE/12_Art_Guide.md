@@ -104,6 +104,43 @@ They are deliberately separable. Each has a slider that reaches zero, so if the
 combination reads as too much, the answer is which one to pull back rather than
 a rebuild.
 
+### The other half of it: speed has no flow (Phase 9)
+
+All three above give back *depth*. None gives back **speed**, and the same
+missing perspective causes both: with no convergence nothing streams past the
+camera, so the ground under a car at 350 units/sec looks exactly like the ground
+under one at 100. The car moves; the world does not react.
+
+Four camera behaviours, all in `BR.CAMERA`, all separately tunable to zero:
+
+- **Pull back with speed** (`speedZoom 0.16`). Measured, 1.15 at rest to 1.00 at
+  racing pace. Scaled against **the car's own top speed** rather than a
+  constant, so a slow car flat out feels as flat out as a fast one — the
+  sensation is "this is as quick as I go", not "this is 350 units/sec".
+- **Punch in on a boost** (`boostKick 0.10`). Zooming *in* under acceleration is
+  backwards from the pull-back, and that is exactly why it works: the contrast
+  sells the shove. Edge-triggered on the boost starting, or holding the button
+  would pin the view punched in for the whole boost.
+- **Shake on impact** (`shakePerImpact 11`, capped at 18). Driven off the
+  `impacts` counter rather than a boolean — the fixed step can run several times
+  per frame, so a boolean shakes once per tick of contact. Hits **compound**:
+  being bounced between two cars should feel worse than one clean knock.
+- **Motion streaks** past the edges above 240 units/sec. Screen space, edges
+  only, because a streak across the middle sits on the road you are reading.
+  Measured cost: 62 canvas operations, 2.6% of a frame.
+
+**Per camera, not global.** `BR.CAMERA.zoom` is one number for the whole game,
+but in split screen four cars are at four speeds — a shared zoom would have one
+player's boost pull back everybody else's view. Everything that scales a line
+width by zoom now reads the effective per-view value, or kerbs and dashes would
+change thickness as the view moved.
+
+**All of it is render-only**, which is not a claim to make loosely: ghosts record
+inputs and replay them, so a camera feeding back into the simulation would
+desync every one. Verified by running the same race twice from identical seeded
+inputs — once rendering every frame, once drawing nothing at all — and the car
+finishes at the same position to the last bit, `dx = 0.00e+0`.
+
 ### Depth scaling
 
 **This scales OBJECTS, not the ground.** Discrete things with a single ground

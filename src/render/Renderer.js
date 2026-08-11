@@ -82,7 +82,63 @@ BR.Renderer = {
       views[i].cam.y = v ? v.y : y;
       views[i].cam.yaw = v ? v.heading : (yaw || 0);
       views[i].cam.z = v ? (v.roadZ || 0) : 0;
+      /* The feel state resets too. A race starts stationary, so the zoom must
+         start at rest rather than easing down from wherever the last one ended
+         — and a shake left running across a restart would rattle the starting
+         grid of the next race. */
+      views[i].cam.zoom = BR.CAMERA.zoom;
+      views[i].cam.kick = 0;
+      views[i].cam.shake = 0;
+      views[i].cam.wasBoosting = false;
+      views[i].cam.lastImpacts = v ? (v.impacts || 0) : 0;
     }
+  },
+
+  /**
+   * Motion streaks at the edges of the view.
+   *
+   * The projection has no perspective, so nothing flows past the camera to say
+   * how fast you are going: the ground under a car at 350 units/sec looks
+   * exactly like the ground under a car at 100. These are the flow, drawn
+   * rather than derived.
+   *
+   * SCREEN SPACE, after the camera transform is unwound, and only near the
+   * edges — a streak across the middle of the screen sits on top of the road
+   * you are trying to read. They fade in from `streakSpeed` so ordinary driving
+   * never has them, which is what keeps them meaning "fast" rather than
+   * meaning "moving".
+   */
+  drawSpeedStreaks(ctx, v, W, H) {
+    if (!v) return;
+    const C = BR.CAMERA;
+    const speed = Math.hypot(v.vel.x, v.vel.y);
+    if (speed < C.streakSpeed) return;
+
+    const top = (v.spec && v.spec.maxSpeed) || 300;
+    const over = (speed - C.streakSpeed) / Math.max(1, top * 1.15 - C.streakSpeed);
+    const a = Math.min(C.streakMax, over * C.streakMax);
+    if (a <= 0.01) return;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,' + a.toFixed(3) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    /* Deterministic placement from a fixed table rather than Math.random, for
+       the same reason the pays check is seeded: streaks that jump about at
+       random every frame read as static, and a renderer that consumes the
+       random stream makes anything downstream of it unreproducible. */
+    const N = 14;
+    for (let i = 0; i < N; i++) {
+      const f = (i * 0.6180339887) % 1;                 // golden-ratio spread
+      const yy = f * H;
+      const len = 40 + ((i * 37) % 60);
+      // Left and right bands only, mirrored, well clear of the middle.
+      const inset = ((i * 53) % 70);
+      ctx.moveTo(inset, yy);       ctx.lineTo(inset + len, yy);
+      ctx.moveTo(W - inset, yy);   ctx.lineTo(W - inset - len, yy);
+    }
+    ctx.stroke();
+    ctx.restore();
   },
 
   updateCamera(cam, v, ix, iy, dt) {
@@ -129,6 +185,57 @@ BR.Renderer = {
        raised section framed, tracking the second would undo the gap between car
        and shadow that every height cue depends on. */
     cam.z = M.lerp(cam.z || 0, v.roadZ || 0, k);
+
+    this.updateFeel(cam, v, speed, dt);
+  },
+
+  /**
+   * Speed pull-back, boost punch and impact shake.
+   *
+   * PER CAMERA, not global. `BR.CAMERA.zoom` is one number for the whole game,
+   * but in split screen four cars are at four different speeds — a shared zoom
+   * would have one player's boost pull back everybody else's view.
+   *
+   * All of it is render-only. Nothing here is readable by the simulation.
+   */
+  updateFeel(cam, v, speed, dt) {
+    const C = BR.CAMERA;
+    const M = BR.M;
+
+    /* Pull back with speed. Measured against the car's OWN top speed rather
+       than a constant, so a slow car at full chat gets the same sense of
+       flat-out as a fast one — the feeling is "this is as quick as I go", not
+       "this is 350 units/sec". */
+    const top = (v.spec && v.spec.maxSpeed) || 300;
+    const frac = M.clamp(speed / (top * 1.15), 0, 1);
+    const target = C.zoom * (1 - C.speedZoom * frac);
+    if (cam.zoom === undefined) cam.zoom = target;
+    cam.zoom = M.lerp(cam.zoom, target, 1 - Math.exp(-C.zoomRate * dt));
+
+    // ── boost punch ────────────────────────────────────────────────────────
+    // Edge-triggered on the boost starting, exactly like Audio does with its
+    // counters: a fixed step can run several times per frame, and re-kicking
+    // per sub-step would hold the view punched in for the whole boost.
+    if (v.boosting && !cam.wasBoosting) cam.kick = C.boostKick;
+    cam.wasBoosting = !!v.boosting;
+    cam.kick = (cam.kick || 0) * Math.exp(-C.boostKickDecay * dt);
+
+    /* ── impact shake ──────────────────────────────────────────────────────
+       Driven off the `impacts` COUNTER, which the vehicle increments in the
+       fixed step and which Audio already edge-detects once per rendered frame
+       for the same reason. Reading a boolean would miss two hits in one frame
+       and reading it per sub-step would shake once per tick of contact. */
+    const impacts = v.impacts || 0;
+    if (cam.lastImpacts === undefined) cam.lastImpacts = impacts;
+    if (impacts > cam.lastImpacts) {
+      const sev = M.clamp(v.lastImpact || 0.5, 0, 1);
+      cam.shake = Math.min(C.shakeMax, (cam.shake || 0) + C.shakePerImpact * sev);
+    }
+    cam.lastImpacts = impacts;
+    cam.shake = (cam.shake || 0) * Math.exp(-C.shakeDecay * dt);
+    // Phase advances in REAL time so the wobble does not stall when the
+    // simulation is paused mid-shake.
+    cam.shakeT = (cam.shakeT || 0) + dt;
   },
 
   /**
@@ -233,11 +340,29 @@ BR.Renderer = {
     // left is centring.
     Pj.setCamera(view.cam.x, view.cam.y, view.cam.yaw, view.cam.z);
 
+    /* THE EFFECTIVE ZOOM FOR THIS VIEW, this frame. `BR.CAMERA.zoom` is the
+       base; the camera pulls back with speed and punches in on a boost, and in
+       split screen each seat does that independently. Everything downstream
+       that scales a line width by zoom must read THIS, not the constant, or
+       kerbs and dashes change thickness as the view moves. */
+    const cam = view.cam;
+    this.zoom = cam.zoom || BR.CAMERA.zoom;
+
     ctx.save();
     // horizonBias pushes the car down the screen so more road is visible
     // ahead of it. This is what makes the camera read as "behind" the car.
-    ctx.translate(W / 2, H * BR.CAMERA.horizonBias);
-    ctx.scale(BR.CAMERA.zoom, BR.CAMERA.zoom);
+    // Shake is applied HERE, in screen space, so it moves the picture without
+    // moving the camera — nothing that reads cam.x/cam.y is disturbed by it.
+    let shx = 0, shy = 0;
+    if (cam.shake > 0.05) {
+      const t = (cam.shakeT || 0) * BR.CAMERA.shakeHz;
+      shx = Math.sin(t) * cam.shake;
+      shy = Math.cos(t * 1.37) * cam.shake * 0.7;   // 1.37 so it is not a line
+    }
+    ctx.translate(W / 2 + shx, H * BR.CAMERA.horizonBias + shy);
+    const zoomNow = this.zoom * (1 + (cam.kick || 0));
+    ctx.scale(zoomNow, zoomNow);
+    this.zoom = zoomNow;
 
     /* Cull bounds for THIS viewport, computed once and hung on the renderer so
        everything drawn before the depth sort can use them too. They used to be
@@ -386,6 +511,7 @@ BR.Renderer = {
     ctx.restore();
 
     // Viewport space, after the camera transform is unwound.
+    this.drawSpeedStreaks(ctx, v, W, H);
     this.drawDepthFade(ctx, arena, W, H);
     BR.HUD.draw(ctx, view, game, W, H);
     BR.CornerHint.draw(ctx, game, view, W, H);
@@ -493,7 +619,7 @@ BR.Renderer = {
     // plane is tilted.
     const step = 180;
     ctx.strokeStyle = arena.weaveColour;
-    ctx.lineWidth = 1.5 / BR.CAMERA.zoom;
+    ctx.lineWidth = 1.5 / BR.Renderer.zoom;
     ctx.beginPath();
     for (let x = b.minX; x <= b.maxX; x += step) {
       const p0 = Pj.project(x, b.minY, 0), p1 = Pj.project(x, b.maxY, 0);
@@ -549,7 +675,7 @@ BR.Renderer = {
       ctx.stroke();                       // seal the seam
     };
 
-    ctx.lineWidth = 1 / BR.CAMERA.zoom;
+    ctx.lineWidth = 1 / BR.Renderer.zoom;
     ctx.lineJoin = 'round';
 
     for (let s = 0; s < segs.length; s++) {
@@ -562,11 +688,11 @@ BR.Renderer = {
         const pTop = Pj.project(mx, my, oi[2] - SKIRT);
         const pBot = Pj.project(mx, my, 0);
         ctx.strokeStyle = 'rgba(38,32,46,0.55)';
-        ctx.lineWidth = 9 / BR.CAMERA.zoom;
+        ctx.lineWidth = 9 / BR.Renderer.zoom;
         ctx.beginPath();
         ctx.moveTo(pTop.sx, pTop.sy); ctx.lineTo(pBot.sx, pBot.sy);
         ctx.stroke();
-        ctx.lineWidth = 1 / BR.CAMERA.zoom;
+        ctx.lineWidth = 1 / BR.Renderer.zoom;
       }
 
       // Skirts: the moulded thickness of the track piece.
@@ -586,9 +712,9 @@ BR.Renderer = {
      drawn before the depth sort can reach them. */
   setCullBounds(view) {
     this.cullBounds = {
-      halfW: view.w / 2 / BR.CAMERA.zoom,
-      top:  -view.h * BR.CAMERA.horizonBias / BR.CAMERA.zoom,
-      bot:   view.h * (1 - BR.CAMERA.horizonBias) / BR.CAMERA.zoom,
+      halfW: view.w / 2 / BR.Renderer.zoom,
+      top:  -view.h * BR.CAMERA.horizonBias / BR.Renderer.zoom,
+      bot:   view.h * (1 - BR.CAMERA.horizonBias) / BR.Renderer.zoom,
       pad:   this.CULL_PAD,
       on:    this.CULL,
     };
@@ -743,7 +869,7 @@ BR.Renderer = {
        same way as the fill — these are two more full traces of the track
        outline, so together with it the whole ring was being walked THREE times
        a frame regardless of what the camera could see. */
-    ctx.lineWidth = 3 / BR.CAMERA.zoom;
+    ctx.lineWidth = 3 / BR.Renderer.zoom;
     ctx.strokeStyle = 'rgba(236,230,218,0.55)';
     if (whole) {
       ctx.beginPath(); trace(arena.outer); ctx.stroke();
@@ -762,9 +888,9 @@ BR.Renderer = {
     if (arena.shortcutChord) {
       const a = Pj.project(arena.shortcutChord[0][0], arena.shortcutChord[0][1], 0);
       const z = Pj.project(arena.shortcutChord[1][0], arena.shortcutChord[1][1], 0);
-      ctx.setLineDash([14 / BR.CAMERA.zoom, 12 / BR.CAMERA.zoom]);
+      ctx.setLineDash([14 / BR.Renderer.zoom, 12 / BR.Renderer.zoom]);
       ctx.strokeStyle = 'rgba(255,211,77,0.7)';
-      ctx.lineWidth = 4 / BR.CAMERA.zoom;
+      ctx.lineWidth = 4 / BR.Renderer.zoom;
       ctx.beginPath();
       ctx.moveTo(a.sx, a.sy); ctx.lineTo(z.sx, z.sy);
       ctx.stroke();
@@ -774,7 +900,7 @@ BR.Renderer = {
     // Centre line, dashed, following the road.
     const line = arena.centreline;
     ctx.strokeStyle = 'rgba(236,230,218,0.30)';
-    ctx.lineWidth = 4 / BR.CAMERA.zoom;
+    ctx.lineWidth = 4 / BR.Renderer.zoom;
     ctx.beginPath();
     for (let i = 0; i < line.length; i += 4) {
       const a = Pj.project(line[i][0], line[i][1], 0);
@@ -855,7 +981,7 @@ BR.Renderer = {
       ctx.fillStyle = 'rgba(255,211,77,0.85)';
       ctx.fill();
       ctx.strokeStyle = '#ece6da';
-      ctx.lineWidth = 2 / BR.CAMERA.zoom;
+      ctx.lineWidth = 2 / BR.Renderer.zoom;
       ctx.stroke();
     }
 
@@ -891,7 +1017,7 @@ BR.Renderer = {
       ctx.fillStyle = 'rgba(79,216,168,0.42)';
       ctx.fill();
       ctx.strokeStyle = '#4fd8a8';
-      ctx.lineWidth = 2.5 / BR.CAMERA.zoom;
+      ctx.lineWidth = 2.5 / BR.Renderer.zoom;
       ctx.stroke();
     }
   },
@@ -940,7 +1066,7 @@ BR.Renderer = {
       ctx.fillStyle = '#ffd34d';
       ctx.fill();
       ctx.strokeStyle = 'rgba(120,80,10,0.65)';
-      ctx.lineWidth = 2 / BR.CAMERA.zoom;
+      ctx.lineWidth = 2 / BR.Renderer.zoom;
       ctx.stroke();
     }
   },
@@ -1087,12 +1213,12 @@ BR.Renderer = {
     ctx.fillStyle = (s % 2) ? R.colour : R.altColour;
     ctx.fill();
     ctx.strokeStyle = R.colour;
-    ctx.lineWidth = 1 / BR.CAMERA.zoom;
+    ctx.lineWidth = 1 / BR.Renderer.zoom;
     ctx.stroke();
 
     // Side rails.
     ctx.strokeStyle = R.railColour;
-    ctx.lineWidth = 3.5 / BR.CAMERA.zoom;
+    ctx.lineWidth = 3.5 / BR.Renderer.zoom;
     for (let side = -1; side <= 1; side += 2) {
       const q0 = P(t0, side, 20), q1 = P(t1, side, 20);
       ctx.beginPath();
@@ -1137,7 +1263,7 @@ BR.Renderer = {
     ctx.moveTo(a1.sx, a1.sy);
     ctx.lineTo(b1.sx, b1.sy);
     ctx.strokeStyle = jumpable ? '#e0b46a' : '#a4907c';
-    ctx.lineWidth = 2.5 / BR.CAMERA.zoom;
+    ctx.lineWidth = 2.5 / BR.Renderer.zoom;
     ctx.stroke();
   },
 
@@ -1178,7 +1304,7 @@ BR.Renderer = {
       ctx.moveTo(p3.sx, p3.sy);
       ctx.lineTo(p2.sx, p2.sy);
       ctx.strokeStyle = '#ffd34d';
-      ctx.lineWidth = 3 / BR.CAMERA.zoom;
+      ctx.lineWidth = 3 / BR.Renderer.zoom;
       ctx.stroke();
     }
   },
@@ -1284,7 +1410,7 @@ BR.Renderer = {
                   -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * v.boostMeter);
       ctx.strokeStyle = v.boosting ? '#ffd34d'
         : (v.boostMeter >= BR.PHYSICS.boostMinToFire ? '#4fd8a8' : '#69a2ff');
-      ctx.lineWidth = 3 / BR.CAMERA.zoom + 1.5;
+      ctx.lineWidth = 3 / BR.Renderer.zoom + 1.5;
       ctx.stroke();
     }
 
