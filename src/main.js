@@ -23,6 +23,26 @@ BR.Game = {
   LAPS: 3,
   OPPONENTS: 3,
 
+  /* How far down the grid the player starts, as a fraction of the field.
+     0 is pole, 1 is dead last.
+
+     MID-GRID, chosen from a sweep of all three against nine skill and
+     difficulty combinations (see buildRace for why this is the lever). On pole
+     the player led inside 8 seconds and the race was over; from dead last even
+     a strong player could not win on Normal, because the field's pace was
+     calibrated back when the requirement was "must not be caught".
+
+     Mid-grid is the only setting where the ladder actually reads as a ladder:
+
+       Easy    won at every skill level, from 13-43s in
+       Normal  won only by the strongest player, and only from 38s in
+       Hard    third, third, second — a podium in sight, never a gift
+
+     The player stand-in is an AI with a raised speed, which understates a real
+     one: it takes no better line, finds no shortcuts and spends boost no more
+     cleverly. Erring on the hard side of that is deliberate. */
+  PLAYER_START_BEHIND: 0.5,
+
   /* Grid order after the player. Personalities are parameter bundles over one
      driver, not separate code paths (04_AI.md).
 
@@ -147,6 +167,12 @@ BR.Game = {
     this.racers = [];
     this.vehicles = [];
     this.actors = [];
+    /* The slot each car actually started from, parallel to `vehicles`.
+       `reset()` used to put vehicles[i] back on grid[i], which was right only
+       while the arrays happened to agree — humans are built first but now start
+       at the BACK, so retrying a race would have quietly restored the old
+       pole-position layout. */
+    this.gridSlots = [];
 
     // More than one human is an exhibition: no ghost, and no medals, stars or
     // records (see bankResult). One save cannot attribute them.
@@ -160,16 +186,56 @@ BR.Game = {
     const diff = BR.AIDriver.DIFFICULTY[this.difficulty] ||
                  BR.AIDriver.DIFFICULTY.normal;
 
-    const takenCars = [];
+    /* ── WHERE THE PLAYER STARTS ──────────────────────────────────────────
+       On POLE, until Phase 9. Humans took grid[0] upward and opponents filled
+       in behind, so the player began every race in the lead and the only thing
+       left to do was not crash.
+
+       Measured across nine skill and difficulty combinations on a six-opponent
+       race: the player was in front within 6-8 seconds in every one, and spent
+       0-1 seconds behind across ninety seconds of racing. That is the whole of
+       "it feels too easy" — not pace, but that the race was decided before the
+       first corner, which is also why lapping people was so easy to do.
+
+       Opponents now start at the front and humans at the back. It is the arcade
+       convention for exactly this reason: the race is the overtaking, and there
+       is none to do from pole. Nothing about the AI or the physics changes. */
+    const takenIds = [];
     for (let i = 0; i < humanCount; i++) {
-      const id = this.playerVehicleIds[i] ||
-                 BR.ProgressionManager.selectedVehicleFor(i + 1);
-      const g = grid[i];
+      takenIds.push(this.playerVehicleIds[i] ||
+                    BR.ProgressionManager.selectedVehicleFor(i + 1));
+    }
+    const availableField = timeTrial ? [] : this.FIELD.filter(function (f) {
+      return takenIds.indexOf(f.vehicle) === -1;
+    });
+    const opponentCount = timeTrial ? 0
+      : Math.min(this.OPPONENTS, grid.length - humanCount, availableField.length);
+
+    /* How far back, as a fraction of the field. 1 is dead last.
+       A tunable rather than a constant because the field's pace was calibrated
+       when the player started on POLE — "must not be caught" — and starting at
+       the back inverts the requirement to "must be able to catch". The pace
+       itself cannot be retuned to suit: `normal` difficulty and the Technician
+       are the reference pairing every target time in the game is measured
+       against, so moving them would silently invalidate eighteen events. Grid
+       position is the lever that does not touch that. */
+    const back = Math.round(opponentCount * this.PLAYER_START_BEHIND);
+
+    // Where seat one actually starts, for the camera below — grid[0] is an
+    // opponent's slot now, and snapping there put the opening shot on somebody
+    // else's car.
+    this.playerSlot = grid[Math.min(back, grid.length - 1)];
+
+    for (let i = 0; i < humanCount; i++) {
+      const id = takenIds[i];
+      // Behind the whole field. In split screen the seats sit side by side on
+      // the back rows rather than being strung out down the grid.
+      const g = grid[Math.min(back + i, grid.length - 1)];
       const car = BR.Vehicle.create(id, g.x, g.y, g.heading);
       car.forgiveness = diff.forgiveness;
       if (i === 0) this.vehicle = car;
       this.vehicles.push(car);
-      takenCars.push(id);
+      this.gridSlots.push(g);
 
       const racer = {
         vehicle: car, isPlayer: true, ai: null,
@@ -189,26 +255,32 @@ BR.Game = {
       BR.Ghost.startRecording();
       const g = BR.Ghost.load(this.arena.id, this.playerVehicleId);
       if (g) {
-        const gv = BR.Vehicle.create(this.playerVehicleId,
-                                     grid[0].x, grid[0].y, grid[0].heading);
+        // On the player's own slot — a time trial has no opponents, so that is
+        // grid[0], but say it in terms of the player rather than assume it.
+        const gs = this.playerSlot;
+        const gv = BR.Vehicle.create(this.playerVehicleId, gs.x, gs.y, gs.heading);
         gv.isGhost = true;
         this.vehicles.push(gv);
+        this.gridSlots.push(gs);
         this.actors.push({ v: gv, kind: 'ghost', racer: null });
       }
     } else {
       BR.Ghost.recording = null;
       BR.Ghost.playback = null;
-      // Do not hand an AI a car a human is already driving — duplicate names in
-      // the standings are confusing, and duplicate cars on track worse.
-      const field = this.FIELD.filter(function (f) {
-        return takenCars.indexOf(f.vehicle) === -1;
-      });
-      const n = Math.min(this.OPPONENTS, grid.length - humanCount, field.length);
+      /* Do not hand an AI a car a human is already driving — duplicate names in
+         the standings are confusing, and duplicate cars on track worse. Filtered
+         against the ids chosen up front, which is the same list `takenCars`
+         collected, so the count decided before the grid was laid out still
+         holds. */
+      const field = availableField;
+      const n = opponentCount;
       for (let i = 0; i < n; i++) {
         const spec = field[i % field.length];
-        const g = grid[i + humanCount];
+        // The front of the grid. The player is behind all of them.
+        const g = grid[i];
         const car = BR.Vehicle.create(spec.vehicle, g.x, g.y, g.heading);
         this.vehicles.push(car);
+        this.gridSlots.push(g);
         const racer = {
           vehicle: car, isPlayer: false, name: spec.name,
           ai: BR.AIDriver.create(spec.personality, this.difficulty),
@@ -232,7 +304,8 @@ BR.Game = {
 
     BR.RaceManager.init(this.arena, this.racers, this.LAPS);
     this.layoutViews();
-    BR.Renderer.snapCameraTo(grid[0].x, grid[0].y, grid[0].heading);
+    BR.Renderer.snapCameraTo(this.playerSlot.x, this.playerSlot.y,
+                             this.playerSlot.heading);
 
     // Cached tracks keep hazard state between races — put it back.
     BR.TrackManager.resetHazards(this.arena);
@@ -396,7 +469,9 @@ BR.Game = {
   reset() {
     const grid = this.arena.grid;
     for (let i = 0; i < this.vehicles.length; i++) {
-      const g = grid[i];
+      // The slot this car actually started from, not grid[i] — the two only
+      // agreed while humans started at the front.
+      const g = (this.gridSlots && this.gridSlots[i]) || grid[i];
       BR.Vehicle.reset(this.vehicles[i], g.x, g.y, g.heading);
     }
     for (let i = 0; i < this.racers.length; i++) {
@@ -406,7 +481,8 @@ BR.Game = {
     }
     BR.RaceManager.reset();
     BR.Particles.init();
-    BR.Renderer.snapCameraTo(grid[0].x, grid[0].y, grid[0].heading);
+    BR.Renderer.snapCameraTo(this.playerSlot.x, this.playerSlot.y,
+                             this.playerSlot.heading);
 
     // Cached tracks keep hazard state between races — put it back.
     BR.TrackManager.resetHazards(this.arena);

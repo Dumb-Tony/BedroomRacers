@@ -48,7 +48,7 @@ BR.EVENTS = [
     laps: 3,
     opponents: 3,
     difficulty: 'easy',
-    platinumTime: 88,
+    platinumTime: 87,
     unlockStars: 0,
     objectives: [
       { id: 'finish',   label: 'Finish the race' },
@@ -65,7 +65,7 @@ BR.EVENTS = [
     laps: 3,
     opponents: 4,
     difficulty: 'normal',
-    platinumTime: 84,
+    platinumTime: 87,
     unlockStars: 2,
     objectives: [
       { id: 'win',      label: 'Win the race' },
@@ -82,7 +82,7 @@ BR.EVENTS = [
     laps: 5,
     opponents: 7,
     difficulty: 'hard',
-    platinumTime: 138,
+    platinumTime: 143,
     unlockStars: 5,
     objectives: [
       { id: 'win',      label: 'Win the race' },
@@ -127,7 +127,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 5,
     difficulty: 'normal',
-    platinumTime: 101,
+    platinumTime: 103,
     unlockStars: 6,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -209,7 +209,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 5,
     difficulty: 'normal',
-    platinumTime: 73,           // 0.93 x 78.1, the clean reference run
+    platinumTime: 75,           // 0.93 x 81.0, re-measured from a mid-grid start
     unlockStars: 14,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -226,7 +226,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 6,
     difficulty: 'normal',
-    platinumTime: 80,           // 0.93 x 86.1
+    platinumTime: 83,           // 0.93 x 88.8, re-measured from a mid-grid start
     unlockStars: 17,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -243,7 +243,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 7,
     difficulty: 'hard',
-    platinumTime: 83,           // 0.93 x 89.3
+    platinumTime: 85,           // 0.93 x 91.5, re-measured from a mid-grid start
     unlockStars: 20,
     objectives: [
       { id: 'win',      label: 'Win the race' },
@@ -288,7 +288,7 @@ BR.EVENTS.push(
     /* 0.93 x 101.9. RE-MEASURED after rides were re-paced by ground distance
        (Rails.js): this track lost 9.1 seconds a race, because its loop had been
        parking the car for nearly two seconds every lap. */
-    platinumTime: 95,
+    platinumTime: 96,           // 0.93 x 103.6, re-measured from a mid-grid start
     unlockStars: 26,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -326,7 +326,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 7,
     difficulty: 'hard',
-    platinumTime: 95,           // 0.93 x 101.8, re-measured after the gate
+    platinumTime: 97,           // 0.93 x 104.7, re-measured from a mid-grid start
     unlockStars: 32,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -374,7 +374,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 7,
     difficulty: 'normal',
-    platinumTime: 85,           // 0.93 x 91.0, the clean reference run
+    platinumTime: 89,           // 0.93 x 95.9, re-measured from a mid-grid start
     unlockStars: 4,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -392,7 +392,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 7,
     difficulty: 'hard',
-    platinumTime: 83,           // 0.93 x 89.4
+    platinumTime: 86,           // 0.93 x 92.0, re-measured from a mid-grid start
     unlockStars: 18,
     objectives: [
       { id: 'finish',   label: 'Finish the race' },
