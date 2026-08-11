@@ -476,3 +476,33 @@ to 2,414.
 
 Props are extruded cylinders and blocks, and the road is a flat fill. Both are
 the obvious next targets.
+
+### Props: four shapes, not four colours (Phase 9)
+
+Every prop was the **same extruded octagon**. A crayon, a wooden block, a
+bucket and a spade differed only by fill colour, which is the literal form of
+"geometric shapes rather than toys".
+
+The fix is not more polygons. It is four silhouettes that are recognisable from
+overhead, because at `groundTilt` 0.30 the top face is what a player sees and a
+prop is thirty pixels across:
+
+| | reads as | what carries it |
+| --- | --- | --- |
+| Crayon | long with a point | slim barrel, two-faced tip with a ridge, paper bands |
+| Block | square | a square footprint — an eight-sided block is a bollard |
+| Bucket | round and hollow | taper from a narrow base, rim lip, dark interior |
+| Spade | a T | blade, shaft and grip at **three different heights** |
+
+Two things that had to be got wrong first to be seen:
+
+- **The crayon was drawn at its full collision radius** and came out a fat red
+  wedge. A crayon is read almost entirely by being long and thin, so the barrel
+  is now 0.36 of its height across and the tip gets a third of the length to
+  taper over.
+- **The spade's blade, shaft and grip were all the same height**, so they merged
+  into one yellow lump. Reading it from overhead depends entirely on those being
+  three different heights.
+
+They share one extrusion helper that takes a local footprint and two heights, so
+a new prop is a footprint and a lid rather than a new renderer.

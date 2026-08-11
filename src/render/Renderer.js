@@ -1182,50 +1182,176 @@ BR.Renderer = {
 
   /* Extruded octagon. Crayons and blocks are the scale cue — a crayon the size
      of a fallen tree. */
+  /**
+   * A prop looks like the thing it is named after.
+   *
+   * Every one of them used to be the SAME extruded octagon: a crayon, a wooden
+   * block, a bucket and a spade differed only by colour. That is the literal
+   * form of "geometric shapes rather than toys", and the fix is not more
+   * polygons — it is four silhouettes that are recognisable from overhead,
+   * because `groundTilt` 0.30 means the top face is what a player sees.
+   *
+   * They share one extrusion helper, so a new prop is a footprint and a lid
+   * rather than a new renderer.
+   */
   drawProp(ctx, p) {
     const Pj = BR.Projection;
-    const sides = 8;
     const pz = p.z || 0;
     const anchor = Pj.project(p.x, p.y, pz);
     const k = Pj.scaleAt(anchor.depth);
-    const base = [], top = [];
-    for (let s = 0; s < sides; s++) {
-      const a = (s / sides) * Math.PI * 2 + p.rot;
-      const wx = p.x + Math.cos(a) * p.r, wy = p.y + Math.sin(a) * p.r;
-      base.push(Pj.shrink(Pj.project(wx, wy, pz), anchor, k));
-      top.push(Pj.shrink(Pj.project(wx, wy, pz + p.h), anchor, k));
-    }
-
-    ctx.beginPath();
-    for (let s = 0; s < sides; s++) {
-      if (s === 0) ctx.moveTo(base[s].sx, base[s].sy);
-      else ctx.lineTo(base[s].sx, base[s].sy);
-    }
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(0,0,0,' +
-      (0.32 * Pj.shadowAlphaAt(anchor.depth)).toFixed(3) + ')';
-    ctx.fill();
-
+    const c = Math.cos(p.rot || 0), s = Math.sin(p.rot || 0);
     const col = this.PROP_COLOURS[p.type] || this.PROP_COLOURS.block;
-    ctx.fillStyle = col[0];
-    for (let s = 0; s < sides; s++) {
-      const t = (s + 1) % sides;
+
+    // Local frame: fx along the prop's rotation, fy across, h up from its base.
+    const lp = function (fx, fy, h) {
+      return Pj.shrink(
+        Pj.project(p.x + fx * c - fy * s, p.y + fx * s + fy * c, pz + h),
+        anchor, k);
+    };
+    const poly = function (pts, fill, stroke, w) {
       ctx.beginPath();
-      ctx.moveTo(base[s].sx, base[s].sy);
-      ctx.lineTo(base[t].sx, base[t].sy);
-      ctx.lineTo(top[t].sx, top[t].sy);
-      ctx.lineTo(top[s].sx, top[s].sy);
+      ctx.moveTo(pts[0].sx, pts[0].sy);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].sx, pts[i].sy);
       ctx.closePath();
-      ctx.fill();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = w || 1; ctx.stroke(); }
+    };
+    /* Extrude a local footprint between two heights: far side walls first so
+       near ones overdraw, then the lid. */
+    const extrude = function (foot, h0, h1, side, lid, line) {
+      const n = foot.length;
+      const order = [];
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        const ay = p.y + foot[i][0] * s + foot[i][1] * c;
+        const by = p.y + foot[j][0] * s + foot[j][1] * c;
+        order.push({ i: i, j: j, key: (ay + by) / 2 });
+      }
+      order.sort(function (a, b) { return a.key - b.key; });
+      for (let e = 0; e < order.length; e++) {
+        const i = order[e].i, j = order[e].j;
+        poly([lp(foot[i][0], foot[i][1], h0), lp(foot[j][0], foot[j][1], h0),
+              lp(foot[j][0], foot[j][1], h1), lp(foot[i][0], foot[i][1], h1)], side);
+      }
+      const top = foot.map(function (q) { return lp(q[0], q[1], h1); });
+      poly(top, lid, line, 1.2);
+      return top;
+    };
+
+    // Ground shadow, from a generous circle — every prop casts one.
+    const sh = [];
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      sh.push(lp(Math.cos(a) * p.r, Math.sin(a) * p.r, 0));
     }
-    ctx.beginPath();
-    for (let s = 0; s < sides; s++) {
-      if (s === 0) ctx.moveTo(top[s].sx, top[s].sy);
-      else ctx.lineTo(top[s].sx, top[s].sy);
+    poly(sh, 'rgba(0,0,0,' + (0.32 * Pj.shadowAlphaAt(anchor.depth)).toFixed(3) + ')');
+
+    const R = p.r, H = p.h;
+    const dark = this.shade(col[0], -0.45);
+
+    if (p.type === 'crayon') {
+      /* A crayon LYING DOWN, which is the only way one ends up on a rug: a
+         long barrel with a conical tip and a paper wrapper round the middle.
+         Drawn along the prop's own rotation, so a scatter of them does not all
+         point the same way. */
+      /* SLIMMER than the collision radius suggests. Drawn at full width it came
+         out a fat red wedge; a crayon is read almost entirely by being long and
+         thin with a point on one end, so the barrel is 0.36 of its height
+         across and the tip gets a third of the length to taper over. */
+      const half = R, rad = H * 0.36, tipAt = half * 0.34;
+      extrude([[-half, -rad], [tipAt, -rad], [tipAt, rad], [-half, rad]],
+              0, H * 0.78, col[0], col[1], dark);
+      // The point. Two faces so it has a ridge down the middle rather than
+      // being a flat triangle — that ridge is what makes it look sharpened.
+      poly([lp(tipAt, -rad, H * 0.78), lp(half, -rad * 0.12, H * 0.78),
+            lp(half, 0, H * 0.55), lp(tipAt, 0, H * 0.78)],
+           this.shade(col[1], -0.10), dark, 1);
+      poly([lp(tipAt, rad, H * 0.78), lp(half, rad * 0.12, H * 0.78),
+            lp(half, 0, H * 0.55), lp(tipAt, 0, H * 0.78)],
+           this.shade(col[0], -0.10), dark, 1);
+      // Paper wrapper: two narrow bands round the barrel, not one wide one.
+      [[-0.62, -0.48], [-0.30, -0.16]].forEach(function (b) {
+        poly([lp(half * b[0], -rad, H * 0.78 + 0.1), lp(half * b[1], -rad, H * 0.78 + 0.1),
+              lp(half * b[1], rad, H * 0.78 + 0.1), lp(half * b[0], rad, H * 0.78 + 0.1)],
+             'rgba(252,248,240,0.88)');
+      });
+
+    } else if (p.type === 'bucket') {
+      /* A pail: narrow at the base, wide at the rim, with a lip and a dark
+         interior. The taper is what makes it a bucket instead of a tin. */
+      const n = 10, botR = R * 0.72;
+      const foot = [], rim = [];
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        foot.push([Math.cos(a) * botR, Math.sin(a) * botR]);
+        rim.push([Math.cos(a) * R, Math.sin(a) * R]);
+      }
+      // Tapered wall, drawn as its own quads since the two rings differ.
+      const order = [];
+      for (let i = 0; i < n; i++) order.push({ i: i, j: (i + 1) % n,
+        key: p.y + (foot[i][0] * s + foot[i][1] * c) });
+      order.sort(function (a, b) { return a.key - b.key; });
+      for (let e = 0; e < order.length; e++) {
+        const i = order[e].i, j = order[e].j;
+        poly([lp(foot[i][0], foot[i][1], 0), lp(foot[j][0], foot[j][1], 0),
+              lp(rim[j][0], rim[j][1], H), lp(rim[i][0], rim[i][1], H)], col[0]);
+      }
+      poly(rim.map(function (q) { return lp(q[0], q[1], H); }), col[1], dark, 1.4);
+      // The hollow, inset and dark — a solid lid would read as a drum.
+      poly(rim.map(function (q) { return lp(q[0] * 0.78, q[1] * 0.78, H - 0.4); }),
+           this.shade(col[0], -0.5));
+      // Handle, arcing over.
+      ctx.strokeStyle = this.shade(col[0], -0.3);
+      ctx.lineWidth = Math.max(1, 2.4 * k / this.zoom);
+      ctx.beginPath();
+      const h0 = lp(-R * 0.96, 0, H), h1 = lp(0, 0, H * 1.85), h2 = lp(R * 0.96, 0, H);
+      ctx.moveTo(h0.sx, h0.sy);
+      ctx.quadraticCurveTo(h1.sx, h1.sy, h2.sx, h2.sy);
+      ctx.stroke();
+
+    } else if (p.type === 'spade') {
+      /* A sand spade: a blade with a shaft and a cross-grip. Low enough to
+         drive over, so it is mostly read from directly above. */
+      /* HEIGHTS HAVE TO DIFFER or the three parts merge into one yellow lump,
+         which is exactly what the first version did. A spade is a flat blade,
+         a thin shaft standing above it, and a crossbar on top — reading it
+         from overhead depends entirely on those being three different heights. */
+      const bw = R * 0.80, blade = H * 0.40;
+      // Blade: widest at the far end, like a scoop.
+      extrude([[-R * 0.10, -bw * 0.52], [R * 0.62, -bw],
+               [R * 0.98, -bw * 0.60], [R * 0.98, bw * 0.60],
+               [R * 0.62, bw], [-R * 0.10, bw * 0.52]],
+              0, blade, col[0], col[1], dark);
+      // Shaft: narrow and tall, so it stands clear of the blade.
+      extrude([[-R * 0.88, -bw * 0.17], [-R * 0.06, -bw * 0.17],
+               [-R * 0.06, bw * 0.17], [-R * 0.88, bw * 0.17]],
+              0, H, col[0], col[1], dark);
+      // Grip: a crossbar at the very top of the shaft.
+      extrude([[-R * 1.04, -bw * 0.58], [-R * 0.80, -bw * 0.58],
+               [-R * 0.80, bw * 0.58], [-R * 1.04, bw * 0.58]],
+              H * 0.55, H, this.shade(col[0], -0.16), col[1], dark);
+
+    } else {
+      /* Wooden alphabet block: SQUARE, not an octagon, with a bevelled lid and
+         a letter face. The square footprint alone does most of the work — an
+         eight-sided block is a bollard. */
+      const q = R * 0.82;
+      const foot = [[-q, -q], [q, -q], [q, q], [-q, q]];
+      extrude(foot, 0, H * 0.9, col[0], col[1], dark);
+      // Bevel: a slightly inset lid, which is what catches the light on a
+      // wooden block and stops the top reading as a flat sticker.
+      const inset = foot.map(function (f) { return [f[0] * 0.82, f[1] * 0.82]; });
+      poly(inset.map(function (f) { return lp(f[0], f[1], H); }),
+           this.shade(col[1], 0.10), dark, 1.1);
+      // A letter, drawn as two strokes so it reads at size without a font.
+      ctx.strokeStyle = this.shade(col[0], -0.55);
+      ctx.lineWidth = Math.max(1, 2.6 * k / this.zoom);
+      ctx.beginPath();
+      const a1 = lp(-q * 0.34, -q * 0.40, H + 0.1), a2 = lp(q * 0.30, 0, H + 0.1);
+      const a3 = lp(-q * 0.34, q * 0.40, H + 0.1);
+      ctx.moveTo(a1.sx, a1.sy); ctx.lineTo(a2.sx, a2.sy); ctx.lineTo(a3.sx, a3.sy);
+      ctx.stroke();
     }
-    ctx.closePath();
-    ctx.fillStyle = col[1];
-    ctx.fill();
   },
 
   /* Toy train. Runs on a strict period so it can be timed. */
