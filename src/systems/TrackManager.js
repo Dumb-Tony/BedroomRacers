@@ -451,6 +451,11 @@ BR.TrackManager = {
       decoration: def.decoration || [],
       haze: def.haze || null,          // depth-fade colour, "r,g,b"
 
+      /* Which world this track belongs to. Carried through because the arena
+         is what everything downstream actually gets handed — Audio picks the
+         musical bed from it, and had no way to ask before this. */
+      world: def.world || 'town-rug',
+
       /* Surfaces and colours are per world now rather than baked into the
          renderer — a sandbox is not a bedroom rug with different numbers. */
       baseSurface: def.baseSurface || 'rugRoad',

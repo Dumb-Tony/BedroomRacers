@@ -182,7 +182,9 @@ job.
    listener's channel by how near the closest one is. The draft guessed six cars
    would be unmanageable; the grid now runs eight and it is a non-issue, because
    opponent count and voice count were never linked.
-3. Music per world, or per track? Per world is cheaper and probably sufficient.
+3. ~~Music per world, or per track?~~ **Resolved in Phase 9: per world**, and it
+   is sufficient. The four sandbox tracks want the same sandbox — a tune each
+   would stop the world being a place. See the section below.
 4. Does the under-bed section (`06_World_Town_Rug.md`) get muffled audio processing?
    It would be a strong effect for one filter.
 
@@ -233,3 +235,65 @@ hits, 6 rail boardings. Three voices fired **zero** times — and one of those w
 the test's fault: falls were measured on Dresser Drop, which has no gap in its
 rail, so falling there is impossible by construction. Shield pops and falls were
 then verified directly instead of hoping a race would reach them.
+
+## Three worlds, three beds (Phase 9)
+
+Open question 3, resolved: **per world.** Four sandbox tracks want the same
+sandbox; a tune each would stop the world being a place, and it would also
+triple the tuning surface for no gain a player could name.
+
+There are three worlds, not four — Bedside Boulevard is `world: 'town-rug'`,
+which is right. It is the same bedroom floor at night, not a different room.
+
+### What varies, and what deliberately does not
+
+This document's own rule decides it: **toy percussion is the connective tissue
+across worlds, "present everywhere, in different guises."** So the
+instrumentation never changes — pulse, xylophone lead and shaker are in all
+three. What changes is key, register, tempo, mode and timbre. They should sound
+like three rooms in one house, not three different games.
+
+| | key | tempo | mode | lead | pulse | shaker |
+| --- | --- | --- | --- | --- | --- | --- |
+| Town rug | G, 392 | 0.227 | minor-ish | sine | triangle | 5000Hz rattle |
+| Sandbox | D, 587 | 0.214 | major pentatonic | sine | triangle | 3200Hz brush |
+| Stunt | B♭, 466 | 0.198 | dorian-ish | **square** | **sawtooth** | 6500Hz tick |
+
+The town rug is the reference this document already named — *"warm, bright, a
+little wistful under the energy"* — so its numbers are exactly what shipped
+before the table existed, and the other two are defined against it.
+
+The reasoning behind each is one line long, which is the point of doing it in
+intervals rather than in samples:
+
+- **Sandbox is outdoors at midday.** Major pentatonic has no minor third to be
+  wistful about, and that single interval is the entire difference. The shaker
+  drops in pitch because sand is a brush, not a rattle.
+- **Stunt is moulded plastic up on the furniture.** A square lead is the one
+  timbre that is unmistakably a toy electronic; the pulse goes to sawtooth an
+  octave down to push rather than sit underneath. Quickest of the three, because
+  this is the world with the loops in it.
+
+Measured: no two worlds share a pitch set, a tempo, or a shaker character, and
+the rug and the sandbox share **1 of 7** pitches — related, not transposed.
+
+**The last-lap lift is a ratio, not a pair of numbers.** Held absolute, every
+world would speed up to the same tempo on the final lap, and three identities
+would collapse into one at the exact moment they matter most. As a ratio the rug
+goes 0.227 → 0.208 and the stunt track 0.198 → 0.181, staying as far apart as
+they started.
+
+Changing world **restarts the phrase**. Carrying a step count across a key
+change drops the new bed halfway through a bar of the old one, which reads as a
+glitch rather than as arriving somewhere.
+
+### Verifying music with the audio clock frozen
+
+Web Audio parameter automation does not advance under headless virtual time —
+already recorded as a trap — so the *sound* cannot be measured here at all.
+
+What can be, and what is actually the content of the music, is **what the
+scheduler decides**: which pitches, which timbres, at what tempo, in what order.
+The harness replaces `note` and `noiseHit` with recorders and stubs the audio
+clock with one it advances itself. That isolates the scheduler exactly and
+sidesteps the frozen clock rather than fighting it.

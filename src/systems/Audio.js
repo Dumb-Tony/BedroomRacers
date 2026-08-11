@@ -484,13 +484,82 @@ BR.Audio = {
      Scheduled against the audio clock, not setInterval, so it does not drift. */
   SCALE: [0, 3, 5, 7, 10, 12, 15],
 
+  /* ── one bed per world ───────────────────────────────────────────────────
+     13_Audio.md open question 3: "music per world, or per track? Per world is
+     cheaper and probably sufficient." Per world, and it IS sufficient — the
+     four sandbox tracks want the same sandbox, and a tune each would stop the
+     world being a place.
+
+     The rule the document sets is that **toy percussion is the connective
+     tissue** across worlds: xylophone, shaker and pulse present everywhere,
+     "in different guises". So what varies is key, register, tempo, timbre and
+     mode — never the instrumentation. Three worlds should sound like three
+     rooms in one house, not three different games.
+
+     The town rug is named as the reference point — "warm, bright, a little
+     wistful under the energy" — so its numbers are exactly what shipped before
+     this table existed, and the other two are defined against it. */
+  MUSIC: {
+    'town-rug': {
+      name: 'the bedroom floor',
+      beat: 0.227, root: 392, bass: 110,
+      scale: [0, 3, 5, 7, 10, 12, 15],       // minor-ish: the wistful part
+      lead: 'sine', pulse: 'triangle',       // soft xylophone over a round pulse
+      leadVol: 0.09, bassVol: 0.16, shaker: 0.06, shakerHz: 5000,
+      step: 3,
+    },
+    sandbox: {
+      /* Outdoors, and the middle of the day. Major pentatonic has no minor
+         third to be wistful about, which is the entire difference in one
+         interval. A fifth up and a little quicker; the shaker drops in pitch
+         because sand is not a rattle, it is a brush. */
+      name: 'out in the sandbox',
+      beat: 0.214, root: 587, bass: 147,
+      scale: [0, 2, 4, 7, 9, 12, 14],
+      lead: 'sine', pulse: 'triangle',
+      leadVol: 0.075, bassVol: 0.13, shaker: 0.05, shakerHz: 3200,
+      step: 2,
+    },
+    stunt: {
+      /* Moulded plastic, up on the furniture. A square lead is the one timbre
+         that is unmistakably a toy electronic, and the pulse goes to sawtooth
+         an octave down to push rather than to sit underneath. Quickest of the
+         three, because this is the world with the loops in it. */
+      name: 'the plastic track',
+      beat: 0.198, root: 466, bass: 87,
+      scale: [0, 2, 3, 7, 9, 10, 12],        // dorian-ish: driving, not sad
+      lead: 'square', pulse: 'sawtooth',
+      leadVol: 0.055, bassVol: 0.11, shaker: 0.045, shakerHz: 6500,
+      step: 5,
+    },
+  },
+
+  bedFor(world) { return this.MUSIC[world] || this.MUSIC['town-rug']; },
+
   music(racing, RM) {
     if (!this.musicEnabled || this.musicVolume <= 0) return;
     const ctx = this.ctx;
     if (!racing) { this.musicNext = 0; return; }
 
+    const arena = BR.Game && BR.Game.arena;
+    const world = (arena && arena.world) || 'town-rug';
+    const M = this.bedFor(world);
+
+    /* Starting a race in a different world restarts the phrase. Carrying the
+       step count across a key change drops the new bed halfway through a bar of
+       the old one, which reads as a glitch rather than as a new place. */
+    if (world !== this.musicWorld) {
+      this.musicWorld = world;
+      this.musicStep = 0;
+      this.musicNext = 0;
+    }
+
     const finalLap = RM && RM.player().lap === RM.laps - 1;
-    const beat = finalLap ? 0.208 : 0.227;   // a small lift for the last lap
+    /* The last-lap lift, as a RATIO rather than a fixed pair of numbers. Held
+       absolute, every world would speed up to the same tempo on the last lap
+       and three identities would collapse into one at the moment they matter
+       most. */
+    const beat = M.beat * (finalLap ? 0.916 : 1);
 
     // Resync if we have fallen behind — a backgrounded tab stops calling
     // update() while the audio clock keeps running, and without this the
@@ -503,13 +572,18 @@ BR.Audio = {
       const t = this.musicNext;
       const s = this.musicStep;
 
-      if (s % 4 === 0) this.note(110, t, 0.22, 'triangle', 0.16);          // pulse
-      if (s % 8 === 2 || s % 8 === 6) this.noiseHit(t, 0.05, 0.06);        // shaker
-      if (s % 2 === 0) {
-        const deg = this.SCALE[(s * 3 + (s % 6)) % this.SCALE.length];
-        this.note(392 * Math.pow(2, deg / 12), t, 0.16, 'sine', 0.09);     // xylophone
+      if (s % 4 === 0) this.note(M.bass, t, 0.22, M.pulse, M.bassVol);     // pulse
+      if (s % 8 === 2 || s % 8 === 6) {
+        this.noiseHit(t, 0.05, M.shaker, M.shakerHz);                      // shaker
       }
-      if (finalLap && s % 4 === 2) this.note(196, t, 0.14, 'triangle', 0.07);
+      if (s % 2 === 0) {
+        const deg = M.scale[(s * M.step + (s % 6)) % M.scale.length];
+        this.note(M.root * Math.pow(2, deg / 12), t, 0.16, M.lead, M.leadVol);
+      }
+      // Final-lap layer, a fifth above the pulse rather than a fixed pitch.
+      if (finalLap && s % 4 === 2) {
+        this.note(M.bass * 1.78, t, 0.14, M.pulse, M.bassVol * 0.44);
+      }
 
       this.musicStep = (s + 1) % 64;
       this.musicNext += beat;
@@ -528,10 +602,13 @@ BR.Audio = {
     o.start(at); o.stop(at + dur + 0.02);
   },
 
-  noiseHit(at, dur, vol) {
+  // `hz` is the highpass corner: high is a rattle, low is a brush. Defaulted so
+  // any existing caller keeps the sound it had.
+  noiseHit(at, dur, vol, hz) {
     const ctx = this.ctx;
     const src = ctx.createBufferSource(); src.buffer = this.noiseBuf;
-    const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 5000;
+    const f = ctx.createBiquadFilter(); f.type = 'highpass';
+    f.frequency.value = hz || 5000;
     const g = ctx.createGain();
     g.gain.setValueAtTime(vol, at);
     g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
