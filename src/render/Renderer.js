@@ -615,21 +615,117 @@ BR.Renderer = {
     ctx.fillStyle = arena.groundColour;
     ctx.fill();
 
-    // Weave, or wind ripples in sand. Also the clearest read on how far the
-    // plane is tilted.
-    const step = 180;
-    ctx.strokeStyle = arena.weaveColour;
-    ctx.lineWidth = 1.5 / BR.Renderer.zoom;
-    ctx.beginPath();
-    for (let x = b.minX; x <= b.maxX; x += step) {
-      const p0 = Pj.project(x, b.minY, 0), p1 = Pj.project(x, b.maxY, 0);
-      ctx.moveTo(p0.sx, p0.sy); ctx.lineTo(p1.sx, p1.sy);
+    /* ── TEXTURE ───────────────────────────────────────────────────────────
+       This was a regular grid of full-length lines at 180-unit spacing, which
+       is the single most programmer-art thing on screen: a bedroom rug is
+       woven, and sand is rippled, and neither is graph paper.
+
+       Drawn as a repeating TILE rather than as geometry. Thousands of little
+       tufts would be thousands of path operations a frame; a pattern is ONE
+       fill, because the ground plane maps to the screen through an affine
+       transform and a pattern can be handed that transform directly.
+
+       The mapping, from Projection.project with z = 0:
+
+         sx = cos·x − sin·y + …
+         sy = tilt·sin·x + tilt·cos·y + …
+
+       so the matrix is (cos, tilt·sin, −sin, tilt·cos, …) — the camera's yaw,
+       squashed vertically by groundTilt. The texture therefore rotates and lies
+       down with the floor exactly as painted-on carpet would. */
+    const tile = this.groundTile(arena);
+    if (tile) {
+      const pat = ctx.createPattern(tile, 'repeat');
+      if (pat && pat.setTransform) {
+        const cs = Pj._cos, sn = Pj._sin, t = Pj.groundTilt;
+        const ox = -Pj.camX, oy = -Pj.camY;
+        pat.setTransform(new DOMMatrix([
+          cs, t * sn,
+          -sn, t * cs,
+          cs * ox - sn * oy,
+          t * (sn * ox + cs * oy) + (Pj.camZ || 0) * Pj.heightScale,
+        ]));
+        ctx.fillStyle = pat;
+        ctx.beginPath();
+        ctx.moveTo(c[0].sx, c[0].sy);
+        for (let i = 1; i < 4; i++) ctx.lineTo(c[i].sx, c[i].sy);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
-    for (let y = b.minY; y <= b.maxY; y += step) {
-      const p0 = Pj.project(b.minX, y, 0), p1 = Pj.project(b.maxX, y, 0);
-      ctx.moveTo(p0.sx, p0.sy); ctx.lineTo(p1.sx, p1.sy);
+  },
+
+  /* One tile per world, built once and cached. 128 world units square, which
+     at racing speed is small enough to read as texture rather than as a
+     repeating motif. */
+  groundTile(arena) {
+    const key = arena.id;
+    this._tiles = this._tiles || {};
+    if (this._tiles[key] !== undefined) return this._tiles[key];
+
+    const S = 128;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    const weave = arena.weaveColour || 'rgba(0,0,0,0.055)';
+
+    /* Deterministic pseudo-randomness. A tile built from Math.random would
+       differ between the two renders of a pixel-diff check and, worse, consume
+       the shared random stream the AI draws from. */
+    let seed = 1337;
+    const rnd = function () {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+
+    if (arena.sandy) {
+      /* Sand: broken ripples running one way, like wind over a sandpit. Long
+         and shallow, never closed, so it reads as drift rather than as rows. */
+      g.strokeStyle = weave;
+      g.lineWidth = 2.2;
+      g.lineCap = 'round';
+      for (let i = 0; i < 14; i++) {
+        const y = rnd() * S;
+        const x0 = rnd() * S, len = 22 + rnd() * 46;
+        g.beginPath();
+        g.moveTo(x0, y);
+        g.quadraticCurveTo(x0 + len / 2, y + (rnd() - 0.5) * 7, x0 + len, y);
+        g.stroke();
+      }
+    } else {
+      /* Rug: tufts in offset rows, the way a loop pile actually sits. Short
+         dashes rather than continuous lines is the whole difference between
+         woven cloth and graph paper. */
+      g.strokeStyle = weave;
+      g.lineWidth = 2.6;
+      g.lineCap = 'round';
+      const pitch = 16;
+      for (let row = 0; row * pitch < S; row++) {
+        const y = row * pitch + 4;
+        const off = (row % 2) * (pitch / 2);
+        for (let col = -1; col * pitch < S + pitch; col++) {
+          const x = col * pitch + off + 2;
+          const jitter = (rnd() - 0.5) * 2.4;
+          g.beginPath();
+          g.moveTo(x, y + jitter);
+          g.lineTo(x + pitch * 0.44, y + jitter + (rnd() - 0.5) * 2);
+          g.stroke();
+        }
+      }
+      // A second, fainter pass across the weft, so the weave has two threads
+      // rather than one set of stripes.
+      g.strokeStyle = 'rgba(255,255,255,0.035)';
+      g.lineWidth = 1.6;
+      for (let col = 0; col * 22 < S; col++) {
+        const x = col * 22 + 9;
+        g.beginPath();
+        g.moveTo(x, 0); g.lineTo(x + 3, S);
+        g.stroke();
+      }
     }
-    ctx.stroke();
+
+    this._tiles[key] = cv;
+    return cv;
   },
 
   /* Printed road: a filled ring between the kerbs, with a dashed centre line.
@@ -1422,19 +1518,70 @@ BR.Renderer = {
 
        Rotation is about the car's MID-HEIGHT, not its floor — pivoting on the
        floor edge would make it heave up and down through the ride instead of
-       turning on the spot. */
-    const base = world.map(function (p) {
-      return PT(p[0] - U.x * H / 2, p[1] - U.y * H / 2, z + H / 2 - U.z * H / 2);
-    });
-    const top = world.map(function (p) {
-      return PT(p[0] + U.x * H / 2, p[1] + U.y * H / 2, z + H / 2 + U.z * H / 2);
-    });
+       turning on the spot.
 
-    // ── sides, nearer edges last so they overdraw correctly ────────────────
-    const edges = [];
+       `lp` takes a point in the car's own frame — x forward, y left, h up from
+       the deck — all the way to the screen. Everything below is authored in
+       those coordinates, so the shapes can be read as a side elevation and the
+       flat-rotate-then-project rule is obeyed in one place instead of five. */
+    const lp = function (fx, fy, h) {
+      const wx = x + fx * c - fy * s;
+      const wy = y + fx * s + fy * c;
+      const dh = h - H / 2;
+      return PT(wx + U.x * dh, wy + U.y * dh, z + H / 2 + U.z * dh);
+    };
+
+    const S = this.shapeFor(spec);
+
+    /* ── WHEELS ────────────────────────────────────────────────────────────
+       The single strongest "this is a toy car and not a box" cue there is, and
+       there were none: the car was four side quads, a flat top and a triangle
+       for a nose.
+
+       Drawn BEFORE the body so the body overlaps their inner halves, which is
+       what makes them read as sitting under the arches rather than stuck on the
+       sides. They stand proud of the body by `S.track` and the body floats at
+       `S.ride`, so there is a visible gap of daylight under the car — that gap
+       is most of the toy look. */
+    const wr = S.wheelR;
+    ctx.fillStyle = S.tyre;
     for (let i = 0; i < 4; i++) {
-      const j = (i + 1) % 4;
-      edges.push({ i: i, j: j, key: (world[i][1] + world[j][1]) / 2 });
+      const fx = (i < 2 ? L * 0.56 : -L * 0.58);
+      const side = (i % 2 ? 1 : -1);
+      /* Drawn as a FOOTPRINT, not a side-on slab. The camera sits at
+         groundTilt 0.30 — almost overhead — so what you actually see of a car
+         is its top, and a wheel drawn as a vertical disc facing sideways is
+         edge-on and invisible. These are little rounded rectangles lying on the
+         ground, poking out past the body, which is what a wheel looks like from
+         above and is the strongest silhouette cue the car has. */
+      const wy0 = side * (W * 0.74), wy1 = side * (W + S.track);
+      const quad = [
+        lp(fx - wr, wy0, S.ride * 0.5), lp(fx + wr, wy0, S.ride * 0.5),
+        lp(fx + wr * 0.9, wy1, S.ride * 0.5), lp(fx - wr * 0.9, wy1, S.ride * 0.5),
+      ];
+      ctx.beginPath();
+      ctx.moveTo(quad[0].sx, quad[0].sy);
+      for (let k = 1; k < 4; k++) ctx.lineTo(quad[k].sx, quad[k].sy);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    /* ── BODY ──────────────────────────────────────────────────────────────
+       A chamfered footprint rather than a rectangle. Eight points instead of
+       four is cheap and it kills the hard corners that made the old shape read
+       as a brick — moulded plastic has no sharp edges anywhere. */
+    const foot = S.foot(L, W);
+    const n = foot.length;
+    const bot = foot.map(function (p) { return lp(p[0], p[1], S.ride); });
+    const top = foot.map(function (p) { return lp(p[0], p[1], S.ride + S.bodyH); });
+
+    // Sides, far edges first so nearer ones overdraw them.
+    const edges = [];
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const a = [x + foot[i][0] * c - foot[i][1] * s, y + foot[i][0] * s + foot[i][1] * c];
+      const b = [x + foot[j][0] * c - foot[j][1] * s, y + foot[j][0] * s + foot[j][1] * c];
+      edges.push({ i: i, j: j, key: (a[1] + b[1]) / 2 });
     }
     edges.sort(function (a, b) { return a.key - b.key; });
 
@@ -1442,36 +1589,179 @@ BR.Renderer = {
     for (let e = 0; e < edges.length; e++) {
       const i = edges[e].i, j = edges[e].j;
       ctx.beginPath();
-      ctx.moveTo(base[i].sx, base[i].sy);
-      ctx.lineTo(base[j].sx, base[j].sy);
-      ctx.lineTo(top[j].sx,  top[j].sy);
-      ctx.lineTo(top[i].sx,  top[i].sy);
+      ctx.moveTo(bot[i].sx, bot[i].sy);
+      ctx.lineTo(bot[j].sx, bot[j].sy);
+      ctx.lineTo(top[j].sx, top[j].sy);
+      ctx.lineTo(top[i].sx, top[i].sy);
       ctx.closePath();
       ctx.fill();
     }
 
-    // ── top face ───────────────────────────────────────────────────────────
+    /* Bonnet — the top of the lower body, and the face the camera mostly sees.
+       OUTLINED. A dark line round the silhouette is what separates one car from
+       the car it is overlapping, and it is most of why moulded plastic reads as
+       moulded plastic rather than as a coloured region. */
     ctx.beginPath();
-    for (let i = 0; i < 4; i++) {
-      if (i === 0) ctx.moveTo(top[i].sx, top[i].sy);
-      else ctx.lineTo(top[i].sx, top[i].sy);
+    for (let i = 0; i < n; i++) {
+      if (i === 0) ctx.moveTo(top[i].sx, top[i].sy); else ctx.lineTo(top[i].sx, top[i].sy);
     }
     ctx.closePath();
     ctx.fillStyle = spec.colorTop;
     ctx.fill();
+    ctx.strokeStyle = S.line;
+    ctx.lineWidth = Math.max(0.6, 1.6 * shrinkK / this.zoom);
+    ctx.stroke();
 
-    // ── nose wedge, so heading is never ambiguous ──────────────────────────
-    const nose = [[L, -W * 0.55], [L, W * 0.55], [L * 0.34, 0]].map(function (p) {
-      return PT(x + p[0] * c - p[1] * s, y + p[0] * s + p[1] * c, z + H);
+    /* ── CABIN ─────────────────────────────────────────────────────────────
+       Set back from the nose, narrower than the body. This is what gives the
+       silhouette a bonnet and a roof instead of one slab, and it is the second
+       half of reading as a car rather than a wedge. */
+    const cf = S.cabinF * L, cb = -S.cabinB * L, cw = W * S.cabinW;
+    const cabFoot = [[cf, -cw], [cf, cw], [cb, cw], [cb, -cw]];
+    const cz0 = S.ride + S.bodyH;
+    const cz1 = cz0 + S.cabinH;
+    const cbot = cabFoot.map(function (p) { return lp(p[0], p[1], cz0); });
+    const ctop = cabFoot.map(function (p) { return lp(p[0], p[1], cz1); });
+
+    const cEdges = [];
+    for (let i = 0; i < 4; i++) {
+      const j = (i + 1) % 4;
+      const a = [x + cabFoot[i][0] * c - cabFoot[i][1] * s,
+                 y + cabFoot[i][0] * s + cabFoot[i][1] * c];
+      const b = [x + cabFoot[j][0] * c - cabFoot[j][1] * s,
+                 y + cabFoot[j][0] * s + cabFoot[j][1] * c];
+      cEdges.push({ i: i, j: j, key: (a[1] + b[1]) / 2, front: i === 0 });
+    }
+    cEdges.sort(function (a, b) { return a.key - b.key; });
+    for (let e = 0; e < cEdges.length; e++) {
+      const i = cEdges[e].i, j = cEdges[e].j;
+      ctx.beginPath();
+      ctx.moveTo(cbot[i].sx, cbot[i].sy);
+      ctx.lineTo(cbot[j].sx, cbot[j].sy);
+      ctx.lineTo(ctop[j].sx, ctop[j].sy);
+      ctx.lineTo(ctop[i].sx, ctop[i].sy);
+      ctx.closePath();
+      // The forward face is glass. Dark and cool against the body colour, so
+      // the car has a front without needing the old nose triangle.
+      ctx.fillStyle = cEdges[e].front ? S.glass : spec.colorBody;
+      ctx.fill();
+    }
+
+    /* Roof. A DIFFERENT colour from the bonnet, which is the whole reason the
+       cabin reads as a cabin — drawn in `colorTop` like the bonnet, the two
+       merged into one lighter slab and the car went back to being a block. */
+    const quad = function (pts, fill, stroke) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].sx, pts[0].sy);
+      for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].sx, pts[k].sy);
+      ctx.closePath();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
+    };
+    quad(ctop, S.roof, S.line);
+
+    /* ── WINDSCREEN AND REAR WINDOW ────────────────────────────────────────
+       On the TOP face, not on the cabin's vertical front. At groundTilt 0.30
+       the camera is nearly overhead, so a vertical pane is edge-on and
+       contributes about two pixels — the first version put the glass there and
+       it may as well not have existed. Seen from above, a toy car is a bonnet,
+       a windscreen, a roof and a back window, and those four bands in the right
+       order are what says "car" at twenty-eight pixels long. */
+    quad([lp(cf + L * 0.20, -cw * 0.94, cz1 - 0.2), lp(cf + L * 0.20, cw * 0.94, cz1 - 0.2),
+          lp(cf, cw * 0.98, cz1), lp(cf, -cw * 0.98, cz1)], S.glass, null);
+    quad([lp(cb, -cw * 0.94, cz1), lp(cb, cw * 0.94, cz1),
+          lp(cb - L * 0.13, cw * 0.86, cz1 - 0.2), lp(cb - L * 0.13, -cw * 0.86, cz1 - 0.2)],
+         S.glassBack, null);
+
+    // Gloss: one pale streak along the roof. Painted plastic has a highlight
+    // and matte cardboard does not.
+    quad([lp(cf * 0.86, -cw * 0.56, cz1 + 0.02), lp(cb * 0.86, -cw * 0.56, cz1 + 0.02),
+          lp(cb * 0.86, -cw * 0.14, cz1 + 0.02), lp(cf * 0.86, -cw * 0.14, cz1 + 0.02)],
+         'rgba(255,255,255,0.18)', null);
+
+    /* Headlights. Two dots, and they do more than they should — they give the
+       car a FACE, which is the difference between a toy and a wedge. */
+    const hz = S.ride + S.bodyH + 0.02;
+    ctx.fillStyle = S.lamp;
+    [-1, 1].forEach(function (side) {
+      quad([lp(L * 0.95, side * W * 0.34, hz), lp(L * 0.95, side * W * 0.60, hz),
+            lp(L * 0.84, side * W * 0.62, hz), lp(L * 0.84, side * W * 0.36, hz)],
+           S.lamp, null);
     });
-    ctx.beginPath();
-    ctx.moveTo(nose[0].sx, nose[0].sy);
-    ctx.lineTo(nose[1].sx, nose[1].sy);
-    ctx.lineTo(nose[2].sx, nose[2].sy);
-    ctx.closePath();
-    ctx.fillStyle = spec.colorTrim;
-    ctx.fill();
+    // And a bumper, in the trim colour, so the nose is not bare.
+    quad([lp(L * 0.99, -W * 0.66, S.ride + S.bodyH * 0.42),
+          lp(L * 0.99, W * 0.66, S.ride + S.bodyH * 0.42),
+          lp(L * 0.99, W * 0.66, S.ride + S.bodyH * 0.06),
+          lp(L * 0.99, -W * 0.66, S.ride + S.bodyH * 0.06)], spec.colorTrim, null);
 
     if (v.isGhost) ctx.restore();
+  },
+
+  /* Proportions, derived from the stats a vehicle already has so every car in
+     the roster gained a shape without a data migration — and so a car added
+     later gets one for free.
+
+     The derivations are characterisation, not arithmetic for its own sake:
+     a heavy vehicle sits taller on bigger wheels, a nimble one is squat with
+     its cabin further back. 09_Vehicles.md: "material is characterisation". */
+  shapeFor(spec) {
+    if (spec._shape) return spec._shape;
+    const heavy = BR.M.clamp((spec.weight - 0.6) / 0.9, 0, 1);
+    const H = spec.height;
+    const s = {
+      wheelR: Math.max(3.2, spec.length * (0.15 + 0.02 * heavy)),
+      track:  spec.width * 0.17,          // how far the wheels stand proud
+      ride:   H * (0.20 + 0.10 * heavy),
+      bodyH:  H * 0.46,
+      cabinH: H * (0.34 + 0.08 * heavy),
+      /* A CABIN, not a lid. At 0.30/0.86 it ran almost the whole length of the
+         car and there was no bonnet left — the silhouette went back to being a
+         slab with a stripe on it. Pulled in at both ends there is a bonnet in
+         front and a boot behind, which is the profile that says "car" before
+         any of the detail is legible. */
+      cabinF: 0.14,                       // cabin front, as a fraction of L
+      cabinB: 0.58,                       // cabin back
+      cabinW: 0.78,
+      tyre:  '#231e1b',
+      /* The roof is the body colour DARKENED, not the bonnet's lighter tint.
+         Two tints of one colour keep the car obviously one moulded object while
+         still separating bonnet from cabin — a third hue would read as a
+         sticker. */
+      roof:  this.shade(spec.colorBody, -0.18),
+      line:  this.shade(spec.colorBody, -0.62),
+      glass: 'rgba(126,178,206,0.92)',
+      glassBack: 'rgba(126,178,206,0.62)',
+      lamp:  'rgba(255,244,214,0.95)',
+      foot: this.chamferedFootprint,
+    };
+    spec._shape = s;
+    return s;
+  },
+
+  /* Lighten or darken a #rrggbb by a fraction. Kept here rather than authored
+     per vehicle so a car added later gets a matching roof and outline for
+     free — and so the two can never drift apart in the data. */
+  shade(hex, amt) {
+    const h = (hex || '#888888').replace('#', '');
+    const n = parseInt(h.length === 3
+      ? h[0] + h[0] + h[1] + h[1] + h[2] + h[2] : h, 16);
+    const f = function (v) {
+      const t = amt < 0 ? 0 : 255;
+      return Math.round((t - v) * Math.abs(amt) + v);
+    };
+    const r = f((n >> 16) & 255), g = f((n >> 8) & 255), b = f(n & 255);
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  },
+
+  /* Eight points: a rectangle with its corners cut. Cheap, and it removes the
+     hard right-angles that made the old shape read as a brick. */
+  chamferedFootprint(L, W) {
+    const cx = L * 0.26, cy = W * 0.34;
+    return [
+      [L, -W + cy], [L, W - cy],
+      [L - cx, W], [-L + cx * 0.8, W],
+      [-L, W - cy], [-L, -W + cy],
+      [-L + cx * 0.8, -W], [L - cx, -W],
+    ];
   },
 };

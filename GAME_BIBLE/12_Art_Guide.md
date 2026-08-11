@@ -411,3 +411,68 @@ do not trace it.
 `03_Driving_Physics.md` — the projection this guide serves.
 `05_Tracks.md` — readability rules the occlusion figures feed into.
 `11_UI.md` — interface art.
+
+## Toys, not geometric shapes (Phase 9)
+
+Direct feedback: *"I want it to look like toys, not geometric shapes."* Fair —
+a car was literally a box. Four side quads, a flat top and a triangle for a
+nose, and the floor was a flat colour with a **grid** ruled across it.
+
+### What the projection dictates
+
+`groundTilt` is 0.30, so the camera is nearly overhead. **The top face is what
+you actually see**, and that decides where detail is worth putting. The first
+attempt built a proper cabin with glass on its vertical front face — correct as
+geometry, and worth about two pixels on screen, because a vertical pane is
+edge-on from up here.
+
+Seen from above a toy car is four bands: bonnet, windscreen, roof, rear window.
+Those four in the right order say "car" at twenty-eight pixels long, which is
+what a car actually occupies at racing zoom.
+
+So the car is now: a chamfered eight-point footprint rather than a rectangle,
+wheels drawn as **footprints on the ground** poking out past the body rather
+than as side-on discs, a cabin pulled in at both ends so there is a bonnet and
+a boot, windscreen and rear window on the top face, a gloss streak, headlights,
+a bumper, and a **dark outline** round the silhouette.
+
+The outline earns its place twice over: it separates a car from the car it is
+overlapping, and it is most of why the shape reads as moulded plastic instead
+of a coloured region.
+
+**The proportions are derived from stats the vehicle already has**, so all nine
+cars gained a shape without a data migration and a car added later gets one for
+free. A heavy vehicle sits taller on bigger wheels. The roof is the body colour
+darkened and the outline darker still — two tints of one colour keep it
+obviously one moulded object, where a third hue would read as a sticker.
+
+### The floor was graph paper
+
+A regular grid of full-length lines at 180-unit spacing. A bedroom rug is woven
+and a sandpit is rippled; neither is graph paper.
+
+Now a repeating **tile**, not geometry. Thousands of tufts would be thousands of
+path operations a frame — a pattern is one fill, because the ground plane maps
+to the screen through an affine transform and a pattern can be handed that
+transform directly:
+
+    sx = cos·x − sin·y + …
+    sy = tilt·sin·x + tilt·cos·y + …
+
+giving the matrix `(cos, tilt·sin, −sin, tilt·cos, …)`. The texture therefore
+rotates with the camera and lies down with the floor exactly as printed carpet
+would, instead of sliding about on top of it.
+
+Rug tiles are tufts in offset rows with a fainter cross-thread; sand is broken
+ripples running one way. The tile is built with a **seeded** generator, not
+`Math.random` — a tile that differed between two renders would break every
+pixel-diff check in the project, and consuming the shared random stream would
+desync the AI.
+
+Measured cost of the whole pass: **+80 operations a frame** on Rug Loop, 2,332
+to 2,414.
+
+### Still geometric
+
+Props are extruded cylinders and blocks, and the road is a flat fill. Both are
+the obvious next targets.
