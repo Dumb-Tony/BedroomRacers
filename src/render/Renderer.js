@@ -633,26 +633,121 @@ BR.Renderer = {
        so the matrix is (cos, tilt·sin, −sin, tilt·cos, …) — the camera's yaw,
        squashed vertically by groundTilt. The texture therefore rotates and lies
        down with the floor exactly as painted-on carpet would. */
-    const tile = this.groundTile(arena);
-    if (tile) {
-      const pat = ctx.createPattern(tile, 'repeat');
-      if (pat && pat.setTransform) {
-        const cs = Pj._cos, sn = Pj._sin, t = Pj.groundTilt;
-        const ox = -Pj.camX, oy = -Pj.camY;
-        pat.setTransform(new DOMMatrix([
-          cs, t * sn,
-          -sn, t * cs,
-          cs * ox - sn * oy,
-          t * (sn * ox + cs * oy) + (Pj.camZ || 0) * Pj.heightScale,
-        ]));
-        ctx.fillStyle = pat;
-        ctx.beginPath();
-        ctx.moveTo(c[0].sx, c[0].sy);
-        for (let i = 1; i < 4; i++) ctx.lineTo(c[i].sx, c[i].sy);
-        ctx.closePath();
-        ctx.fill();
+    const pat = this.groundPattern(ctx, this.groundTile(arena));
+    if (pat) {
+      ctx.fillStyle = pat;
+      ctx.beginPath();
+      ctx.moveTo(c[0].sx, c[0].sy);
+      for (let i = 1; i < 4; i++) ctx.lineTo(c[i].sx, c[i].sy);
+      ctx.closePath();
+      ctx.fill();
+    }
+  },
+
+  /**
+   * A tile turned into a pattern that lies down on the ground plane.
+   *
+   * Shared by the floor and the road, which is the point: both are printed on
+   * the same flat plane, and a road whose texture slid about relative to the
+   * rug it is printed on would give the whole trick away.
+   */
+  groundPattern(ctx, tile) {
+    if (!tile) return null;
+    const pat = ctx.createPattern(tile, 'repeat');
+    if (!pat || !pat.setTransform) return null;
+    const Pj = BR.Projection;
+    const cs = Pj._cos, sn = Pj._sin, t = Pj.groundTilt;
+    const ox = -Pj.camX, oy = -Pj.camY;
+    pat.setTransform(new DOMMatrix([
+      cs, t * sn,
+      -sn, t * cs,
+      cs * ox - sn * oy,
+      t * (sn * ox + cs * oy) + (Pj.camZ || 0) * Pj.heightScale,
+    ]));
+    return pat;
+  },
+
+  /**
+   * The road surface.
+   *
+   * It was one flat fill — the last obviously geometric surface in the game.
+   * What it should be depends on what the track is made of, and the worlds
+   * disagree:
+   *
+   *   rug     the road is PRINTED ON THE FABRIC, so the weave shows through it.
+   *           This is the one that matters: a smooth road on a woven floor
+   *           reads as two separate materials, and the whole conceit is that
+   *           the track is part of the rug.
+   *   sand    packed grain, finer than the loose sand beside it.
+   *   plastic moulded, so it gets seam lines and a sheen rather than a grain.
+   */
+  roadTile(arena) {
+    const key = 'road:' + arena.id;
+    this._tiles = this._tiles || {};
+    if (this._tiles[key] !== undefined) return this._tiles[key];
+
+    const S = 128;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+
+    // Seeded, for the same reasons as the floor tile: reproducible renders,
+    // and never touching the random stream the AI draws from.
+    let seed = 7717;
+    const rnd = function () {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+
+    if (arena.world === 'stunt') {
+      // Moulded plastic: long seams along the track and a soft sheen.
+      g.strokeStyle = 'rgba(255,255,255,0.05)';
+      g.lineWidth = 3;
+      for (let i = 0; i < 3; i++) {
+        const x = 18 + i * 44;
+        g.beginPath(); g.moveTo(x, 0); g.lineTo(x, S); g.stroke();
+      }
+      g.strokeStyle = 'rgba(0,0,0,0.07)';
+      g.lineWidth = 1.4;
+      for (let i = 0; i < 3; i++) {
+        const x = 21 + i * 44;
+        g.beginPath(); g.moveTo(x, 0); g.lineTo(x, S); g.stroke();
+      }
+    } else if (arena.sandy) {
+      // Packed grain: dense flecks, finer than the ripples off the road.
+      for (let i = 0; i < 240; i++) {
+        g.fillStyle = rnd() > 0.5 ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.05)';
+        g.fillRect(rnd() * S, rnd() * S, 1.6, 1.6);
+      }
+    } else {
+      /* Rug: the SAME tuft geometry as the floor, so the print sits on the
+         weave rather than beside it. Lighter, because a printed road hides
+         some of the pile without flattening it. */
+      g.strokeStyle = 'rgba(255,255,255,0.055)';
+      g.lineWidth = 2.4;
+      g.lineCap = 'round';
+      const pitch = 16;
+      for (let row = 0; row * pitch < S; row++) {
+        const y = row * pitch + 4;
+        const off = (row % 2) * (pitch / 2);
+        for (let col = -1; col * pitch < S + pitch; col++) {
+          const x = col * pitch + off + 2;
+          const j = (rnd() - 0.5) * 2.4;
+          g.beginPath();
+          g.moveTo(x, y + j);
+          g.lineTo(x + pitch * 0.44, y + j + (rnd() - 0.5) * 2);
+          g.stroke();
+        }
+      }
+      // A little print speckle, so it reads as ink on cloth rather than paint.
+      for (let i = 0; i < 90; i++) {
+        g.fillStyle = 'rgba(0,0,0,0.055)';
+        g.fillRect(rnd() * S, rnd() * S, 2, 2);
       }
     }
+
+    this._tiles[key] = cv;
+    return cv;
   },
 
   /* One tile per world, built once and cached. 128 world units square, which
@@ -949,11 +1044,18 @@ BR.Renderer = {
       trace(arena.inner);
       ctx.fillStyle = arena.roadColour;
       ctx.fill('evenodd');
+      /* Surface texture, over the base colour and through the SAME path —
+         `fill` does not clear the path, so a second fill costs one more fill
+         and no more geometry. See `roadTile`. */
+      const rp = this.groundPattern(ctx, this.roadTile(arena));
+      if (rp) { ctx.fillStyle = rp; ctx.fill('evenodd'); }
     } else {
       ctx.beginPath();
       for (let i = 0; i < runs.length; i++) traceRun(runs[i]);
       ctx.fillStyle = arena.roadColour;
       ctx.fill();
+      const rp = this.groundPattern(ctx, this.roadTile(arena));
+      if (rp) { ctx.fillStyle = rp; ctx.fill(); }
     }
 
     // Compacted sand, drawn over the loose surface. Only touched cells are

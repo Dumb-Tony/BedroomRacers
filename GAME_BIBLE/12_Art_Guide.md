@@ -506,3 +506,29 @@ Two things that had to be got wrong first to be seen:
 
 They share one extrusion helper that takes a local footprint and two heights, so
 a new prop is a footprint and a lid rather than a new renderer.
+
+### The road: printed on the rug, not laid on it (Phase 9)
+
+The last obviously geometric surface. One flat fill, on a floor that had just
+gained a weave — which read as two separate materials sitting next to each
+other, when the whole conceit is that **the track is part of the rug**.
+
+The road now takes the same tile treatment as the floor, and the two share one
+`groundPattern` helper. That sharing is the point rather than tidiness: both are
+printed on the same flat plane, and a road whose texture slid relative to the
+rug underneath it would give the trick away immediately.
+
+It costs **one extra fill and no extra geometry** — `fill` does not clear the
+path, so the texture goes down through the same path the base colour just used.
+
+What the surface is depends on what the track is made of, and the worlds
+disagree:
+
+| World | Surface | Why |
+| --- | --- | --- |
+| Town rug | the floor's own tuft geometry, lighter | printed on fabric: ink hides some pile without flattening it |
+| Sandbox | dense fine grain | packed sand, finer than the loose ripples beside it |
+| Stunt | seam lines and a sheen | moulded plastic has no grain — it has mould lines |
+
+Measured across the whole art pass — cars, floor, props and road together —
+Rug Loop went from **2,332 to 2,374** operations a frame. Forty-two.
