@@ -22,6 +22,15 @@ CHROME="${CHROME:-/c/Program Files/Google/Chrome/Application/chrome.exe}"
 OUT="${TMPDIR:-/tmp}/br-smoke"
 mkdir -p "$OUT"
 
+# A FRESH PROFILE PER RUN, removed on exit.
+# Chrome refuses to start on a user-data-dir another instance still holds, and
+# it does so by exiting immediately with no output — which this script reported
+# as "the page did not finish", indistinguishable from the game hanging. That
+# cost a real debugging detour: a rendering change was blamed for a lock left
+# behind by an unrelated browser window. A unique directory cannot collide.
+PROFILE="$OUT/profile-$$"
+trap 'rm -rf "$PROFILE" 2>/dev/null' EXIT
+
 [ -x "$CHROME" ] || { echo "chrome not found at: $CHROME" >&2
                       echo "set CHROME=/path/to/chrome" >&2; exit 2; }
 
@@ -38,7 +47,7 @@ mkdir -p "$OUT"
 "$CHROME" --headless=new --disable-gpu \
   --autoplay-policy=no-user-gesture-required \
   --window-size=1280,900 --virtual-time-budget=900000 \
-  --user-data-dir="$OUT/profile" \
+  --user-data-dir="$PROFILE" \
   --dump-dom "file://$(cygpath -m "$OUT/smoke.html" 2>/dev/null || echo "$OUT/smoke.html")" \
   2>/dev/null > "$OUT/dom.html"
 

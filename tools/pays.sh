@@ -27,6 +27,12 @@ CHROME="${CHROME:-/c/Program Files/Google/Chrome/Application/chrome.exe}"
 OUT="${TMPDIR:-/tmp}/br-pays"
 mkdir -p "$OUT"
 
+# A fresh profile per run — see the note in smoke.sh. Chrome exits instantly and
+# silently if another instance holds the profile, which reads exactly like the
+# page hanging.
+PROFILE="$OUT/profile-$$"
+trap 'rm -rf "$PROFILE" 2>/dev/null' EXIT
+
 [ -x "$CHROME" ] || { echo "chrome not found at: $CHROME" >&2
                       echo "set CHROME=/path/to/chrome" >&2; exit 2; }
 
@@ -44,7 +50,7 @@ mkdir -p "$OUT"
 "$CHROME" --headless=new --disable-gpu \
   --autoplay-policy=no-user-gesture-required \
   --window-size=1280,900 --virtual-time-budget=3600000 \
-  --user-data-dir="$OUT/profile" \
+  --user-data-dir="$PROFILE" \
   --dump-dom "file://$(cygpath -m "$OUT/pays.html" 2>/dev/null || echo "$OUT/pays.html")" \
   2>/dev/null > "$OUT/dom.html"
 

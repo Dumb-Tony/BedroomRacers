@@ -532,3 +532,28 @@ disagree:
 
 Measured across the whole art pass — cars, floor, props and road together —
 Rug Loop went from **2,332 to 2,374** operations a frame. Forty-two.
+
+### Kerbs are made of something (Phase 9)
+
+One pale line, in every world. The track edge is the thing a driver reads most
+often, so it is worth the character — and what a track edge is *made of* differs
+by world:
+
+| World | Edge | Why |
+| --- | --- | --- |
+| Town rug | stitched hem | the road is printed on fabric, so its border is sewn |
+| Sandbox | timber with plank joints | it is the frame of the sandpit |
+| Stunt | alternating light/slate blocks | moulded plastic edging |
+
+`05_Tracks.md` is firm that road edges must be unmistakable and must never rely
+on texture alone, so **every world keeps the solid continuous line underneath**.
+The character is drawn on top of readability, never instead of it. The stunt
+blocks are light-and-slate rather than the obvious orange-and-blue, because the
+legal note in `07_World_Stunt_Track.md` binds the palette here too.
+
+**Not drawn with `setLineDash`.** Dashing is the obvious way to draw stitching
+and it is a trap: a track outline is around ten thousand world units long, so a
+six-unit dash asks the rasteriser to subdivide it into a few thousand pieces,
+twice, every frame. The marks are generated at a stride over the edge points
+instead — about sixty per edge rather than sixteen hundred, at a spacing chosen
+to look right rather than one that falls out of a dash length.

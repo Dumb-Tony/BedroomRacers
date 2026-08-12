@@ -1063,21 +1063,104 @@ BR.Renderer = {
     // bounded by the line people actually take.
     if (arena.sandy && BR.SandGrid.active) this.drawCompaction(ctx);
 
-    /* Kerbs, drawn light so the road reads as the brightest path. Culled the
-       same way as the fill — these are two more full traces of the track
-       outline, so together with it the whole ring was being walked THREE times
-       a frame regardless of what the camera could see. */
-    ctx.lineWidth = 3 / BR.Renderer.zoom;
-    ctx.strokeStyle = 'rgba(236,230,218,0.55)';
-    if (whole) {
-      ctx.beginPath(); trace(arena.outer); ctx.stroke();
-      ctx.beginPath(); trace(arena.inner); ctx.stroke();
-    } else {
+    /* ── KERBS ─────────────────────────────────────────────────────────────
+       Culled the same way as the fill — these are two more full traces of the
+       track outline, so together with it the whole ring was being walked THREE
+       times a frame regardless of what the camera could see.
+
+       They were one pale line. What a track edge is MADE OF differs by world,
+       and the edge is the thing a driver reads most often, so it is worth the
+       character:
+
+         rug     stitched. The road is printed on fabric, so its border is
+                 hemmed — a solid line with machine stitching over it.
+         sandbox the wooden frame of the sandpit, with plank joints.
+         stunt   moulded plastic edging, alternating light and dark.
+
+       05_Tracks.md is firm that road edges must be unmistakable and must never
+       rely on texture alone, so EVERY world keeps a solid continuous line
+       underneath. The character is drawn on top of readability, never instead
+       of it. */
+    const kerbPath = function () {
       ctx.beginPath();
-      for (let i = 0; i < runs.length; i++) {
-        traceEdge(arena.outer, runs[i]);
-        traceEdge(arena.inner, runs[i]);
+      if (whole) {
+        trace(arena.outer);
+        // A second sub-path — one beginPath holds both, so the two edges are
+        // one stroke rather than two.
+        trace(arena.inner);
+      } else {
+        for (let i = 0; i < runs.length; i++) {
+          traceEdge(arena.outer, runs[i]);
+          traceEdge(arena.inner, runs[i]);
+        }
       }
+    };
+    const Z = BR.Renderer.zoom;
+
+    // The readable base, in every world.
+    ctx.lineWidth = 3 / Z;
+    ctx.strokeStyle = 'rgba(236,230,218,0.55)';
+    kerbPath();
+    ctx.stroke();
+
+    /* The decoration is built as SEGMENTS, not with setLineDash.
+       Dashing is the obvious way to draw stitching and it hung the game. A
+       track outline is around ten thousand world units long, so a six-unit dash
+       asks the rasteriser to subdivide it into a few thousand pieces — twice,
+       for two edges, every frame, on a software rasteriser. The smoke test
+       stopped finishing at all.
+
+       Generating the marks at a stride over the edge points instead puts the
+       count under this code's control: about sixty per edge rather than
+       sixteen hundred, at a spacing chosen to look right rather than one that
+       falls out of a dash length. */
+    const marks = function (pts, stride, frac, phase) {
+      const n = pts.length;
+      const step = function (r) {
+        const from = r ? r[0] : 0;
+        const count = r ? ((r[1] - r[0] + n) % n + 1) : n;
+        for (let k = phase; k < count; k += stride) {
+          const a = pts[(from + k) % n];
+          const b = pts[(from + k + 1) % n];
+          const p0 = Pj.project(a[0], a[1], a[2] || 0);
+          const p1 = Pj.project(a[0] + (b[0] - a[0]) * frac,
+                                a[1] + (b[1] - a[1]) * frac,
+                                (a[2] || 0) + ((b[2] || 0) - (a[2] || 0)) * frac);
+          ctx.moveTo(p0.sx, p0.sy);
+          ctx.lineTo(p1.sx, p1.sy);
+        }
+      };
+      if (whole) step(null);
+      else for (let i = 0; i < runs.length; i++) step(runs[i]);
+    };
+
+    if (arena.world === 'stunt') {
+      /* Alternating blocks. Deliberately light-and-slate rather than the
+         obvious orange-and-blue — the legal note in 07_World_Stunt_Track.md
+         binds the palette here as much as anywhere. */
+      ctx.lineWidth = 5 / Z;
+      ctx.strokeStyle = 'rgba(244,240,232,0.85)';
+      ctx.beginPath();
+      marks(arena.outer, 2, 0.98, 0); marks(arena.inner, 2, 0.98, 0);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(64,74,86,0.85)';
+      ctx.beginPath();
+      marks(arena.outer, 2, 0.98, 1); marks(arena.inner, 2, 0.98, 1);
+      ctx.stroke();
+    } else if (arena.sandy) {
+      // Plank joints: a short break every few points, so the edge reads as
+      // timber laid end to end rather than as one moulded strip.
+      ctx.lineWidth = 5 / Z;
+      ctx.strokeStyle = 'rgba(150,110,68,0.75)';
+      ctx.beginPath();
+      marks(arena.outer, 1, 0.88, 0); marks(arena.inner, 1, 0.88, 0);
+      ctx.stroke();
+    } else {
+      // Stitching: a fine thread along the hem, broken like machine stitch.
+      ctx.lineWidth = 1.6 / Z;
+      ctx.strokeStyle = 'rgba(255,252,244,0.70)';
+      ctx.beginPath();
+      marks(arena.outer, 1, 0.55, 0); marks(arena.inner, 1, 0.55, 0);
       ctx.stroke();
     }
 

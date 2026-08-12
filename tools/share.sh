@@ -82,7 +82,7 @@ setTimeout(function () {
 </script>
 EOF
   dom="$("$CHROME" --headless=new --disable-gpu --window-size=1280,900 \
-        --virtual-time-budget=20000 --user-data-dir="$probe/profile" \
+        --virtual-time-budget=20000 --user-data-dir="$probe/profile-$$" \
         --dump-dom "file://$(cygpath -m "$probe/index.html" 2>/dev/null || echo "$probe/index.html")" \
         2>/dev/null | grep -o '<title>[^<]*</title>' | head -1)"
   # Bash pattern substitution is globbing, not regex — strip the tags with sed.
