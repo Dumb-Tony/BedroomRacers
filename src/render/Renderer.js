@@ -498,7 +498,7 @@ BR.Renderer = {
 
     for (let i = 0; i < drawables.length; i++) {
       const d = drawables[i];
-      if (d.wall)        this.drawWall(ctx, d.wall, arena.wallHeight);
+      if (d.wall)        this.drawWall(ctx, d.wall, arena.wallHeight, arena);
       else if (d.rail)   this.drawRailSegment(ctx, d.rail, d.seg);
       else if (d.prop)   this.drawProp(ctx, d.prop);
       else if (d.hazard) this.drawHazard(ctx, d.hazard);
@@ -1634,7 +1634,35 @@ BR.Renderer = {
     }
   },
 
-  drawWall(ctx, w, fallbackH) {
+  /* What the barrier round a track is MADE OF, per world. It was one grey
+     brown for every segment on every track, which drew as a single unbroken
+     ribbon — the most obviously "geometric" thing left once the surfaces were
+     done. A bedroom track is walled in by things that were already in the
+     room, and they are not identical to each other.
+
+       town rug   books and blocks laid end to end
+       sandbox    timber planks, warm and varied
+       stunt      moulded plastic barrier sections
+
+     Jumpable barriers keep their warning colour in every world. That is
+     readability, not decoration: it is how a player tells at a glance what to
+     fly over rather than avoid, and no amount of character is worth losing
+     it. */
+  WALL_PALETTES: {
+    'town-rug': [
+      ['#7d4a4a', '#a97070'], ['#43607d', '#6d8bab'], ['#4f6b47', '#7a996f'],
+      ['#8a7250', '#b39a74'], ['#6a4f74', '#94769c'], ['#7a6a56', '#a3927b'],
+    ],
+    sandbox: [
+      ['#8a6238', '#b98d59'], ['#7d5730', '#ad7f4e'], ['#946c40', '#c39763'],
+      ['#6f4d2c', '#9c7146'],
+    ],
+    stunt: [
+      ['#d8d3c8', '#f2eee4'], ['#49525f', '#6d7787'],
+    ],
+  },
+
+  drawWall(ctx, w, fallbackH, arena) {
     const Pj = BR.Projection;
     const H = w.h === undefined ? fallbackH : w.h;
 
@@ -1642,12 +1670,28 @@ BR.Renderer = {
     // a glance what they are meant to fly over rather than avoid.
     const jumpable = isFinite(w.clearAt);
 
+    /* A stable per-segment identity, hashed from the wall's own position. Not
+       random: it has to be the same every frame, and it must not touch the
+       shared random stream the AI draws from. */
+    const world = (arena && arena.world) || 'town-rug';
+    const pal = this.WALL_PALETTES[world] || this.WALL_PALETTES['town-rug'];
+    const hash = Math.abs(Math.round(w.ax * 0.37 + w.ay * 0.71));
+    const tone = pal[hash % pal.length];
+
+    /* Drawn height varies a little, so the top edge is a row of separate
+       objects rather than one ruled line. DRAWN ONLY — `H` still governs what
+       a car has to clear, and a barrier that looked lower than it collides
+       would be a lie the player pays for. Jumpable ones do not vary at all,
+       for exactly that reason. */
+    const vary = jumpable ? 1 : 0.90 + (hash % 7) * 0.033;
+    const Hd = H * vary;
+
     // Barriers stand on their own deck, not on the bedroom floor.
     const wz = w.z || 0;
     const a0 = Pj.project(w.ax, w.ay, wz);
     const b0 = Pj.project(w.bx, w.by, wz);
-    let a1 = Pj.project(w.ax, w.ay, wz + H);
-    let b1 = Pj.project(w.bx, w.by, wz + H);
+    let a1 = Pj.project(w.ax, w.ay, wz + Hd);
+    let b1 = Pj.project(w.bx, w.by, wz + Hd);
 
     // Height shrinks with depth, computed PER ENDPOINT. Scaling the segment as
     // a whole would step the top edge between neighbouring segments; per
@@ -1663,14 +1707,25 @@ BR.Renderer = {
     ctx.lineTo(b1.sx, b1.sy);
     ctx.lineTo(a1.sx, a1.sy);
     ctx.closePath();
-    ctx.fillStyle = jumpable ? '#9c5f2a' : '#6b5f52';
+    ctx.fillStyle = jumpable ? '#9c5f2a' : tone[0];
     ctx.fill();
 
+    // The lit top edge, in the segment's own lighter tone.
     ctx.beginPath();
     ctx.moveTo(a1.sx, a1.sy);
     ctx.lineTo(b1.sx, b1.sy);
-    ctx.strokeStyle = jumpable ? '#e0b46a' : '#a4907c';
+    ctx.strokeStyle = jumpable ? '#e0b46a' : tone[1];
     ctx.lineWidth = 2.5 / BR.Renderer.zoom;
+    ctx.stroke();
+
+    /* The join to the next one. Without it, neighbouring segments in the same
+       tone merge back into the ribbon this is trying to break up — the seam is
+       what says "these are separate objects standing in a row". */
+    ctx.beginPath();
+    ctx.moveTo(a0.sx, a0.sy);
+    ctx.lineTo(a1.sx, a1.sy);
+    ctx.strokeStyle = 'rgba(0,0,0,0.30)';
+    ctx.lineWidth = 1.2 / BR.Renderer.zoom;
     ctx.stroke();
   },
 

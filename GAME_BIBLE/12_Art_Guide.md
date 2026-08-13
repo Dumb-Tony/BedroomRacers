@@ -557,3 +557,31 @@ six-unit dash asks the rasteriser to subdivide it into a few thousand pieces,
 twice, every frame. The marks are generated at a stride over the edge points
 instead — about sixty per edge rather than sixteen hundred, at a spacing chosen
 to look right rather than one that falls out of a dash length.
+
+### Walls are things that were already in the room (Phase 9)
+
+One grey-brown for every segment on every track, which drew as a single
+unbroken ribbon — the last obviously geometric thing once the surfaces were
+done. A bedroom track is walled in by whatever was to hand, and those things are
+not identical to each other:
+
+| World | Barrier |
+| --- | --- |
+| Town rug | books and blocks laid end to end |
+| Sandbox | timber planks, warm and varied |
+| Stunt | moulded plastic barrier sections |
+
+Each segment takes a colour from its world's palette by a **hash of its own
+position** — stable every frame, and never touching the shared random stream
+the AI draws from. The drawn height varies slightly with the same hash, so the
+top edge is a row of separate objects rather than one ruled line, and a dark
+seam at each join stops neighbours in the same tone merging back into a ribbon.
+
+Two things deliberately do **not** vary:
+
+- **Jumpable barriers keep their warning colour** in every world. That is how a
+  player tells at a glance what to fly over rather than avoid, and no amount of
+  character is worth losing it.
+- **Only the DRAWN height varies.** `H` still governs what a car has to clear.
+  A barrier that looked lower than it collides would be a lie the player pays
+  for, so jumpable segments do not vary at all.
