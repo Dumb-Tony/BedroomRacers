@@ -585,3 +585,26 @@ Two things deliberately do **not** vary:
 - **Only the DRAWN height varies.** `H` still governs what a car has to clear.
   A barrier that looked lower than it collides would be a lie the player pays
   for, so jumpable segments do not vary at all.
+
+### Toy pieces are toys (Phase 9)
+
+A four-pointed gold star — the generic video-game collectible, in the one place
+in this game literally called a **toy piece**. Finding every one is the only
+route to the Heirloom (`09_Vehicles.md`), so they are meant to be a collection,
+and five identical stars on a track is not a collection.
+
+Four objects now — a building brick with studs, a jigsaw piece with a tab and a
+blank, a five-pip die, a glass marble — chosen by a **hash of the piece's id**,
+so a given piece is always the same thing and always the same between renders.
+
+Two decisions carry it:
+
+- **The signal stays constant.** A gold ring on the ground under every piece.
+  The object varies; "there is something to collect here" must not, or variety
+  costs readability.
+- **They stand up and face the camera.** Drawn flat on the ground plane,
+  `groundTilt` 0.30 squashes a piece to a third of its height and a brick
+  becomes a sliver — the first version did exactly that and the studs and pips
+  were illegible. Upright billboards are the only way the detail survives. The
+  spin is faked by squeezing horizontally, like a card turning on the spot:
+  cheaper than rotating geometry and it reads as the same thing.

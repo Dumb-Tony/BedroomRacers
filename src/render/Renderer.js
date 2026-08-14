@@ -1309,6 +1309,10 @@ BR.Renderer = {
      invisible at speed. */
   bobPhase: 0,
 
+  /* The four things a toy piece can be. Named rather than indexed so a fifth
+     is a word in this list and a branch below, not a magic number. */
+  PIECE_KINDS: ['brick', 'jigsaw', 'die', 'marble'],
+
   drawCollectibles(ctx, arena, dt) {
     const list = arena.collectibles;
     if (!list || !list.length) return;
@@ -1332,23 +1336,96 @@ BR.Renderer = {
         (0.3 * Pj.shadowAlphaAt(g.depth)).toFixed(3) + ')';
       ctx.fill();
 
-      // A four-pointed star, drawn on the plane and turned so it catches
-      // the eye from any approach.
+      /* ── THE SIGNAL, kept constant ─────────────────────────────────────
+         A gold ring on the ground under every piece. The piece itself is now
+         a different object each time, and without a constant cue that variety
+         would cost readability — "there is something to collect here" has to
+         look the same whatever the thing turns out to be. */
       ctx.beginPath();
-      for (let k = 0; k < 8; k++) {
-        const a = spin + (k * Math.PI) / 4;
-        const r = k % 2 === 0 ? 21 : 8;
-        const p = Pj.shrink(
-          Pj.project(c.x + Math.cos(a) * r, c.y + Math.sin(a) * r,
-                     (c.z || 0) + bob), g, k2);
-        if (k === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
-      }
-      ctx.closePath();
-      ctx.fillStyle = '#ffd34d';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(120,80,10,0.65)';
-      ctx.lineWidth = 2 / BR.Renderer.zoom;
+      ctx.ellipse(g.sx, g.sy, 17 * k2, 17 * k2 * Pj.groundTilt, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,211,77,0.55)';
+      ctx.lineWidth = 2.4 / BR.Renderer.zoom;
       ctx.stroke();
+
+      /* ── THE PIECE ─────────────────────────────────────────────────────
+         It was a four-pointed gold star: the generic video-game collectible,
+         in the one place in this game literally called a TOY PIECE. Finding
+         every one is the only route to the Heirloom (09_Vehicles.md), so they
+         are meant to be bits of a real toy collection — and five identical
+         stars on a track is not a collection.
+
+         Four objects, chosen by a hash of the piece's id so a given piece is
+         always the same thing, and always the same thing between renders. */
+      const P4 = this.PIECE_KINDS;
+      let hsh = 0;
+      for (let s = 0; s < (c.id || '').length; s++) hsh = (hsh * 31 + c.id.charCodeAt(s)) | 0;
+      const kind = P4[Math.abs(hsh + i) % P4.length];
+
+      /* UPRIGHT AND FACING THE CAMERA — not laid on the ground plane.
+         Drawn flat on the plane, `groundTilt` 0.30 squashes a piece to a third
+         of its height and a brick becomes a sliver. A collectible has to read
+         instantly, so it stands up and faces the viewer, which is also the only
+         way the pips on a die or the studs on a brick are legible at all.
+
+         The spin is faked by squeezing horizontally, like a card turning on the
+         spot: cheaper than rotating the geometry, and it reads as the same
+         thing. */
+      const centre = Pj.shrink(Pj.project(c.x, c.y, (c.z || 0) + bob), g, k2);
+      const squeeze = 0.28 + 0.72 * Math.abs(Math.cos(spin));
+      const pp = function (fx, fy) {
+        return { sx: centre.sx + fx * squeeze * k2, sy: centre.sy + fy * k2 };
+      };
+      const shape = function (pts, fill, line) {
+        ctx.beginPath();
+        for (let k = 0; k < pts.length; k++) {
+          const p = pp(pts[k][0], pts[k][1]);
+          if (k === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+        }
+        ctx.closePath();
+        ctx.fillStyle = fill; ctx.fill();
+        if (line) {
+          ctx.strokeStyle = line;
+          ctx.lineWidth = 1.8 / BR.Renderer.zoom;
+          ctx.stroke();
+        }
+      };
+      const dot = function (fx, fy, r, fill) {
+        const p = pp(fx, fy);
+        ctx.beginPath();
+        ctx.ellipse(p.sx, p.sy, r * k2, r * k2, 0, 0, Math.PI * 2);
+        ctx.fillStyle = fill; ctx.fill();
+      };
+      const dark = 'rgba(60,40,10,0.70)';
+
+      if (kind === 'brick') {
+        // A building brick, studs up. The studs are the whole read.
+        shape([[-15, -10], [15, -10], [15, 10], [-15, 10]], '#e05545', dark);
+        [[-7.5, -5], [7.5, -5], [-7.5, 5], [7.5, 5]].forEach(function (s) {
+          dot(s[0], s[1], 3.6, '#f5806f');
+        });
+      } else if (kind === 'jigsaw') {
+        // A jigsaw piece: a square with a tab out one side and a blank in the
+        // other. That asymmetric silhouette is recognisable at any size.
+        shape([[-13, -13], [4, -13], [4, -19], [12, -13], [13, -13],
+               [13, 13], [4, 13], [4, 7], [-4, 13], [-13, 13]],
+              '#5aa8d8', dark);
+        dot(-4, -3, 2.6, 'rgba(255,255,255,0.5)');
+      } else if (kind === 'die') {
+        // A die, five up.
+        shape([[-12, -12], [12, -12], [12, 12], [-12, 12]], '#f2efe6', dark);
+        [[-6, -6], [6, -6], [0, 0], [-6, 6], [6, 6]].forEach(function (s) {
+          dot(s[0], s[1], 2.4, '#2a2622');
+        });
+      } else {
+        // A marble: a glass bead with a twist of colour and a highlight.
+        const p = pp(0, 0);
+        ctx.beginPath();
+        ctx.ellipse(p.sx, p.sy, 13 * k2, 13 * k2, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#7ec8a9'; ctx.fill();
+        ctx.strokeStyle = dark; ctx.lineWidth = 1.8 / BR.Renderer.zoom; ctx.stroke();
+        shape([[-8, -2], [0, -7], [8, -2], [0, 4]], 'rgba(255,255,255,0.55)', null);
+        dot(-5, -5, 2.4, 'rgba(255,255,255,0.85)');
+      }
     }
   },
 
