@@ -16,6 +16,17 @@
   happened. Keeping the file to plain ASCII removes the dependency on how it was
   saved.
 
+  YOU HAVE TO START IT YOURSELF, and that is not a shortcoming of the
+  script. An agent session cannot hold this open: the sandbox reaps the
+  whole process tree when the shell call that started it returns, and
+  Start-Process detaching does not survive it either. Verified by
+  netstat - after the call ends there is no LISTENING socket, only
+  TIME_WAIT leftovers from requests that did work.
+
+  So a request inside one shell call succeeds and the identical request
+  in the next call fails. That is the teardown, not your machine, and
+  not a port clash.
+
     powershell -ExecutionPolicy Bypass -File tools/serve.ps1
     powershell -ExecutionPolicy Bypass -File tools/serve.ps1 -Port 8090
 #>
