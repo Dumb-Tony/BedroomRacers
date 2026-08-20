@@ -608,3 +608,24 @@ Two decisions carry it:
   were illegible. Upright billboards are the only way the detail survives. The
   spin is faked by squeezing horizontally, like a card turning on the spot:
   cheaper than rotating geometry and it reads as the same thing.
+
+### Boost pads say which way (Phase 9)
+
+A flat translucent rectangle with an outline: a UI element lying on a rug, and
+the last thing on the track that still looked drawn by a programmer rather than
+printed by a toy company.
+
+A speed strip on a play mat is **chevrons**, and they do a job a rectangle
+cannot — they say *which way*. Three of them, scrolling forward and fading in
+and out at either end, so the strip reads as "go" rather than as a coloured
+patch.
+
+**The plate keeps the authored rectangle exactly.** What you see is still what
+triggers the boost; only the markings inside it are new. A prettier shape that
+disagreed with its own trigger area would be the same class of lie as a barrier
+drawn shorter than it collides.
+
+A pad is authored as an axis-aligned rectangle with **no heading**, so the
+direction comes from the racing line underneath it and is cached on the pad —
+the line does not move. The scroll costs nothing extra: it rides the phase
+already being advanced for the bobbing toy pieces.

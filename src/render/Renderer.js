@@ -1282,24 +1282,95 @@ BR.Renderer = {
   },
 
   /* Boost pads: chevrons pointing the way you are meant to be going. */
+  /* The direction of travel across a boost pad, cached on the pad itself.
+     A pad is authored as an axis-aligned rectangle with no heading, so there
+     is nothing in the data that says which way "forward" is — it comes from
+     the racing line underneath. Computed once: the line does not move. */
+  padDir(arena, p) {
+    if (p._dir) return p._dir;
+    const line = arena.centreline;
+    const cx = p.x + p.w / 2, cy = p.y + p.h / 2;
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < line.length; i++) {
+      const d = (line[i][0] - cx) * (line[i][0] - cx) +
+                (line[i][1] - cy) * (line[i][1] - cy);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    const a = line[best], b = line[(best + 1) % line.length];
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    const m = Math.hypot(dx, dy) || 1;
+    p._dir = [dx / m, dy / m];
+    return p._dir;
+  },
+
+  /* Boost pads.
+     They were flat translucent rectangles with an outline: a UI element lying
+     on a rug, and the last thing on the track that still looked drawn by a
+     programmer rather than printed by a toy company.
+
+     A speed strip on a play mat is CHEVRONS, and they do a job a rectangle
+     cannot — they say which way. The plate keeps the authored footprint
+     exactly, so what you see is still what triggers; only the markings inside
+     it are new. */
   drawBoostPads(ctx, arena) {
     const Pj = BR.Projection;
     for (let i = 0; i < arena.boostPads.length; i++) {
       const p = arena.boostPads[i];
+      const z = p.z || 0;
+
+      // The plate: the authored rectangle, unchanged.
       ctx.beginPath();
       const pts = [
         [p.x, p.y], [p.x + p.w, p.y], [p.x + p.w, p.y + p.h], [p.x, p.y + p.h],
       ];
       for (let k = 0; k < 4; k++) {
-        const q = Pj.project(pts[k][0], pts[k][1], p.z || 0);
+        const q = Pj.project(pts[k][0], pts[k][1], z);
         if (k === 0) ctx.moveTo(q.sx, q.sy); else ctx.lineTo(q.sx, q.sy);
       }
       ctx.closePath();
-      ctx.fillStyle = 'rgba(79,216,168,0.42)';
+      ctx.fillStyle = 'rgba(79,216,168,0.30)';
       ctx.fill();
       ctx.strokeStyle = '#4fd8a8';
       ctx.lineWidth = 2.5 / BR.Renderer.zoom;
       ctx.stroke();
+
+      /* Chevrons along the direction of travel, scrolling forward. The scroll
+         is what makes a printed strip read as "go" rather than as a coloured
+         patch — and it is free, because the phase is already being advanced
+         for the bobbing toy pieces. */
+      const d = this.padDir(arena, p);
+      const nx = -d[1], ny = d[0];
+      const cx = p.x + p.w / 2, cy = p.y + p.h / 2;
+      // Fit the arrows inside the plate whichever way it is oriented.
+      const half = Math.min(p.w, p.h) * 0.34;
+      const reach = Math.min(p.w, p.h) * 0.42;
+
+      ctx.strokeStyle = 'rgba(236,255,246,0.85)';
+      ctx.lineWidth = 4 / BR.Renderer.zoom;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      const N = 3;
+      for (let c = 0; c < N; c++) {
+        // Each chevron slides forward and wraps, so the strip flows.
+        const t = ((this.bobPhase * 0.42 + c / N) % 1) - 0.5;
+        const along = t * reach * 2.2;
+        // Fade at both ends, so they appear and vanish rather than popping.
+        ctx.globalAlpha = 1 - Math.abs(t) * 1.8;
+        if (ctx.globalAlpha <= 0.02) continue;
+        const tipX = cx + d[0] * (along + half * 0.7);
+        const tipY = cy + d[1] * (along + half * 0.7);
+        const backX = cx + d[0] * (along - half * 0.35);
+        const backY = cy + d[1] * (along - half * 0.35);
+        const l = Pj.project(backX + nx * half, backY + ny * half, z);
+        const m = Pj.project(tipX, tipY, z);
+        const r = Pj.project(backX - nx * half, backY - ny * half, z);
+        ctx.beginPath();
+        ctx.moveTo(l.sx, l.sy);
+        ctx.lineTo(m.sx, m.sy);
+        ctx.lineTo(r.sx, r.sy);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
     }
   },
 
