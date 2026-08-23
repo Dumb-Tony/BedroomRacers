@@ -45,12 +45,15 @@ prototyping early, even if it ends up used sparingly or only on specific vehicle
 
 Sound follows material (`09_Vehicles.md`):
 
-| Material | Character |
-| --- | --- |
-| Die-cast metal | Heavier, ringing impacts, low rattle |
-| Glossy plastic | Light, hollow, clattering |
-| Wood | Dull knock, no ring |
-| Wind-up | Mechanical ratchet under the engine |
+| Material | Character | Built |
+| --- | --- | --- |
+| Die-cast metal | Heavier, ringing impacts, low rattle | Green Pickup, Orange Tipper |
+| Glossy plastic | Light, hollow, clattering | Red Racer, Blue Buggy, Yellow Rocket, Teal Scout, Cream Camper |
+| Wood | Dull knock, no ring | Heirloom |
+| Wind-up | Mechanical ratchet under the engine | Purple Micro |
+
+All four are implemented in Phase 10 — `BR.Audio.MATERIALS`, driven by a
+`material` field on each vehicle. See *Nine cars, four materials*.
 
 ## Gameplay-critical sounds
 
@@ -121,6 +124,7 @@ recorded texture, which is mood.
 | Collision | Noise burst through a sweeping bandpass. Severity picks pitch and length, so a graze ticks and a square hit clunks |
 | Landing | Bright tick plus chime when clean, dull thud when not |
 | Checkpoint / lap / countdown | Short tones, with a second note on the final lap |
+| Material | Per vehicle. Changes the oscillator pair, detune, cutoff, filter Q, tyre rattle and what happens *after* an impact — see below |
 | Opponents | **One proximity layer per listener**, never a voice each |
 | Music | Sparse procedural toy percussion over a pulse, scheduled against the audio clock. Lifts slightly on the final lap |
 
@@ -159,9 +163,12 @@ second. One-shots are not leaking voices.
 
 ### Still missing
 
-Environmental sound, per-vehicle material character, and the announcer. Music is
-procedural rather than composed — it works, but a real soundtrack is a different
-job.
+Environmental sound and the announcer. Music is procedural rather than composed
+— it works, but a real soundtrack is a different job.
+
+**Per-vehicle material character was on this list until Phase 10.** It is built:
+every car declares what it is made of and the whole channel changes with it. See
+*Nine cars, four materials* below for what varies and what deliberately does not.
 
 ## Technical
 
@@ -297,3 +304,131 @@ scheduler decides**: which pitches, which timbres, at what tempo, in what order.
 The harness replaces `note` and `noiseHit` with recorders and stubs the audio
 clock with one it advances itself. That isolates the scheduler exactly and
 sidesteps the frozen clock rather than fighting it.
+
+## Nine cars, four materials (Phase 10)
+
+`09_Vehicles.md`: *"Each should bring a MATERIAL as much as a stat spread — the
+wooden car should feel and sound wooden. Material is characterisation."* Until
+this phase every car in the game made **exactly the same noise**. The Heirloom
+is described in the design as a battered wooden car and sounded like a moulded
+plastic one, which is the specific failure this section closes.
+
+Each vehicle declares `material` — one of `plastic`, `metal`, `wood`, `windup` —
+and `BR.Audio.MATERIALS` turns that into a voice. It is **not a stat**: nothing
+here touches speed, grip or weight, and a lap time cannot tell the difference.
+
+Roster: **5 plastic, 2 die-cast, 1 wood, 1 wind-up.**
+
+### Glossy plastic is the reference
+
+Its numbers are exactly what shipped before the table existed, for the same
+reason the town rug's music is: most of the roster is a plastic toy car, so the
+common case must not change and the other three are defined against it. A car
+that declares no material at all resolves to plastic — measured identical to a
+declared plastic car, oscillators, cutoff and Q — because an undeclared toy car
+is a plastic toy car, never a silent one.
+
+### What varies
+
+Measured off the live channel at full speed, from a probe car identical in every
+way except its material:
+
+| | oscillators | detune beat | engine pitch | cutoff idle→flat | filter Q | tyre rattle | after the hit |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Glossy plastic | saw + **square** | 3.26 Hz | 272.0 | 600→2100 | 3.0 | 1100 Hz / Q1.2 | 2 clatter ticks |
+| Die-cast metal | saw + saw | 1.47 Hz | 244.8 | 520→1670 | 4.5 | **660 Hz** / Q2.6 | **rings, 2100+3171 Hz** |
+| Wood | **triangle** + saw | 5.37 Hz | 255.7 | **420→1320** | **1.4** | 858 Hz / Q0.7 | **nothing** |
+| Wind-up | **square + square** | 8.81 Hz | 293.8 | 700→2400 | 2.2 | 1298 Hz / Q1.9 | 1 tick + ratchet |
+
+Each column is doing one job, and the reasoning is one line long — which is the
+point of doing this in synthesis parameters rather than in samples:
+
+- **The square oscillator is what makes plastic sound empty.** Metal drops it
+  for a second sawtooth, because a die-cast car is not hollow.
+- **Detune is age.** The beat rate spans 1.47 Hz to 8.81 Hz — a 6x spread. Metal
+  is nearly in tune with itself; the wind-up tin toy is not remotely, and a
+  battered wooden car sits between them.
+- **Cutoff is dullness.** Wood is the darkest thing in the game at 420→1320 Hz
+  and has the lowest Q anywhere, 1.4 in the engine and 0.8 in its impacts —
+  everything that could resonate has been taken away.
+- **"Low rattle" is literal.** Metal's tyre note sits at 660 Hz against plastic's
+  1100. Both ends of the rug/road split scale together, so the *size* of the
+  surface change is identical in every car.
+
+### The tail is what makes wood sound like wood
+
+Severity 0.8, time from the contact to the last thing still sounding:
+
+| | impact tail | voices created |
+| --- | --- | --- |
+| Wood | **0.140 s** | 1 oscillator, 1 noise burst — and then silence |
+| Wind-up | 0.205 s | + one tick at +45 ms, the mechanism jolting |
+| Glossy plastic | 0.238 s | + clatter at +45 ms and +85 ms |
+| Die-cast metal | **0.434 s** | + two sustained partials |
+
+**Metal rings 3.1x longer than wood.** That single ratio is most of the
+character: what makes wood *sound* like wood is not its pitch, it is how fast it
+stops.
+
+The ring is two partials at **1:1.51**. An integer ratio reads as a musical note;
+this one reads as struck metal, which is the difference between a chime and a
+die-cast car hitting a skirting board. Wood has neither branch — *"dull knock, no
+ring"* is a statement about what is **absent**, so the wooden car's impact is
+over when the knock is.
+
+### The ratchet is a graph, not a schedule
+
+Wind-up gets a fifth voice: narrow-banded noise **gated by a square LFO**, so the
+click rate is a parameter. It runs **9 Hz at idle → 39 Hz flat out**, which is a
+spring unwinding faster.
+
+The obvious implementation is to fire a tick per frame at the right interval, and
+that is precisely the bug the counters exist to prevent — it would run on the
+render clock, drift with frame rate, and machine-gun the moment the fixed step
+ran twice in one frame. An LFO runs on the audio thread and cannot do any of
+that. The gating trick is that an `AudioParam`'s value is its intrinsic value
+**plus** everything connected to it: hold both at *a* and a ±*a* square swings the
+gain between 0 and 2*a*. Measured, the gate is 0.028 + 0.028 → swinging 0…0.055.
+
+Both halves must be silenced together. Leaving the LFO amplitude up on a silenced
+channel keeps it ticking at half level.
+
+### What material may not touch
+
+Audio's first job is gameplay feedback and its third is mood. Material only ever
+changes the mood layer of a cue, never the part carrying information:
+
+- **Engine pitch still tracks speed.** Material shifts the whole curve by a
+  constant, so "faster is higher" survives in every car.
+- **The rug/road tyre split scales together**, so leaving the road is exactly as
+  audible whatever you are driving.
+- **Drift is untouched** — measured at 1200 Hz in all four. That is tyres against
+  the *floor*: it belongs to the surface, not to the shell.
+- **The clean-landing chime is untouched.** It is the cue that says the landing
+  was clean, and a car whose confirmation was duller than everyone else's would
+  be a car penalised for what it is made of.
+- **Rivals stay generic.** The proximity layer collapses the whole field into one
+  voice, so it has no single material to be.
+
+Character sits on top of readability, never instead of it.
+
+### Verified the same way the music was
+
+Same trap, same answer: parameter automation does not advance under headless
+virtual time, so the sound cannot be measured. The harness replaces the entire
+`AudioContext` with a recording one — every node remembers every write to every
+parameter, and the clock is a number the harness advances itself — then drives
+the real `updateChannel` with a synthetic car. That measures **what the code
+decides**, which is what a material actually is.
+
+**41 checks pass.** Every one of the nine vehicles resolves to a declared
+material; all four materials have at least one car, because a voice with no
+vehicle never fires and a voice that never fires does not exist; all **6 pairs**
+of materials differ, and they differ on *every* axis separately — 4 distinct
+oscillator pairs, 4 pitches, 4 cutoffs, 4 filter Qs, 4 rattle centres, 4 beat
+rates — so the distinctness is not one lucky field carrying three that are really
+the same.
+
+**The negative control is the part worth keeping.** Forcing `materialFor()` to
+return plastic for every car fails **17 of the 41 checks**. Without that run, a
+harness that quietly measured nothing would have looked exactly like this one.

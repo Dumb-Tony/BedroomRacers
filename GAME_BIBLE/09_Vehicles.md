@@ -37,6 +37,7 @@ name of balance.
   handling: 0.85,
   weight: 1.0,
   boostPower: 1.15,
+  material: "plastic",           // NOT a stat — see Material, below
   sprite: "red-racer",
   unlock: { type: "default" }
 }
@@ -104,6 +105,10 @@ remote-control buggy, miniature van, plastic dinosaur car, rocket-powered fantas
 
 Each should bring a **material** as much as a stat spread — the wooden car should feel
 and sound wooden. Material is characterisation. See `12_Art_Guide.md` and `13_Audio.md`.
+
+**The audio half of that is built — see *Material* below.** The roster does not
+need new vehicle *types* to carry material; the cars already here are made of
+things, and saying so was the cheap two thirds of this idea.
 
 Some of these imply mechanics rather than stats:
 - **Wind-up car** — periodic self-boost that must be re-wound
@@ -231,6 +236,55 @@ Field sizes now escalate with the ladder: 3 on the shakedown, 4-5 mid-table, 6-7
 on the Grand Prix, Tide Pool, Shelf Run and both item races. Verified: every
 event fields exactly what it asks for, and the closest pair of grid slots is 87
 units against a ~22-unit car radius.
+
+## Material (Phase 10)
+
+This document has always said material is characterisation and that the wooden
+car should sound wooden. It did not. **Every car in the game made exactly the
+same noise**, including the one whose entire description is that it is older than
+everything else in the room.
+
+Every vehicle now declares `material`, and `13_Audio.md`'s four-row table is what
+reads it:
+
+| | material | why |
+| --- | --- | --- |
+| Red Racer | plastic | the yardstick car is the yardstick material |
+| Blue Buggy | plastic | |
+| Yellow Rocket | plastic | |
+| Teal Scout | plastic | |
+| Cream Camper | plastic | |
+| **Green Pickup** | **die-cast** | the heaviest thing on the roster should sound like it — it already wins every argument |
+| **Orange Tipper** | **die-cast** | a site truck, like every real one |
+| **Heirloom** | **wood** | *"a battered wooden car"*, and the only one in the room |
+| **Purple Micro** | **wind-up** | *"tiny, eager, always first out of a corner"* is a description of a wind-up toy — and it is the highest acceleration and lowest weight here, which is what a wound spring does |
+
+**`material` is not a stat.** It changes nothing a lap time can see: no speed, no
+grip, no weight, no collision outcome. Five plastic, two die-cast, one wood, one
+wind-up — and a car that declares nothing is a plastic toy car, never a silent
+one.
+
+### Purple Micro is wind-up in MATERIAL only
+
+The **wind-up mechanic** — a periodic self-boost that must be re-wound — is
+flagged above as tempting scope creep, and this is not it. Nothing here touches
+physics.
+
+It is here because the fourth row of the audio table needed a car. A voice with
+no vehicle never fires, and this project has already learned that **a feature
+that never fires is a feature that does not exist**. Assigning wind-up to the car
+that already behaves like one costs a data field and gives the row a home.
+
+What that sounds like, and the measured numbers behind it, are in
+`13_Audio.md` → *Nine cars, four materials*: metal rings 3.1x longer than wood,
+metal's tyre rattle sits at 660 Hz against plastic's 1100, and the wind-up's
+ratchet runs 9 Hz at idle to 39 Hz flat out.
+
+### Still open: the visual half
+
+`12_Art_Guide.md` has not been touched. A die-cast car should catch light
+differently from a moulded plastic one and a wooden one should not shine at all,
+and none of that is drawn yet — the field exists and the renderer ignores it.
 
 ## `boostPower` — resolved (Phase 8): a real stat, and a strong one
 

@@ -17,6 +17,13 @@
    have made every car abruptly slower than the version that was signed off, so
    the whole roster was scaled to preserve the felt speed and keep the relative
    spread intact.
+
+   `material` IS NOT A STAT. It changes nothing a lap time can see — no speed,
+   no grip, no weight. It is what the car is MADE OF, and 09_Vehicles.md is
+   firm that material is characterisation: "the wooden car should feel and
+   sound wooden". One of 'plastic' | 'metal' | 'wood' | 'windup'; the table
+   that turns each into a voice is BR.Audio.MATERIALS, and a car that declares
+   none falls back to plastic rather than falling silent.
    ========================================================================== */
 
 window.BR = window.BR || {};
@@ -32,6 +39,9 @@ BR.VEHICLES = {
     handling: 0.85,
     weight: 1.0,
     boostPower: 1.15,
+    // The yardstick car is the yardstick material too — every other voice in
+    // BR.Audio.MATERIALS is defined against this one.
+    material: 'plastic',
     // Placeholder geometry. Replaced by 16-frame sprite sheets once
     // groundTilt is locked (12_Art_Guide.md).
     length: 28, width: 16, height: 11,
@@ -47,6 +57,7 @@ BR.VEHICLES = {
     handling: 1.00,
     weight: 1.0,
     boostPower: 1.05,
+    material: 'plastic',
     length: 26, width: 18, height: 13,
     colorBody: '#2f6fd8', colorTop: '#4f8ef2', colorTrim: '#d7e6ff',
   },
@@ -60,6 +71,7 @@ BR.VEHICLES = {
     handling: 0.62,
     weight: 0.8,
     boostPower: 1.30,
+    material: 'plastic',
     length: 31, width: 14, height: 9,
     colorBody: '#e8b21c', colorTop: '#ffd34d', colorTrim: '#fff3cc',
   },
@@ -73,6 +85,9 @@ BR.VEHICLES = {
     handling: 0.74,
     weight: 1.45,
     boostPower: 1.00,
+    // Die-cast. The heaviest thing on the roster should sound like the
+    // heaviest thing on the roster — it already wins every argument.
+    material: 'metal',
     length: 30, width: 18, height: 14,
     colorBody: '#2f9e52', colorTop: '#4fc072', colorTrim: '#d7f2e0',
   },
@@ -93,6 +108,11 @@ BR.VEHICLES = {
     handling: 1.05,
     weight: 1.20,
     boostPower: 1.25,
+    /* "A battered wooden car" (09_Vehicles.md), and the only one in the room.
+       Wood is the material this whole table exists for: a dull knock and no
+       ring, so the oldest car in the game is identifiable with the screen
+       off. */
+    material: 'wood',
     length: 27, width: 17, height: 13,
     colorBody: '#8a5a32', colorTop: '#b07a48', colorTrim: '#e8cfa8',
   },
@@ -106,6 +126,16 @@ BR.VEHICLES = {
     handling: 0.98,
     weight: 0.75,
     boostPower: 1.10,
+    /* Tin wind-up. "Tiny, eager, always first out of a corner" is a
+       description of a wind-up toy, and it is the highest acceleration and
+       lowest weight on the roster — which is what a wound spring does.
+
+       MATERIAL ONLY. 09_Vehicles.md flags the wind-up MECHANIC (a periodic
+       self-boost that must be re-wound) as scope creep, and this is not it:
+       nothing here touches physics. It gives the fourth row of 13_Audio.md's
+       material table a car, because a voice with no vehicle never fires and a
+       voice that never fires does not exist. */
+    material: 'windup',
     length: 22, width: 13, height: 10,
     colorBody: '#8b4fd8', colorTop: '#a875f2', colorTrim: '#e8d7ff',
   },
@@ -132,6 +162,7 @@ BR.VEHICLES = {
     handling: 0.86,
     weight: 1.42,
     boostPower: 0.92,
+    material: 'metal',          // a die-cast site truck, like every real one
     length: 27, width: 15, height: 13,
     colorBody: '#e07a2f', colorTop: '#f79c52', colorTrim: '#2b2622',
   },
@@ -145,6 +176,7 @@ BR.VEHICLES = {
     handling: 0.97,
     weight: 0.92,
     boostPower: 1.02,
+    material: 'plastic',
     length: 24, width: 13, height: 11,
     colorBody: '#2f9e9e', colorTop: '#4fc4c4', colorTrim: '#e8f7f7',
   },
@@ -158,6 +190,7 @@ BR.VEHICLES = {
     handling: 0.88,
     weight: 1.18,
     boostPower: 0.98,
+    material: 'plastic',
     length: 28, width: 14, height: 15,
     colorBody: '#e8dcc0', colorTop: '#f5ecd8', colorTrim: '#8c6b3f',
   },

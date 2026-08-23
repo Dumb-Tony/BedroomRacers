@@ -108,6 +108,119 @@ BR.Audio = {
     this.musicBus.gain.value = this.musicEnabled ? this.musicVolume : 0;
   },
 
+  /* ── PER-VEHICLE MATERIAL ─────────────────────────────────────────────────
+     09_Vehicles.md: "Each should bring a MATERIAL as much as a stat spread —
+     the wooden car should feel and sound wooden. Material is characterisation."
+     13_Audio.md then names four and what each should do:
+
+       die-cast metal  heavier, ringing impacts, low rattle
+       glossy plastic  light, hollow, clattering
+       wood            dull knock, no ring
+       wind-up         mechanical ratchet under the engine
+
+     GLOSSY PLASTIC IS THE REFERENCE, and its numbers are exactly what shipped
+     before this table existed — most of the roster is a plastic toy car, so
+     the common case must not change. The other three are defined against it,
+     the same way the town rug is the reference for the three music beds.
+
+     WHAT A MATERIAL MAY NOT TOUCH. Audio's first job is gameplay feedback and
+     its third is mood (13_Audio.md ranks them), so material only ever changes
+     the mood layer of a cue and never the part carrying information:
+
+       - Engine pitch still tracks speed; material shifts the whole curve by a
+         constant, so "faster is higher" survives.
+       - The rug/road tyre split is still 420 vs 1100 scaled together, so
+         leaving the road is exactly as audible in every car.
+       - Drift is untouched. That is tyres against the FLOOR — it belongs to
+         the surface, not to the shell.
+       - The clean-landing chime is untouched. It is the cue that says the
+         landing was clean, and a car you cannot hear it on would be a car
+         punished for its material.
+
+     `pitch`, `cut*`, `rattle*` and `hit*` are multipliers on the shipped
+     values; `ring`, `clatter` and `ratchet` are additions that only some
+     materials have at all. */
+  MATERIALS: {
+    /* Light, hollow, clattering — and the fallback for anything undeclared. */
+    plastic: {
+      id: 'plastic', label: 'glossy plastic',
+      o1: 'sawtooth', o2: 'square',     // square is the hollow half
+      detune: 1.012, engQ: 3.0, pitch: 1.00,
+      cutBase: 600, cutSpan: 1500, engGain: 1.00,
+      rattleHz: 1.00, rattleQ: 1.2, rattleGain: 1.00,
+      hitHz: 1.00, hitLen: 1.00, hitQ: 1.4, hitGain: 1.00, hitTone: 'triangle',
+      ringHz: 0, ringDur: 0,
+      clatter: 2,                       // the loose pieces, after the hit
+      ratchet: 0, rateBase: 0, rateSpan: 0, clickHz: 2600, clickQ: 7,
+    },
+    /* Die-cast: heavier, ringing impacts, low rattle. Two saws rather than a
+       saw and a square, because the square is what makes plastic sound empty
+       and a metal car is not. Tighter detune, so it beats slowly instead of
+       warbling; a higher Q for the resonance a metal shell has. */
+    metal: {
+      id: 'metal', label: 'die-cast metal',
+      o1: 'sawtooth', o2: 'sawtooth',
+      detune: 1.006, engQ: 4.5, pitch: 0.90,
+      cutBase: 520, cutSpan: 1150, engGain: 1.10,
+      rattleHz: 0.60, rattleQ: 2.6, rattleGain: 1.15,
+      hitHz: 0.86, hitLen: 1.50, hitQ: 3.2, hitGain: 1.20, hitTone: 'triangle',
+      ringHz: 2100, ringDur: 0.45,      // the whole point of this row
+      clatter: 0,
+      ratchet: 0, rateBase: 0, rateSpan: 0, clickHz: 2600, clickQ: 7,
+    },
+    /* Wood: dull knock, no ring. Everything that could resonate is taken away
+       — lowest cutoff on the roster, Q under 1 in both the body and the hit,
+       no ring partial and no clatter. The knock is also the SHORTEST, because
+       what makes wood sound like wood is how fast it stops. */
+    wood: {
+      id: 'wood', label: 'wood',
+      o1: 'triangle', o2: 'sawtooth',
+      detune: 1.021, engQ: 1.4, pitch: 0.94,
+      cutBase: 420, cutSpan: 900, engGain: 0.92,
+      rattleHz: 0.78, rattleQ: 0.7, rattleGain: 0.85,
+      hitHz: 0.72, hitLen: 0.55, hitQ: 0.8, hitGain: 0.95, hitTone: 'sine',
+      ringHz: 0, ringDur: 0,
+      clatter: 0,
+      ratchet: 0, rateBase: 0, rateSpan: 0, clickHz: 2600, clickQ: 7,
+    },
+    /* Wind-up: a mechanical ratchet under the engine. Tin, so both oscillators
+       are squares and the detune is the widest here — a wind-up toy is not in
+       tune with itself. The ratchet rate tracks speed, which is the sound of a
+       spring unwinding faster. */
+    windup: {
+      id: 'windup', label: 'wind-up tin',
+      o1: 'square', o2: 'square',
+      detune: 1.030, engQ: 2.2, pitch: 1.08,
+      cutBase: 700, cutSpan: 1700, engGain: 0.95,
+      rattleHz: 1.18, rattleQ: 1.9, rattleGain: 1.00,
+      hitHz: 1.06, hitLen: 0.85, hitQ: 2.0, hitGain: 0.90, hitTone: 'square',
+      ringHz: 0, ringDur: 0,
+      clatter: 1,                       // one tick: the mechanism jolting
+      ratchet: 0.055, rateBase: 9, rateSpan: 30, clickHz: 2600, clickQ: 7,
+    },
+  },
+
+  /** A spec's material, or plastic. An undeclared car is a plastic toy car —
+      the roster's common case — never a silent one. */
+  materialFor(spec) {
+    return (spec && this.MATERIALS[spec.material]) || this.MATERIALS.plastic;
+  },
+
+  /* Applied on CHANGE, never per frame. Oscillator type and filter Q can be
+     set on a running node, so swapping cars re-materialises the existing graph
+     rather than rebuilding it — the channels are built up front precisely
+     because reconnecting a running graph clicks, and rebuilding one mid-race
+     would throw that away. */
+  applyMaterial(ch, m) {
+    ch.material = m.id;
+    ch.engine.o1.type = m.o1;
+    ch.engine.o2.type = m.o2;
+    ch.engine.filt.Q.value = m.engQ;
+    ch.rattle.filt.Q.value = m.rattleQ;
+    ch.ratchet.filt.frequency.value = m.clickHz;
+    ch.ratchet.filt.Q.value = m.clickQ;
+  },
+
   /* One player's entire soundstage: their car, their tyres, their rivals. */
   makeChannel() {
     const ctx = this.ctx;
@@ -129,7 +242,11 @@ BR.Audio = {
       rattle:   this.makeNoiseVoice(900, 1.2, out),
       drift:    this.makeNoiseVoice(1600, 4.0, out),
       boostAir: this.makeNoiseVoice(700, 0.9, out),
+      ratchet:  this.makeRatchet(out),
       pack:     this.makeEngine(out),
+      // Which material this channel is currently wearing. Null until the first
+      // frame, so applyMaterial always runs once.
+      material: null,
       prev: null,
     };
   },
@@ -172,11 +289,43 @@ BR.Audio = {
     return { src: src, filt: filt, gain: g };
   },
 
-  /* ── one-shots. `dest` routes to a player's channel; omit for centre. ──── */
+  /* The wind-up ratchet: narrow-banded noise GATED by a square LFO, so the
+     click rate is a parameter rather than a schedule.
 
-  blip(freq, dur, type, vol, sweepTo, dest) {
+     Built as a graph on purpose. The obvious implementation is to fire a tick
+     per frame at the right interval, and that is exactly the shape of bug the
+     counters exist to prevent — it would run on the render clock, drift with
+     frame rate, and machine-gun the moment the fixed step ran twice. An LFO
+     runs on the audio thread and cannot do any of that.
+
+     The gating trick: an AudioParam's value is its intrinsic value PLUS every
+     signal connected to it. Hold both at `a` and a ±a square swings the gain
+     between 0 and 2a — silence for half of each period, which is a ratchet. */
+  makeRatchet(dest) {
+    const ctx = this.ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuf; src.loop = true;
+    const filt = ctx.createBiquadFilter();
+    filt.type = 'bandpass'; filt.frequency.value = 2600; filt.Q.value = 7;
+    const g = ctx.createGain(); g.gain.value = 0;
+    const lfo = ctx.createOscillator();
+    lfo.type = 'square'; lfo.frequency.value = 1;
+    const amp = ctx.createGain(); amp.gain.value = 0;
+    lfo.connect(amp); amp.connect(g.gain);
+    src.connect(filt); filt.connect(g); g.connect(dest);
+    src.start(); lfo.start();
+    return { src: src, filt: filt, gain: g, lfo: lfo, amp: amp };
+  },
+
+  /* ── one-shots. `dest` routes to a player's channel; omit for centre. ────
+     `delay` schedules against the AUDIO clock, not setTimeout — a clatter is
+     several pieces knocking a few tens of milliseconds apart, and setTimeout
+     cannot be trusted at that resolution. Optional, so every existing caller
+     keeps the timing it had. */
+
+  blip(freq, dur, type, vol, sweepTo, dest, delay) {
     if (!this.ready) return;
-    const ctx = this.ctx, t = ctx.currentTime;
+    const ctx = this.ctx, t = ctx.currentTime + (delay || 0);
     const o = ctx.createOscillator();
     o.type = type || 'sine';
     o.frequency.setValueAtTime(freq, t);
@@ -189,9 +338,9 @@ BR.Audio = {
     o.start(t); o.stop(t + dur + 0.02);
   },
 
-  thud(vol, freq, dur, q, dest) {
+  thud(vol, freq, dur, q, dest, delay) {
     if (!this.ready) return;
-    const ctx = this.ctx, t = ctx.currentTime;
+    const ctx = this.ctx, t = ctx.currentTime + (delay || 0);
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuf;
     const filt = ctx.createBiquadFilter();
@@ -207,11 +356,40 @@ BR.Audio = {
   },
 
   /* Collisions are playful, not violent. Severity picks pitch and length, so a
-     graze ticks and a square hit clunks — 02_Mechanics.md. */
-  collide(severity, dest) {
+     graze ticks and a square hit clunks — 02_Mechanics.md. `mat` is what the
+     car is made of; omitted, it is a plastic one. */
+  collide(severity, dest, mat) {
+    const m = mat || this.MATERIALS.plastic;
     const s = Math.max(0, Math.min(1, severity));
-    this.thud(0.10 + 0.35 * s, 420 - 220 * s, 0.09 + 0.16 * s, 1.2, dest);
-    if (s > 0.55) this.blip(180 + 60 * (1 - s), 0.16, 'triangle', 0.13, 90, dest);
+    this.thud((0.10 + 0.35 * s) * m.hitGain, (420 - 220 * s) * m.hitHz,
+              (0.09 + 0.16 * s) * m.hitLen, m.hitQ, dest);
+    if (s > 0.55) {
+      this.blip((180 + 60 * (1 - s)) * m.hitHz, 0.16 * m.hitLen, m.hitTone,
+                0.13 * m.hitGain, 90 * m.hitHz, dest);
+    }
+    this.shell(s, dest, m);
+  },
+
+  /* WHAT THE SHELL DOES AFTER THE HIT — the part that is actually the
+     material. The thud above is the contact and every car has one; this is the
+     object still moving afterwards, and it is where metal, plastic and wood
+     stop being the same event at different pitches.
+
+     Wood has neither branch. "Dull knock, no ring" is a statement about what
+     is ABSENT, so the wooden car's impact is over when the knock is. */
+  shell(s, dest, m) {
+    if (m.ringHz) {
+      /* Two partials at 1:1.51. An integer ratio reads as a musical note; an
+         irrational-ish one reads as struck metal, which is the difference
+         between a chime and a die-cast car hitting a skirting board. */
+      const v = 0.05 + 0.07 * s, d = m.ringDur * (0.6 + 0.4 * s);
+      this.blip(m.ringHz, d, 'sine', v, m.ringHz * 0.86, dest);
+      this.blip(m.ringHz * 1.51, d * 0.7, 'sine', v * 0.5, m.ringHz * 1.30, dest);
+    }
+    // Loose pieces, landing after the car has. Scheduled on the audio clock.
+    for (let i = 0; i < m.clatter; i++) {
+      this.thud(0.05 + 0.05 * s, 1500 + i * 620, 0.035, 5, dest, 0.045 + i * 0.04);
+    }
   },
 
   /* THE most important sound in the game (13_Audio.md). Must be unmistakable
@@ -223,12 +401,20 @@ BR.Audio = {
     this.thud(0.18, 1400, 0.3, 0.7, dest);
   },
 
-  landing(clean, dest) {
+  /* A landing is the car hitting the floor, so it takes the material too —
+     except for the chime, which does not vary. That chime IS the "you landed
+     clean" cue (13_Audio.md's gameplay-critical table), and a car whose
+     confirmation was quieter or duller than everyone else's would be a car
+     penalised for what it is made of. Character sits on top of readability,
+     never instead of it. */
+  landing(clean, dest, mat) {
+    const m = mat || this.MATERIALS.plastic;
     if (clean) {
-      this.thud(0.2, 900, 0.09, 2.2, dest);
+      this.thud(0.2 * m.hitGain, 900 * m.hitHz, 0.09 * m.hitLen, 2.2, dest);
       this.blip(1200, 0.1, 'sine', 0.13, 1700, dest);
     } else {
-      this.thud(0.3, 260, 0.19, 1.0, dest);
+      this.thud(0.3 * m.hitGain, 260 * m.hitHz, 0.19 * m.hitLen, m.hitQ, dest);
+      this.shell(0.7, dest, m);
     }
   },
 
@@ -345,6 +531,11 @@ BR.Audio = {
     ch.drift.gain.gain.setTargetAtTime(0, now, 0.08);
     ch.boostAir.gain.gain.setTargetAtTime(0, now, 0.08);
     ch.pack.gain.gain.setTargetAtTime(0, now, 0.08);
+    // The ratchet is gated by two gains summed into one param, so BOTH have to
+    // go to zero — leaving the LFO amplitude up would keep it ticking at half
+    // level on a silenced channel.
+    ch.ratchet.gain.gain.setTargetAtTime(0, now, 0.08);
+    ch.ratchet.amp.gain.setTargetAtTime(0, now, 0.08);
     ch.prev = null;
   },
 
@@ -357,6 +548,12 @@ BR.Audio = {
     const speed = Math.hypot(v.vel.x, v.vel.y);
     const ratio = Math.min(1, speed / v.spec.maxSpeed);
 
+    /* What this car is made of. Cheap to look up every frame, and only
+       re-applied when it actually changes — which is at most once a race,
+       when a channel starts voicing a different car. */
+    const m = this.materialFor(v.spec);
+    if (ch.material !== m.id) this.applyMaterial(ch, m);
+
     if (!ch.prev) {
       ch.prev = { boost: v.boostMeter, boosting: v.boosting, grounded: v.grounded,
                   impacts: v.impacts || 0, cps: racer.cpsPassed, lap: racer.lap,
@@ -368,20 +565,35 @@ BR.Audio = {
     const p = ch.prev;
 
     // ── engine ────────────────────────────────────────────────────────────
-    const base = 62 + ratio * 210 + (v.boosting ? 40 : 0);
+    // The speed curve is unchanged; the material shifts the whole of it, so a
+    // heavier car sits lower everywhere without "faster is higher" breaking.
+    const base = (62 + ratio * 210 + (v.boosting ? 40 : 0)) * m.pitch;
     ch.engine.o1.frequency.setTargetAtTime(base, now, 0.05);
-    ch.engine.o2.frequency.setTargetAtTime(base * 1.012, now, 0.05);
-    ch.engine.filt.frequency.setTargetAtTime(600 + ratio * 1500, now, 0.08);
-    ch.engine.gain.gain.setTargetAtTime(engOn ? 0.035 + ratio * 0.05 : 0, now, 0.1);
+    ch.engine.o2.frequency.setTargetAtTime(base * m.detune, now, 0.05);
+    ch.engine.filt.frequency.setTargetAtTime(m.cutBase + ratio * m.cutSpan, now, 0.08);
+    ch.engine.gain.gain.setTargetAtTime(
+      engOn ? (0.035 + ratio * 0.05) * m.engGain : 0, now, 0.1);
+
+    /* The ratchet. Silent on everything that is not a wind-up, so this costs
+       three parameter writes and no voices on the rest of the roster. Rate
+       tracks speed — a spring unwinding faster — and it is a GRAPH, so
+       nothing here fires anything; see makeRatchet. */
+    const rLevel = (engOn && m.ratchet) ? m.ratchet * (0.45 + 0.55 * ratio) : 0;
+    ch.ratchet.lfo.frequency.setTargetAtTime(
+      (m.rateBase + ratio * m.rateSpan) || 1, now, 0.08);
+    ch.ratchet.gain.gain.setTargetAtTime(rLevel * 0.5, now, 0.07);
+    ch.ratchet.amp.gain.setTargetAtTime(rLevel * 0.5, now, 0.07);
 
     // ── surface ───────────────────────────────────────────────────────────
     // The tyre note must change the instant the surface does, so the player
-    // learns the map by feel (13_Audio.md).
+    // learns the map by feel (13_Audio.md). Material scales BOTH ends of the
+    // rug/road split by the same factor, so the size of the change — the part
+    // carrying the information — is identical in every car.
     const rough = v.surface === 'rugGrass' ? 1 : 0.32;
     ch.rattle.filt.frequency.setTargetAtTime(
-      v.surface === 'rugGrass' ? 420 : 1100, now, 0.05);
+      (v.surface === 'rugGrass' ? 420 : 1100) * m.rattleHz, now, 0.05);
     ch.rattle.gain.gain.setTargetAtTime(
-      v.grounded && engOn ? ratio * 0.05 * rough : 0, now, 0.06);
+      v.grounded && engOn ? ratio * 0.05 * rough * m.rattleGain : 0, now, 0.06);
 
     // ── drift: pitch tracks slip, so how hard you slide is audible ────────
     const slip = Math.min(1, v.slip / 0.9);
@@ -401,9 +613,10 @@ BR.Audio = {
     if (v.boostMeter - p.boost > 0.25) this.pad(dest);
 
     // ── landing and collisions ────────────────────────────────────────────
-    if (v.grounded && !p.grounded) this.landing(v.lastLanding === 'clean', dest);
+    // Both take the material: this is the car's own body hitting something.
+    if (v.grounded && !p.grounded) this.landing(v.lastLanding === 'clean', dest, m);
     const impacts = v.impacts || 0;
-    if (impacts > p.impacts) this.collide(v.lastImpact || 0.4, dest);
+    if (impacts > p.impacts) this.collide(v.lastImpact || 0.4, dest, m);
 
     /* ── items, rides and falls ───────────────────────────────────────────
        Edge-detected off counters here rather than called from the fixed step,
