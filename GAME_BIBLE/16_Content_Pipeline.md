@@ -157,15 +157,41 @@ envelope, then place what it is meant to clear at the middle of the window.
 
    Still true that hand-placing props is tedious, and a visual editor would help
    once there are six tracks. But it is no longer blocking.
-2. JSON fetched at runtime, or JS modules bundled? JSON is tool-friendly; modules avoid
-   a fetch and work from `file://`.
+2. ~~JSON fetched at runtime, or JS modules bundled?~~ **RESOLVED: JS modules,
+   bundled.** `fetch()` is blocked by CORS over `file://`, which is how the
+   sendable build is opened, and `share.sh` verifies the artifact makes no
+   external requests at all. See below.
 3. Who authors tracks — is this a solo project, or will there be an artist? Changes
-   the tooling calculus substantially.
-4. Is a build step acceptable? Atlas packing and SVG import both want one.
-   See `14_Technical_Architecture.md`, open question 1.
+   the tooling calculus substantially. **Stays open: it is not a technical
+   question, and nothing in the codebase can answer it.**
+4. ~~Is a build step acceptable?~~ **RESOLVED: yes, and there already is one.**
+   A build STEP, not a build system — `tools/build-artifact.sh` is forty lines of
+   `cat`, and this machine has no Node.js for anything larger. See below and
+   `14_Technical_Architecture.md`.
 
 ## Related
 
 `05_Tracks.md` — the schema being authored.
 `12_Art_Guide.md` — asset requirements.
 `14_Technical_Architecture.md` — how data is loaded.
+
+## Questions 2 and 4, answered (Phase 10)
+
+**2. JSON fetched at runtime, or JS modules bundled? — JS modules, bundled.**
+`fetch()` is blocked by CORS over `file://`, which is exactly how the sendable
+build is opened, and `tools/share.sh` verifies the artifact makes no external
+requests at all. The eight tracks are `.js` files declaring literals onto `BR`;
+`src/` contains no `fetch`, `XMLHttpRequest` or dynamic `import()`. Full
+reasoning in `14_Technical_Architecture.md`.
+
+**4. Is a build step acceptable? — Yes, and there already is one.**
+`tools/build-artifact.sh` bundles thirty-six files into one `dist/play.html`. It
+is a build *step*, not a build *system* — this machine has no Node.js, so Vite,
+tsc and npm are not available at any price. Atlas packing and SVG import, the two
+things this question was asked on behalf of, were both dropped for other reasons
+(q1: control points beat SVG outright), so the build has never needed to grow
+past `cat`.
+
+**3 stays open, because it is not a technical question.** Whether an artist joins
+changes the tooling calculus, and nothing in the codebase can answer it. Left for
+whoever knows.

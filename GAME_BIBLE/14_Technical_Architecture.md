@@ -200,10 +200,17 @@ These are the three places where bugs are expensive and hard to spot by playing.
 
 ## Open questions
 
-1. Build step from Phase 4, or stay build-free? Vite is the obvious choice if needed.
-2. TypeScript? Would help with data schemas but adds a build step immediately.
-3. How is track data authored and loaded — inline JS modules or fetched JSON?
-   JSON is tool-friendly, JS modules avoid a fetch. See `16_Content_Pipeline.md`.
+1. ~~Build step from Phase 4, or stay build-free?~~ **RESOLVED: a build STEP,
+   never a build system.** `tools/build-artifact.sh` bundles thirty-six files
+   into one sendable `dist/play.html`. Vite is not an option at any price --
+   this machine has no Node.js. See the section below.
+2. ~~TypeScript?~~ **RESOLVED: no.** `tsc` needs the Node runtime this machine
+   does not have, and the data errors that actually shipped were valid objects
+   of the right shape. `findStrayRects()` catches those; a type declaration
+   could not.
+3. ~~How is track data authored and loaded?~~ **RESOLVED: JS modules, bundled.**
+   `fetch()` is blocked by CORS over `file://`, which is how the sendable build
+   is opened, and `share.sh` verifies the artifact makes no external requests.
 
 ## Related
 
@@ -322,3 +329,58 @@ Per-frame work is 42% below drawing everything.
 Absolute cost went *up* against the shipped build — Rug Loop 1,565 to 2,332
 operations a frame — and that is the honest trade. The old number was cheap
 because the game was not drawing two thirds of the walls in front of you.
+
+## The tooling questions, answered by what shipped (Phase 10)
+
+Open questions 1, 2 and 3 were all asked before there was anything to look at.
+There are now eight tracks, thirty-six source files and a published build, so
+they can be answered from evidence instead of preference.
+
+### 1. Build step or build-free? — **A build STEP, never a build SYSTEM**
+
+Both, and the distinction is the whole answer. `tools/build-artifact.sh`
+concatenates thirty-six source files into a single `dist/play.html`, and it is
+genuinely required: the deliverable is one file a person can be sent, opened from
+their downloads folder, with no server and no second request.
+
+What was rejected is the build *system*. Vite was the obvious candidate and is
+impossible here for a reason that has nothing to do with taste: **this machine
+has no Node.js**. No npm, no `tsc`, no bundler, no dev server. The stack is bash
+and a browser.
+
+That constraint turned out to be a feature. The build is forty lines of `cat`
+with a drift guard, it cannot break in a way that needs a lockfile to diagnose,
+and the project has never spent a minute on a toolchain upgrade. The cost is
+paid in exactly one place — **a new source file must be registered in BOTH
+`index.html` and the `FILES` list**, and a file missing from both once shipped
+with `BR.Items` undefined.
+
+### 2. TypeScript? — **No**
+
+Same reason, and it is not a close call: `tsc` needs Node. Adopting TypeScript
+means adopting a runtime this machine does not have, to check schemas that are
+authored as plain object literals and read by one program.
+
+The thing TypeScript was wanted for — catching malformed track data — is done
+instead by `TrackManager.findStrayRects()` and the smoke test, which check the
+data against **how the game actually reads it** rather than against a
+declaration. That catches the error TypeScript could not have: six rectangles
+authored around their centres when every consumer tests `x <= p <= x + w`. Every
+one of those is a valid object of the right shape.
+
+### 3. Track data — **JS modules, bundled. Not fetched JSON**
+
+Decided by two hard constraints rather than by tool-friendliness.
+
+`fetch()` of a local JSON file is blocked by CORS over `file://`, and the whole
+point of the sendable build is that it opens from `file://`. There is no server
+to fall back on. And `tools/share.sh` verifies the built file makes **no external
+fetches at all** — a runtime load would fail that check by design, because a
+build that reaches for the network is a build that breaks on somebody else's
+machine.
+
+So the eight tracks in `src/data/tracks/` are `.js` files declaring object
+literals onto `BR`, and there is not one `fetch`, `XMLHttpRequest` or dynamic
+`import()` anywhere in `src/`. JSON's tool-friendliness would matter if there
+were a tool; there is not, and `16_Content_Pipeline.md` q1 explains why one was
+not needed — a track is about a hundred lines of readable data.
