@@ -163,8 +163,8 @@ second. One-shots are not leaking voices.
 
 ### Still missing
 
-Environmental sound and the announcer. Music is procedural rather than composed
-— it works, but a real soundtrack is a different job.
+The announcer, and nothing else on this list. Music is procedural rather than
+composed - it works, but a real soundtrack is a different job.
 
 **Per-vehicle material character was on this list until Phase 10.** It is built:
 every car declares what it is made of and the whole channel changes with it. See
@@ -432,3 +432,48 @@ the same.
 **The negative control is the part worth keeping.** Forcing `materialFor()` to
 return plastic for every car fails **17 of the 41 checks**. Without that run, a
 harness that quietly measured nothing would have looked exactly like this one.
+
+## The house going on around the race (Phase 10)
+
+Environmental sound, which this document has listed under "Still missing" since
+the first draft while being unusually clear about why it matters:
+
+> Distant household sounds carry the framing story from `00_Vision.md` — the
+> toys are racing while the house goes on around them... Used sparingly, this
+> does more for the premise than any cutscene would.
+
+**Sparingly is the entire design.** A race is ninety seconds of engine, tyres
+and collisions; anything continuous underneath becomes noise you stop hearing
+and then cannot unhear. Measured, it fires **21 events a minute on the rug, 12
+in the sandbox, 13 on the stunt track**, and the loudest thing in it is 0.055.
+
+Per world, because the room is part of the world:
+
+| | what you hear |
+| --- | --- |
+| Town rug | a bedroom clock ticking, a floorboard, a door closing elsewhere, plastic settling |
+| Sandbox | wind across an open pit, a spade knocking the frame |
+| Stunt | moulded track flexing, a television two rooms away, plastic tapping the dresser |
+
+On the **SFX bus, not the music bus**. This is diegetic world sound: a player who
+turns the music down to hear the driving should keep the room they are driving
+in.
+
+### It has its own random numbers, and that is not fussiness
+
+`Math.random` is the stream the AI's wander and mistake rolls come out of. Audio
+runs once per **rendered** frame, so if ambience drew from it, the sequence the
+AI saw would depend on frame rate — and Time Trial ghosts replay recorded inputs
+through a simulation that must land in the same place every time. **Sound would
+have silently desynced the game.** Ambience carries its own seeded mulberry32,
+touched by nothing else. Verified: zero `Math.random` calls across a scheduled
+minute, and the same seed gives the same sequence twice.
+
+### Smoke cannot catch a bug in here
+
+Worth recording. The first version threw `t is not defined` in two of eleven
+voices, and **smoke passed anyway** — `Audio.update` returns early unless the
+audio context is actually `running`, which it never is in headless Chrome. The
+43 checks say nothing about audio at all. Only a harness that stubs the context
+and drives the scheduler directly can see this code, which is exactly what the
+music and material harnesses already do.

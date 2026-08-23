@@ -522,6 +522,7 @@ BR.Audio = {
 
     this.updateRace(RM);
     this.music(racing, RM);
+    this.ambience(racing);
   },
 
   silence(ch) {
@@ -748,6 +749,142 @@ BR.Audio = {
   },
 
   bedFor(world) { return this.MUSIC[world] || this.MUSIC['town-rug']; },
+
+  /* ── AMBIENCE — the house going on around the race ───────────────────────
+     13_Audio.md has always listed environmental sound under "Still missing",
+     and is unusually specific about why it matters: "Distant household sounds
+     carry the framing story from 00_Vision.md - the toys are racing while the
+     house goes on around them... Used sparingly, this does more for the
+     premise than any cutscene would."
+
+     SPARINGLY IS THE WHOLE DESIGN. A race is ninety seconds of engine, tyres
+     and collisions; anything continuous underneath it becomes noise you stop
+     hearing and then cannot unhear. These fire every few seconds at most, and
+     always quietly.
+
+     On the SFX bus, not the music bus. This is diegetic world sound, so a
+     player who turns the music down to hear the driving should keep the room
+     they are driving in. */
+  AMBIENCE: {
+    'town-rug': {
+      every: [2.6, 5.2],
+      voices: [
+        // A bedroom clock, the most recognisable "indoors at night" sound there
+        // is, and the cheapest: two clicks a couple of hundred ms apart.
+        { w: 4, play: function (A, d) {
+            A.blip(2400, 0.012, 'square', 0.030, 1900, A.sfxBus, d);
+            A.blip(2100, 0.010, 'square', 0.022, 1700, A.sfxBus, d + 0.52);
+          } },
+        // A floorboard, somewhere behind you.
+        { w: 3, play: function (A, d) {
+            A.thud(0.045, 96, 0.26, 2.2, A.sfxBus, d);
+          } },
+        // A door closing elsewhere in the house. Low, soft, and gone.
+        { w: 2, play: function (A, d) {
+            A.thud(0.055, 62, 0.34, 1.1, A.sfxBus, d);
+          } },
+        // Plastic settling on the rug.
+        { w: 3, play: function (A, d) {
+            A.blip(880, 0.05, 'triangle', 0.028, 520, A.sfxBus, d);
+            A.blip(700, 0.04, 'triangle', 0.020, 430, A.sfxBus, d + 0.07);
+          } },
+      ],
+    },
+    sandbox: {
+      every: [3.2, 6.4],
+      voices: [
+        // Wind across an open sandpit: a long breath of filtered noise.
+        { w: 5, play: function (A, d) { A.gust(d, 1.6, 0.040, 520); } },
+        { w: 3, play: function (A, d) { A.gust(d, 2.4, 0.030, 340); } },
+        // A spade knocking the frame.
+        { w: 2, play: function (A, d) { A.thud(0.040, 150, 0.18, 3.0, A.sfxBus, d); } },
+      ],
+    },
+    stunt: {
+      every: [3.0, 6.0],
+      voices: [
+        // Moulded track flexing under the weight of a car.
+        { w: 4, play: function (A, d) {
+            A.blip(420, 0.09, 'triangle', 0.026, 300, A.sfxBus, d);
+          } },
+        // A distant television, two floors of nothing in particular.
+        { w: 3, play: function (A, d) { A.gust(d, 1.9, 0.026, 260); } },
+        // Something plastic tapping the dresser.
+        { w: 3, play: function (A, d) {
+            A.blip(1500, 0.02, 'square', 0.024, 1200, A.sfxBus, d);
+          } },
+      ],
+    },
+  },
+
+  /* A long soft band of noise — wind, or a television through a wall. */
+  gust(delay, dur, vol, hz) {
+    if (!this.ready) return;
+    const ctx = this.ctx, at = ctx.currentTime + (delay || 0);
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuf; src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass'; f.frequency.value = hz; f.Q.value = 0.7;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(vol, at + dur * 0.4);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    src.connect(f); f.connect(g); g.connect(this.sfxBus);
+    src.start(at); src.stop(at + dur + 0.05);
+  },
+
+  /* ITS OWN RANDOM NUMBERS, and this is not fussiness.
+     `Math.random` is the stream the AI's wander and mistake rolls come out of.
+     Audio runs once per RENDERED frame, so if ambience drew from it the
+     sequence the AI sees would depend on frame rate — and Time Trial ghosts
+     replay recorded inputs through a simulation that must land in the same
+     place every time. Sound would silently desync the game.
+     mulberry32, seeded once, touched by nothing else. */
+  _ambSeed: 20260819,
+  ambRandom() {
+    let s = this._ambSeed | 0;
+    s = (s + 0x6D2B79F5) | 0;
+    this._ambSeed = s;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  },
+
+  ambNext: 0,
+
+  ambience(racing) {
+    if (!this.ready || this.sfxVolume <= 0) return;
+    const ctx = this.ctx;
+    if (!racing) { this.ambNext = 0; return; }
+
+    const arena = BR.Game && BR.Game.arena;
+    const bed = this.AMBIENCE[(arena && arena.world) || 'town-rug'] ||
+                this.AMBIENCE['town-rug'];
+
+    // Resync after a backgrounded tab, exactly as the music scheduler does, or
+    // the catch-up loop fires every missed event at once.
+    if (this.ambNext === 0 || this.ambNext < ctx.currentTime - 1) {
+      this.ambNext = ctx.currentTime + 1.2;
+      return;
+    }
+    while (this.ambNext < ctx.currentTime + 0.4) {
+      const r = this.ambRandom();
+      let total = 0;
+      for (let i = 0; i < bed.voices.length; i++) total += bed.voices[i].w;
+      let pick = r * total, v = bed.voices[0];
+      for (let i = 0; i < bed.voices.length; i++) {
+        pick -= bed.voices[i].w;
+        if (pick <= 0) { v = bed.voices[i]; break; }
+      }
+      /* blip and thud take a delay RELATIVE to ctx.currentTime, so the
+         absolute instant this scheduler works in is converted here. Same
+         instant either way; the conversion just has to happen once, at the
+         boundary, rather than in every voice. */
+      v.play(this, this.ambNext - ctx.currentTime);
+      const lo = bed.every[0], hi = bed.every[1];
+      this.ambNext += lo + this.ambRandom() * (hi - lo);
+    }
+  },
 
   music(racing, RM) {
     if (!this.musicEnabled || this.musicVolume <= 0) return;
