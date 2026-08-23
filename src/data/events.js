@@ -243,7 +243,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 7,
     difficulty: 'hard',
-    platinumTime: 85,           // 0.93 x 91.5, re-measured from a mid-grid start
+    platinumTime: 84,           // 0.93 x 90.8, scaled when the grid stopped double-booking a slot
     unlockStars: 20,
     objectives: [
       { id: 'win',      label: 'Win the race' },
@@ -395,7 +395,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 7,
     difficulty: 'hard',
-    platinumTime: 86,           // 0.93 x 92.0, re-measured from a mid-grid start
+    platinumTime: 87,           // 0.93 x 92.8, scaled when the grid stopped double-booking a slot
     unlockStars: 18,
     objectives: [
       { id: 'finish',   label: 'Finish the race' },

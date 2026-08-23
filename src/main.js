@@ -274,10 +274,26 @@ BR.Game = {
          holds. */
       const field = availableField;
       const n = opponentCount;
+
+      /* THE SLOTS THE HUMANS ARE IN ARE SKIPPED, not driven over. This was
+         `grid[i]`, written when the player started dead last and every opponent
+         really was in front of them. `PLAYER_START_BEHIND` put the player in
+         the MIDDLE of the grid and left this loop counting from the front, so
+         the i-th opponent was handed the box a human was already sitting in:
+         measured on Rug Route, the player and the Blue Buggy spawned 0.0 units
+         apart — the same coordinates, one car inside another — while five of
+         the eight slots stood empty. */
+      const taken = {};
+      for (let i = 0; i < humanCount; i++) {
+        taken[Math.min(back + i, grid.length - 1)] = true;
+      }
+      const freeSlots = [];
+      for (let i = 0; i < grid.length; i++) if (!taken[i]) freeSlots.push(grid[i]);
+
       for (let i = 0; i < n; i++) {
         const spec = field[i % field.length];
-        // The front of the grid. The player is behind all of them.
-        const g = grid[i];
+        // Front of the grid first, then around the humans sitting in it.
+        const g = freeSlots[i];
         const car = BR.Vehicle.create(spec.vehicle, g.x, g.y, g.heading);
         this.vehicles.push(car);
         this.gridSlots.push(g);
