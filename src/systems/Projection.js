@@ -42,7 +42,27 @@ BR.Projection = {
   groundTilt: 0.30,
 
   /* How much one world unit of height lifts a sprite up the screen. The gap
-     between a car and its shadow is the only height cue there is.           */
+     between a car and its shadow is the only height cue there is.
+
+     CHOSEN, PHASE 9: 0.85, over the geometrically consistent 0.954.
+     12_Art_Guide.md open question 4, settled by rendering both at five jump
+     heights and looking at them.
+
+     0.954 is what a true axonometric at asin(0.30) = 17.5 degrees would want,
+     and it is the wrong number here. heightScale / groundTilt is an EXCHANGE
+     RATE between height and depth: both spend the same screen axis, so one
+     unit of height is drawn exactly like 2.83 units of ground receding. At
+     0.954 that becomes 3.18. The rug jump already puts the car eight car
+     lengths up the screen at its apex and the sandpit jump fifteen; buying
+     another 12% of that is buying ambiguity, not height.
+
+     It also costs occlusion by the same ratio — a prop of height h hides
+     h * 2.83 units of ground behind it, and 0.954 makes every barrier in the
+     game hide 12% more road.
+
+     Consistency is not a property this projection has to protect anyway:
+     depthScale below shrinks objects with distance and deliberately leaves
+     the ground plane alone, which no orthographic camera does either.        */
   heightScale: 0.85,
 
   // ── camera state (render-only — never read by the simulation) ────────────
