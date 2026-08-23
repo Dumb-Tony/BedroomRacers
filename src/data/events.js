@@ -357,6 +357,97 @@ BR.EVENTS.push(
   }
 );
 
+/* ── Kitchen Table ─────────────────────────────────────────────────────────
+   The fifth world, and the one that asks for the most driving. Gated above the
+   stunt track deliberately: laminate is the fastest base surface in the game
+   and the second least grippy, and half the barrier is missing. A player who
+   has not yet learned to be smooth will spend this world on the kitchen floor.
+
+   19_World_Kitchen_Table.md carries the measurements. */
+BR.EVENTS.push(
+  {
+    id: 'kt-01',
+    name: 'Breakfast Run',
+    blurb: 'Up on the table. Wiped laminate — fast everywhere, grippy nowhere.',
+    trackId: 'kitchen-breakfast-run',
+    mode: 'standard-race',
+    laps: 3,
+    opponents: 5,
+    difficulty: 'normal',
+    /* 0.93 x 103.0. Technician on normal, four runs from a mid-grid start:
+       103.0 / 103.1 / 103.2 / 103.3, quickest taken. Laps 35.7 / 33.8 / 33.5 —
+       the longest circuit in the game, and the slowest race in it. */
+    platinumTime: 96,
+    unlockStars: 38,
+    objectives: [
+      { id: 'finish',  label: 'Finish the race' },
+      { id: 'win',     label: 'Win the race' },
+      // Laminate at 0.78 grip drifts almost by itself. Six seconds is a low
+      // bar here on purpose — it is an invitation to find that out.
+      { id: 'drifter', label: 'Spend 6 seconds drifting' },
+    ],
+  },
+  {
+    id: 'tt-breakfast',
+    name: 'Breakfast Run Time Trial',
+    blurb: 'Nobody to blame. The kerb still stops at the east end.',
+    trackId: 'kitchen-breakfast-run',
+    mode: 'time-trial',
+    laps: 3,
+    opponents: 0,
+    difficulty: 'normal',
+    // Four solo runs: 103.9 / 104.0 / 104.1 / 104.3. Clean reference 103.9.
+    times: { gold: 99, silver: 108, bronze: 121 },
+    platinumTime: 92,
+    unlockStars: 41,
+    objectives: [
+      { id: 'finish',  label: 'Set a time' },
+      { id: 'ttGold',  label: 'Beat the gold time' },
+      { id: 'ttPlat',  label: 'Beat the platinum time' },
+    ],
+  },
+  {
+    id: 'kt-02',
+    name: "Table's Edge",
+    blurb: 'Narrower, and the kerb is missing down the whole front straight.',
+    trackId: 'kitchen-tables-edge',
+    mode: 'standard-race',
+    laps: 3,
+    opponents: 7,
+    difficulty: 'hard',
+    /* 0.93 x 95.3. Four runs: 95.3 / 95.4 / 95.5 / 95.7. Seven and a half
+       seconds quicker than Breakfast Run despite being the harder track: it is
+       850 units shorter, and on laminate it is grip rather than distance that
+       costs the time. */
+    platinumTime: 89,
+    unlockStars: 44,
+    objectives: [
+      { id: 'win',      label: 'Win the race' },
+      { id: 'spotless', label: 'Win without a single collision' },
+      { id: 'clean',    label: 'Finish with fewer than 4 collisions' },
+    ],
+  },
+  {
+    id: 'tt-tables-edge',
+    name: "Table's Edge Time Trial",
+    blurb: 'Two gaps, one sugar slick, three laps. Do not run wide.',
+    trackId: 'kitchen-tables-edge',
+    mode: 'time-trial',
+    laps: 3,
+    opponents: 0,
+    difficulty: 'normal',
+    // Four solo runs: 95.6 / 95.6 / 95.8 / 95.9. Clean reference 95.6.
+    times: { gold: 91, silver: 99, bronze: 111 },
+    platinumTime: 85,
+    unlockStars: 47,
+    objectives: [
+      { id: 'finish',  label: 'Set a time' },
+      { id: 'ttGold',  label: 'Beat the gold time' },
+      { id: 'ttPlat',  label: 'Beat the platinum time' },
+    ],
+  }
+);
+
 /* ── Item races ────────────────────────────────────────────────────────────
    A SEPARATE MODE, deliberately (10_Items.md Q4). The flagship Standard Race
    stays item-free: it already has drift-charged boost, shortcuts, worn sand and

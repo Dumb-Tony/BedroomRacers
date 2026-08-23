@@ -42,6 +42,8 @@ FILES=(
   "src/data/tracks/sandbox-tide-pool.js"
   "src/data/tracks/stunt-dresser-drop.js"
   "src/data/tracks/stunt-shelf-run.js"
+  "src/data/tracks/kitchen-breakfast-run.js"
+  "src/data/tracks/kitchen-tables-edge.js"
   "src/entities/Vehicle.js"
   "src/systems/VehicleController.js"
   "src/systems/Collision.js"

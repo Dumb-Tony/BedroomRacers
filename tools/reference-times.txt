@@ -14,5 +14,9 @@ st-01 98.95 spread 0.08 plat 94
 tt-dresser 98.68 spread 0.42 plat 89
 st-02 101.85 spread 0.23 plat 97
 tt-shelf 100.80 spread 0.53 plat 92
+kt-01 103.30 spread 0.40 plat 96
+tt-breakfast 104.28 spread 0.57 plat 92
+kt-02 95.38 spread 2.62 plat 89
+tt-tables-edge 95.57 spread 0.18 plat 85
 ir-01 92.90 spread 1.28 plat 89
 ir-02 89.95 spread 1.30 plat 87
