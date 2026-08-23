@@ -2024,6 +2024,67 @@ BR.Renderer = {
       ctx.stroke();
     }
 
+    /* ── DRIFT CHARGE ──────────────────────────────────────────────────────
+       `v.driftCharge` is commented "DISPLAY ONLY" in Vehicle.js and was
+       displayed NOWHERE. The only thing reading it was Debug.js, which is
+       stripped from the shipped bundle — so a value whose entire purpose is to
+       be shown was invisible in the actual game.
+
+       That also broke a stated rule. 13_Audio.md: "All gameplay-critical audio
+       must have a visual equivalent - no information exists in sound alone",
+       and the same document calls the drift-charge-full cue "the single most
+       important sound in the game". It had no visual equivalent at all.
+
+       03_Driving_Physics.md open question 3 asks whether drift needs a VISIBLE
+       CHARGE TIER, "given we rejected discrete tiers". Both halves can be true:
+       the mechanic stays continuous, and only the PRESENTATION is quantised.
+       A bar creeping up is unreadable in the middle of a slide, when the car is
+       sideways and the player is looking at the apex. A pip lighting is a
+       single unmistakable event, seen without being looked at.
+
+       Lit versus unlit rather than hue-versus-hue, so it survives colour
+       blindness — the brightness and the fill both carry it. */
+    if (isPlayer && v.driftCharge > 0.02) {
+      const g = anchor;
+      const rr = spec.length * 1.12 * shrinkK;
+      const N = 3;
+      const gap = 0.30;                       // radians of space between pips
+      const span = (Math.PI * 2 - gap * N) / N;
+      // Fades out as the charge decays after a drift is released, so the pips
+      // do not linger over a car that is no longer earning anything.
+      ctx.globalAlpha = Math.min(1, v.driftCharge * 4);
+
+      for (let t = 0; t < N; t++) {
+        // Filled proportionally WITHIN the tier, so it is a meter up close and
+        // three pips at a glance. The quantised read is the point; the partial
+        // fill just stops it feeling like it jumps from nothing.
+        const lo = t / N, hi = (t + 1) / N;
+        const f = BR.M.clamp((v.driftCharge - lo) / (hi - lo), 0, 1);
+        const a0 = -Math.PI / 2 + t * (span + gap);
+
+        // The empty socket, always drawn, so you can see what is still to earn.
+        ctx.beginPath();
+        ctx.ellipse(g.sx, g.sy, rr, rr * Pj.groundTilt, 0, a0, a0 + span);
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+        ctx.lineWidth = 2 / BR.Renderer.zoom + 1;
+        ctx.stroke();
+
+        if (f > 0.001) {
+          ctx.beginPath();
+          ctx.ellipse(g.sx, g.sy, rr, rr * Pj.groundTilt, 0, a0, a0 + span * f);
+          /* Same colour language as the boost ring directly inside it, because
+             this charge becomes that boost: blue while it is only building,
+             green once the tier is banked, gold on the last one. */
+          ctx.strokeStyle = f >= 1
+            ? (t === N - 1 ? '#ffd34d' : '#4fd8a8')
+            : '#69a2ff';
+          ctx.lineWidth = 3 / BR.Renderer.zoom + 1.6;
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
     /* ── which way is up ───────────────────────────────────────────────────
        Upright, up is (0,0,1) and this is the extrusion it has always been.
        On a ride it comes from the rail: a loop swings it backwards through the

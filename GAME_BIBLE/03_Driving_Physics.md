@@ -408,9 +408,12 @@ props only. Do not migrate the vehicle model.
    accumulator with render interpolation, capped at 6 steps per frame.
    Determinism verified: identical input sequences produce bit-identical
    positions over 300 ticks including wall collisions.
-3. **Does drift need a visible charge tier** for readability, given we rejected
-   discrete tiers? Playtest with children specifically.
-4. ~~**Camera behaviour** — pure follow, or look-ahead biased by velocity?~~
+3. ~~**Does drift need a visible charge tier** for readability, given we
+   rejected discrete tiers?~~ **Resolved in Phase 9: yes, and both halves
+   hold.** The MECHANIC stays continuous; only the PRESENTATION is
+   quantised. See the section below - and note that `driftCharge` was
+   commented DISPLAY ONLY and displayed nowhere at all.
+4. ~~**Camera behaviour** - pure follow, or look-ahead biased by velocity?~~
    **Superseded.** The camera is now a rotating chase camera following travel
    direction. `lookAhead` survives as a small extra bias, but `horizonBias` does
    most of the work. Open sub-question: is `yawRate 4.5` too much lag? It makes
@@ -477,3 +480,63 @@ Shelf Run 106.3 against 106.2 — all inside noise. No retune needed.
 > Whether 87% on a brief scrape is too harsh for "glancing blows feel good" is a
 > **feel judgement**, not a measurement. It joins the list in `18_Roadmap.md`
 > that needs a human.
+
+## The drift charge was invisible (Phase 9)
+
+`Vehicle.js` declares `driftCharge` with the comment **"0..1, DISPLAY ONLY"**.
+The only thing in the tree that read it was `Debug.js`, which is stripped from
+the shipped bundle. A value whose entire stated purpose is to be shown was shown
+nowhere in the actual game.
+
+That also quietly broke a rule. `13_Audio.md` requires that **"all
+gameplay-critical audio must have a visual equivalent - no information exists in
+sound alone"**, and calls the drift-charge-full cue *"the single most important
+sound in the game"*. It had no visual equivalent whatsoever.
+
+### Continuous mechanic, quantised presentation
+
+Open question 3 asked whether drift needs a visible charge *tier* "given we
+rejected discrete tiers". Both can be true, and the distinction is the answer:
+the physics stays continuous, and only the display is quantised.
+
+A bar creeping up is unreadable in the middle of a slide, which is exactly when
+it matters — the car is sideways, the camera is rotating, and the player is
+looking at the apex. **A pip lighting is a single unmistakable event**, seen
+without being looked at.
+
+Three pips ring the player's car, just outside the boost meter, filling
+proportionally within each tier so it is a meter up close and three pips at a
+glance. Colour follows the boost ring directly inside it, because this charge
+*becomes* that boost: blue while a tier is building, green once it is banked,
+gold on the last one. Player only — a ring under every opponent is noise.
+
+**Lit versus unlit, not hue versus hue.** The empty sockets are always drawn, so
+the reading is a fill difference and survives colour blindness rather than
+depending on telling blue from green.
+
+### Measured
+
+| charge | pixels the pips own | blue | green | gold |
+| --- | --- | --- | --- | --- |
+| 0.00 | 0 | - | - | - |
+| 0.30 | 594 | 159 | 17 | 0 |
+| 0.40 | 619 | 70 | **182** | 0 |
+| 1.00 | 770 | 2 | 509 | **171** |
+
+Crossing the first tier at 1/3 flips the pip from blue to green: 17 green pixels
+to 182. That is the event the design is claiming, and it is a colour change
+rather than a size change.
+
+**Which is why the first two attempts to measure it were both wrong**, and both
+are worth recording:
+
+- **Counting pixels** showed 15px of change across the tier edge against 29px
+  within a tier, making the tiers look inert. Crossing a tier changes colour,
+  not area.
+- **Counting colours across the whole frame** reported 821 "banked green" pixels
+  at a charge with no green pip on screen — the boost ring, the boost pads and
+  the HUD bar all use that palette *on purpose*.
+
+The instrument that works is the one already used for the control hint: render
+the same frame with the feature suppressed, diff, and classify **only the pixels
+that differ**. Those are the pips and nothing else.
