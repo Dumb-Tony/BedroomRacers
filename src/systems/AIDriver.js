@@ -34,7 +34,8 @@ BR.AIDriver = {
       targetSpeedMul: 0.91, lineAccuracy: 0.65, cornerCaution: 1.35,
       boostEfficiency: 0.25, mistakeChance: 0.16, driftSkill: 0.4,
       sandReading: 0.15,      // hasn't noticed the ground is different
-      itemSkill: 0.25,        // sits on things and fires them late
+      itemSkill: 0.25,        // barely notices a target
+      itemPatience: 7.0,      // sits on things and fires them late
       gateNerve: 0.55,        // wants a big margin before trying the high road
     },
     technician: {
@@ -42,7 +43,8 @@ BR.AIDriver = {
       targetSpeedMul: 0.99, lineAccuracy: 0.95, cornerCaution: 0.95,
       boostEfficiency: 0.90, mistakeChance: 0.03, driftSkill: 0.95,
       sandReading: 0.95,      // reading the surface is the whole personality
-      itemSkill: 0.95,        // waits for a target, then uses it
+      itemSkill: 0.95,        // spots a target from a long way off
+      itemPatience: 4.0,      // waits for one, then uses it
       gateNerve: 1.00,        // knows exactly what it will be carrying
     },
     speedster: {
@@ -50,7 +52,8 @@ BR.AIDriver = {
       targetSpeedMul: 1.10, lineAccuracy: 0.72, cornerCaution: 0.70,
       boostEfficiency: 0.60, mistakeChance: 0.14, driftSkill: 0.6,
       sandReading: 0.45,      // too busy going fast to look down
-      itemSkill: 0.6,         // empties the slot the moment it fills
+      itemSkill: 0.6,         // sees a target, but rarely waits for one
+      itemPatience: 0.4,      // empties the slot the moment it fills
       gateNerve: 1.35,        // takes the high road it cannot always make
     },
     bully: {
@@ -58,7 +61,8 @@ BR.AIDriver = {
       targetSpeedMul: 0.96, lineAccuracy: 0.70, cornerCaution: 1.05,
       boostEfficiency: 0.50, mistakeChance: 0.08, driftSkill: 0.5,
       sandReading: 0.55,      // will happily take the line you just made
-      itemSkill: 0.8,         // saves the offensive ones for company
+      itemSkill: 0.8,         // good eye for a victim
+      itemPatience: 4.5,      // saves the offensive ones for company
       gateNerve: 0.90,        // goes where the traffic isn't
     },
   },
@@ -206,6 +210,10 @@ BR.AIDriver = {
      the whole field took the same branch. Measured, a driver needs about 180
      units to ease 70 across the road, so 340 leaves room to move while judging
      a speed close to the one it will actually turn up with. */
+  /* How far off a rival registers as a target, before itemSkill scales it.
+     A Rookie at 0.25 has to be almost touching one. */
+  ITEM_RANGE: 340,
+
   GATE_LOOK: 340,
 
   /**
@@ -461,11 +469,30 @@ BR.AIDriver = {
       const def = BR.Items.DEFS[v.item];
       if (def && def.offensive) {
         ai.itemHold = (ai.itemHold || 0) + dt;
-        if (this.nearestRival(v) < 340 || ai.itemHold > 6 * ai.p.itemSkill) {
+        /* TWO TRAITS, NOT ONE, because the four documented personalities are
+           not monotonic in skill and one number cannot describe them.
+
+           The fallback used to be `itemHold > 6 * itemSkill`, which fires
+           SOONEST for the lowest skill — the exact opposite of the Rookie's
+           own comment, "sits on things and fires them late". Measured over a
+           full item race it showed: low-skill drivers fired 11.5 items on
+           average against high-skill 9.7.
+
+           `itemSkill` is now only about SEEING a target: it scales how far off
+           a rival registers, so a Rookie has to be almost touching one before
+           it notices. `itemPatience` is how long it will hold before firing
+           blind, and it is orthogonal — the Speedster has middling skill and
+           almost no patience, because it "empties the slot the moment it
+           fills". */
+        const range = this.ITEM_RANGE * ai.p.itemSkill;
+        const patience = ai.p.itemPatience === undefined ? 4 : ai.p.itemPatience;
+        if (this.rivalAhead(v) < range || ai.itemHold > patience) {
           input.item = true;
           ai.itemHold = 0;
         }
       } else if (Math.random() < ai.p.itemSkill * 1.6 * dt) {
+        // Defensive items help whoever holds them, so there is nothing to aim
+        // and skill is simply how quickly it thinks to use one.
         input.item = true;
       }
     } else {
@@ -476,6 +503,38 @@ BR.AIDriver = {
   },
 
   /** Distance to the closest other car. */
+  /**
+   * Distance to the nearest rival IN FRONT, or Infinity if there is none.
+   *
+   * Targeting used `nearestRival`, which is omnidirectional, and in an
+   * eight-car pack somebody is nearly always within a few hundred units in
+   * SOME direction. So a high-skill driver never had to wait for a target and
+   * fired the instant it was handed anything — measured at a 0.02s median
+   * hold, against its own comment "waits for a target, then uses it".
+   *
+   * Two of the three offensive items travel forward — the aeroplane flies
+   * along the car's heading and the hammer has a 210-unit reach — so a rival
+   * behind is not a target at all, and saying so is what makes waiting mean
+   * something.
+   */
+  rivalAhead(v) {
+    const list = (BR.Game && BR.Game.vehicles) || [];
+    const hx = Math.cos(v.heading), hy = Math.sin(v.heading);
+    let best = Infinity;
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i];
+      if (o === v || o.isGhost) continue;
+      const dx = o.x - v.x, dy = o.y - v.y;
+      // Ahead, and roughly in the cone the item would travel through.
+      const along = dx * hx + dy * hy;
+      if (along <= 0) continue;
+      const d = Math.hypot(dx, dy);
+      if (along < d * 0.55) continue;          // off to one side, not in front
+      if (d < best) best = d;
+    }
+    return best;
+  },
+
   nearestRival(v) {
     const list = (BR.Game && BR.Game.vehicles) || [];
     let best = Infinity;
