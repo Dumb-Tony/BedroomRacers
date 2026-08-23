@@ -246,3 +246,67 @@ costs several seconds and the margin was thin enough for ordinary variance to
 tip it. It is now 90 seconds with an early exit, roughly double what any lap
 needs, because a smoke test that cries wolf gets ignored. Verified stable across
 three consecutive runs.
+
+## The third blunt instrument (Phase 10) — `tools/calibrate.sh`
+
+The reason this one exists is a mistake, and the mistake is more useful than the
+tool.
+
+### A coherent story is not evidence
+
+Fifteen events were recalibrated on a theory that fitted every number available.
+Each standard race measured 2-4 seconds quicker than the reference recorded
+beside its target time. No time trial on an untouched track measured
+differently. Races have opponents; time trials do not. An AI commit had just
+landed. So the AI change had quietly handed every race a few seconds and nothing
+had re-measured.
+
+It explained the sign of the difference. It explained exactly which events were
+spared. It suggested its own fix. It was wrong.
+
+**Items do not exist in standard races** — `10_Items.md` q4, resolved, the
+flagship mode is item-free — so the commit being blamed could not have touched
+ten of the twelve races attributed to it. Building six older commits and
+measuring each settled it: the race times were **identical at every one**,
+including the very commit that had written those references. Nothing had
+drifted. The recorded numbers came from a player stand-in that was never written
+down, and the gap between two measuring conventions is indistinguishable from a
+regression when you only ever measure once.
+
+The three time trials that appeared to validate the model validated nothing.
+They agreed because solo events measure the same under either convention, which
+is precisely the subset incapable of detecting the problem. **A control that
+agrees for a reason unrelated to the hypothesis is not a control.**
+
+### Compare the game to itself, not to an assumption
+
+The first version of this tool checked each event against its own target —
+platinum ≈ 0.93 × reference — and flagged the disagreements. That version was
+wrong by construction. A formula compares the game to a belief about the game,
+so it cannot distinguish a regression from a disagreement about units, and it
+reports both as the same red number.
+
+`calibrate.sh` records what all eighteen events measure **today** into
+`tools/reference-times.txt`, which is committed, and diffs against it. The
+question becomes "what changed since last time?" — always a real effect, in the
+units the game is played in. A number that moved is a finding. A number that sat
+still needs nothing done to it, however wrong its target may look.
+
+When something does move, **scale that event's targets by the ratio measured,
+never by a ratio believed in.**
+
+### Prefer a control that cannot respond
+
+Fixing the starting grid moved every standard race by −0.65 to +0.80s and all
+six time trials by **exactly 0.00**. Time trials have no opponents, so a grid bug
+physically cannot reach them. A column that *could not* have moved is worth more
+than one that merely did not — it is the difference between evidence and
+coincidence, and it is what made the rest of that table trustworthy.
+
+### The stand-in is written down this time
+
+`technician` on `normal`, seat one, five seeds, median. Seat one starts mid-grid
+since `PLAYER_START_BEHIND`, so it measures a lap driven through traffic — do not
+read `racers[0]` as "whoever is on pole". The pairing is stated in the harness
+header, because the previous one lived in a session's scratchpad and died with
+it, which is half of why any of this happened.
