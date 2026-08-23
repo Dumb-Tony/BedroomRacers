@@ -107,6 +107,15 @@ BR.Screens = {
        could not choose an event, pick a car, or leave the pause menu without
        somebody reaching for a mouse. */
     window.addEventListener('keydown', function (e) {
+      /* The save-code panel is real DOM sitting over the canvas, and this
+         listener is on `window` — so every character typed into its textarea
+         would ALSO arrive here as menu navigation. Pasting a code would scroll
+         the event list and Escape would walk out of the screen mid-paste.
+         While the panel is open it owns the keyboard. */
+      if (self.panel) {
+        if (e.key === 'Escape') { e.preventDefault(); self.closePanel(); }
+        return;
+      }
       if (self.state === self.RACE && !BR.Game.paused) return;
       switch (e.key) {
         case 'ArrowDown': case 'ArrowRight':
@@ -224,6 +233,9 @@ BR.Screens = {
     // Leaving the screen disarms the reset. A destructive action must never sit
     // primed while the player is somewhere else.
     this.resetArmed = false;
+    // Same rule for the save-code panel, which can be sitting on a confirmation
+    // that would replace everything.
+    this.closePanel();
   },
 
   say(msg) { this.toast = msg; this.toastTime = 2.6; },
@@ -300,6 +312,13 @@ BR.Screens = {
         break;
       }
 
+      /* ── save codes ──────────────────────────────────────────────────────
+         15_Save_System.md open question 2. Both open the same panel; the panel
+         is where the friction lives, because importing destroys progress and a
+         one-press button that eats a save is not acceptable. */
+      case 'saveExport': this.openExport(); break;
+      case 'saveImport': this.openImport(); break;
+
       case 'goto':    this.set(r.value); break;
       case 'start':   G.startEvent(BR.eventById(r.value)); break;
       case 'slot':
@@ -329,6 +348,309 @@ BR.Screens = {
         BR.Audio.checkpoint();
         break;
     }
+  },
+
+  /* ── the save-code panel ──────────────────────────────────────────────────
+     The one piece of real DOM this game puts on the screen, and it is here
+     because a save code is a THOUSAND characters that have to be selected,
+     copied, and pasted back. A canvas cannot be selected and it cannot receive
+     a paste; navigator.clipboard needs a permission the artifact host may not
+     grant; window.prompt is a single-line box that throws the pasted text away
+     the moment the code is rejected, which on a long code is the difference
+     between fixing a paste and giving up.
+
+     A textarea does all three jobs and degrades to the same floor every time:
+     THE CODE IS VISIBLE AND SELECTABLE. Every clipboard convenience layered on
+     top of that is allowed to fail.
+
+     It is also where the destructive confirmation lives. Import is the only
+     action in the game that can destroy progress the player did not choose to
+     destroy, so like RESET PROGRESS it takes two presses, and the second names
+     what is going and what is arriving rather than asking "are you sure".
+     ────────────────────────────────────────────────────────────────────── */
+
+  panel: null,
+
+  el(tag, style, text) {
+    const e = document.createElement(tag);
+    // Set through CSSOM, never as a style ATTRIBUTE: the published page runs
+    // under a CSP with no unsafe-inline, which blocks the attribute form.
+    if (style) for (const k in style) e.style[k] = style[k];
+    if (text !== undefined) e.textContent = text;
+    return e;
+  },
+
+  tallyWords(t) {
+    const bits = [];
+    if (t.stars)  bits.push(t.stars  + (t.stars  === 1 ? ' star'  : ' stars'));
+    if (t.medals) bits.push(t.medals + (t.medals === 1 ? ' medal' : ' medals'));
+    if (t.pieces) bits.push(t.pieces + (t.pieces === 1 ? ' toy piece' : ' toy pieces'));
+    if (!bits.length) return 'nothing yet';
+    return bits.join(', ');
+  },
+
+  closePanel() {
+    if (!this.panel) return;
+    try {
+      const b = this.panel.back;
+      if (b && b.parentNode) b.parentNode.removeChild(b);
+    } catch (e) { /* already gone */ }
+    this.panel = null;
+  },
+
+  /**
+   * Build the panel shell. Returns the panel record, or null if there is no
+   * document to attach to — in which case the caller falls back to a toast
+   * rather than throwing.
+   */
+  openPanel(title, hint) {
+    this.closePanel();
+    const self = this;
+    if (typeof document === 'undefined' || !document.body) return null;
+
+    const back = this.el('div', {
+      position: 'fixed', left: '0', top: '0', right: '0', bottom: '0',
+      background: 'rgba(10,9,8,0.86)', zIndex: '9999',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '16px',
+    });
+
+    const card = this.el('div', {
+      width: '560px', maxWidth: '100%', boxSizing: 'border-box',
+      background: '#191614', border: '1px solid rgba(255,255,255,0.16)',
+      borderRadius: '10px', padding: '16px',
+      fontFamily: 'ui-monospace, Consolas, monospace',
+      color: '#ece6da', fontSize: '12px', lineHeight: '1.5',
+      boxShadow: '0 18px 44px rgba(0,0,0,0.6)',
+    });
+
+    const head = this.el('div', {
+      fontSize: '13px', fontWeight: '800', letterSpacing: '0.04em',
+      color: '#ffd34d', marginBottom: '8px',
+    }, title);
+
+    const note = this.el('div', {
+      color: 'rgba(255,255,255,0.62)', marginBottom: '10px',
+    }, hint);
+
+    const area = this.el('textarea', {
+      width: '100%', height: '132px', boxSizing: 'border-box',
+      background: '#0f0d0c', color: '#ece6da',
+      border: '1px solid rgba(255,255,255,0.18)', borderRadius: '6px',
+      padding: '8px', fontFamily: 'ui-monospace, Consolas, monospace',
+      fontSize: '12px', lineHeight: '1.45', resize: 'vertical',
+      // A code has no words in it, so wrapping mid-"word" is the correct thing
+      // to do — otherwise it draws as one unbreakable 1000-character line.
+      wordBreak: 'break-all',
+    });
+    area.spellcheck = false;
+    area.autocapitalize = 'off';
+    area.autocomplete = 'off';
+    area.setAttribute('autocorrect', 'off');
+
+    const status = this.el('div', {
+      minHeight: '16px', marginTop: '8px', color: 'rgba(255,255,255,0.55)',
+    }, '');
+
+    const row = this.el('div', {
+      display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px',
+    });
+
+    card.appendChild(head);
+    card.appendChild(note);
+    card.appendChild(area);
+    card.appendChild(status);
+    card.appendChild(row);
+    back.appendChild(card);
+
+    // Clicking the dark surround leaves. Clicking the card must not.
+    back.addEventListener('click', function (e) {
+      if (e.target === back) self.closePanel();
+    });
+
+    document.body.appendChild(back);
+    this.panel = { back: back, card: card, head: head, note: note,
+                   area: area, status: status, row: row };
+    return this.panel;
+  },
+
+  panelSay(msg, colour) {
+    if (!this.panel) return;
+    this.panel.status.textContent = msg;
+    this.panel.status.style.color = colour || 'rgba(255,255,255,0.55)';
+  },
+
+  /* Buttons are rebuilt rather than toggled, because the confirmation step
+     replaces them entirely and a leftover handler on a hidden button is how a
+     destructive action gets fired by the wrong press. */
+  panelButtons(defs) {
+    if (!this.panel) return;
+    const row = this.panel.row;
+    while (row.firstChild) row.removeChild(row.firstChild);
+    for (let i = 0; i < defs.length; i++) {
+      const d = defs[i];
+      const b = this.el('button', {
+        appearance: 'none', cursor: 'pointer',
+        padding: '9px 14px', borderRadius: '7px',
+        fontFamily: 'ui-monospace, Consolas, monospace',
+        fontSize: '11px', fontWeight: '700', letterSpacing: '0.03em',
+        background: d.danger ? 'rgba(255,107,107,0.16)'
+                  : d.primary ? '#ffd34d' : 'rgba(255,255,255,0.08)',
+        color: d.danger ? '#ffb3b3' : d.primary ? '#221e1b' : '#ece6da',
+        border: d.danger ? '2px solid #ff6b6b' : '1px solid rgba(255,255,255,0.18)',
+      }, d.label);
+      b.type = 'button';
+      b.addEventListener('click', d.on);
+      row.appendChild(b);
+    }
+  },
+
+  /* ── export ─────────────────────────────────────────────────────────────*/
+
+  openExport() {
+    const SM = BR.SaveManager;
+    const code = SM.exportCode();
+    if (!code) {
+      // exportCode() verifies its own output and returns null rather than hand
+      // over a code that will not decode. Saying nothing would be worse.
+      this.say('Could not build a save code');
+      return;
+    }
+    const t = SM.saveTally();
+    const self = this;
+
+    const p = this.openPanel('YOUR SAVE CODE',
+      'Copy all of it into Bedroom Racers in another browser to bring ' +
+      this.tallyWords(t) + ' across. It does not carry your settings — volume, ' +
+      'difficulty and the minimap stay with each browser.');
+    if (!p) { this.say('Could not open the save code'); return; }
+
+    p.area.value = code;
+    p.area.readOnly = true;
+    p.area.focus();
+    p.area.select();
+    // select() leaves the caret at the end, which scrolls the box to the TAIL of
+    // the code — the player opens the panel and sees the middle of a string with
+    // no BR01 on it. Put it back to the top; the selection survives the scroll.
+    p.area.scrollTop = 0;
+    this.panelSay('Select it and copy, or press COPY.');
+
+    this.panelButtons([
+      { label: 'COPY', primary: true, on: function () {
+          self.copyToClipboard(code, function (ok) {
+            if (!self.panel) return;
+            if (ok) self.panelSay('Copied.', '#7fe06a');
+            else self.panelSay('This browser would not let the game reach the ' +
+                               'clipboard — select the code above and copy it.',
+                               '#ff9d6b');
+          });
+        } },
+      { label: 'DONE', on: function () { self.closePanel(); } },
+    ]);
+  },
+
+  /* Clipboard, then the old execCommand path, then nothing — and "nothing" is
+     survivable because the code is already on screen and selectable. The async
+     API needs a secure context and a permission the artifact host controls, so
+     it is tried but never relied on. */
+  copyToClipboard(text, done) {
+    const self = this;
+    const nav = window.navigator;
+    if (nav && nav.clipboard && nav.clipboard.writeText) {
+      try {
+        const pr = nav.clipboard.writeText(text);
+        if (pr && pr.then) {
+          pr.then(function () { done(true); },
+                  function () { done(self.copyLegacy(text)); });
+          return;
+        }
+        done(true);
+        return;
+      } catch (e) { /* fall through to the legacy path */ }
+    }
+    done(this.copyLegacy(text));
+  },
+
+  copyLegacy(text) {
+    try {
+      const ta = this.el('textarea',
+        { position: 'fixed', left: '-9999px', top: '0', opacity: '0' });
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = !!(document.execCommand && document.execCommand('copy'));
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) { return false; }
+  },
+
+  /* ── import ─────────────────────────────────────────────────────────────*/
+
+  openImport() {
+    const self = this;
+    const p = this.openPanel('PASTE A SAVE CODE',
+      'Paste the code from your other browser. Nothing on this browser changes ' +
+      'until you confirm.');
+    if (!p) { this.say('Could not open the save code box'); return; }
+
+    p.area.value = '';
+    p.area.readOnly = false;
+    p.area.focus();
+
+    this.panelButtons([
+      { label: 'CHECK THE CODE', primary: true,
+        on: function () { self.checkImport(); } },
+      { label: 'CANCEL', on: function () { self.closePanel(); } },
+    ]);
+  },
+
+  /* Decode ONLY. Nothing is written here — a rejected code must leave both the
+     save and the pasted text exactly where they were, so the player can fix a
+     truncated paste instead of starting again. */
+  checkImport() {
+    if (!this.panel) return;
+    const SM = BR.SaveManager, self = this;
+    const text = this.panel.area.value;
+
+    const res = SM.decodeCode(text);
+    if (!res.ok) { this.panelSay(res.reason, '#ff8f8f'); return; }
+
+    const bring = SM.codeTally(res.payload);
+    const have = SM.saveTally();
+
+    // Nothing to lose: no confirmation to give. The two-step exists to protect
+    // progress, and an empty save has none.
+    if (!have.stars && !have.medals && !have.pieces) { this.applyImport(text); return; }
+
+    this.panel.head.textContent = 'REPLACE YOUR PROGRESS?';
+    this.panel.note.textContent =
+      'That code holds ' + this.tallyWords(bring) + '. ' +
+      'This browser has ' + this.tallyWords(have) + ', and all of it — ' +
+      'plus every lap record — is replaced. This cannot be undone. ' +
+      'Your settings are kept.';
+    this.panel.area.readOnly = true;
+    this.panelSay('');
+
+    this.panelButtons([
+      { label: 'YES, REPLACE IT', danger: true,
+        on: function () { self.applyImport(text); } },
+      { label: 'KEEP WHAT I HAVE', on: function () { self.closePanel(); } },
+    ]);
+  },
+
+  applyImport(text) {
+    const res = BR.SaveManager.importCode(text);
+    if (!res.ok) { this.panelSay(res.reason, '#ff8f8f'); return; }
+
+    // Repair anything the code could not carry: unlocks the current build
+    // grants for those stars, and the four vehicle slots.
+    BR.ProgressionManager.applyUnlocks();
+    BR.Game.refreshPlayerVehicles();
+
+    this.closePanel();
+    this.set(this.MENU);
+    this.say('Progress restored — ' + this.tallyWords(res.tally));
   },
 
   /* ── drawing ───────────────────────────────────────────────────────────── */
@@ -702,57 +1024,75 @@ BR.Screens = {
     ctx.fillText(this.DIFF_BLURB[cur] || '', cx, by + 44);
     ctx.textAlign = 'left';
 
-    /* ── reset progress ────────────────────────────────────────────────────
-       15_Save_System.md open question 4. Deliberately the smallest, dimmest
-       control on the screen — it must be findable, not inviting.
+    /* ── save codes and reset progress ─────────────────────────────────────
+       15_Save_System.md open questions 2 and 4, in one row of small, dim
+       controls — they must be findable, not inviting.
 
-       Only appears once there is something to lose. Offering to erase an empty
-       save is noise, and it is the one button whose absence nobody misses. */
-    const save = BR.SaveManager.get();
-    const stars = P.stars();
-    const evs = save.progression.events || {};
-    let medals = 0;
-    for (const k in evs) if (evs[k] && evs[k].medal) medals++;
-    const pieces = (save.collection.piecesFound || []).length;
+       COUNTED THROUGH SaveManager.saveTally(), not by walking the events map
+       here. This used to count any event with a truthy `medal`, and 'none' is
+       truthy: drawEvents calls eventRecord() for every event, which CREATES a
+       {medal:'none'} row, so simply opening the event list on a fresh save gave
+       the player eighteen medals and offered to erase them.
 
-    if (stars > 0 || medals > 0 || pieces > 0) {
-      /* Pinned near the bottom, but NEVER above the end of the flowed content.
-         Bottom-anchoring alone put it straight on top of the difficulty buttons
-         at 820x420 and below — and because hit() takes the last matching region,
-         the reset won: a press aimed at DIFFICULTY armed a destructive control.
-         Taking the max keeps it low on a normal window and clear of everything
-         on a short one.
+       USE A SAVE CODE is always here, including on an empty save — a brand new
+       browser is precisely where somebody needs to bring progress IN, and it is
+       the one case where importing destroys nothing. Copying out and resetting
+       only appear once there is something to copy or lose. */
+    const t = BR.SaveManager.saveTally();
+    const hasProgress = t.stars > 0 || t.medals > 0 || t.pieces > 0;
 
-         `by` is the difficulty row; its blurb ends around by + 52, and the armed
-         state needs two lines above the buttons, so by + 70 is the first safe y. */
-      const ry = Math.max(h - 52, by + 70);
-      if (!this.resetArmed) {
-        this.button(ctx, cx - 70, ry, 140, 24, 'RESET PROGRESS',
-                    'resetArm', null, { small: true });
-      } else {
-        /* Armed. The confirm names the actual numbers rather than asking "are
-           you sure" — a player who has forgotten they have 14 stars deserves to
-           be told before they press it, not after. */
-        const bits = [];
-        if (stars)  bits.push(stars  + (stars  === 1 ? ' star'  : ' stars'));
-        if (medals) bits.push(medals + (medals === 1 ? ' medal' : ' medals'));
-        if (pieces) bits.push(pieces + (pieces === 1 ? ' piece' : ' pieces'));
+    /* Pinned near the bottom, but NEVER above the end of the flowed content.
+       Bottom-anchoring alone put it straight on top of the difficulty buttons
+       at 820x420 and below — and because hit() takes the last matching region,
+       the reset won: a press aimed at DIFFICULTY armed a destructive control.
+       Taking the max keeps it low on a normal window and clear of everything
+       on a short one.
 
+       `by` is the difficulty row; its blurb ends around by + 52, and the armed
+       state needs two lines above the buttons, so by + 70 is the first safe y.
+       The save-code row is deliberately the SAME row rather than a second one:
+       a second row would have to start higher, and at 900x500 that is already
+       on top of the difficulty blurb. */
+    const ry = Math.max(h - 52, by + 70);
+
+    if (hasProgress && this.resetArmed) {
+      /* Armed. The confirm names the actual numbers rather than asking "are
+         you sure" — a player who has forgotten they have 14 stars deserves to
+         be told before they press it, not after. */
+      ctx.textAlign = 'center';
+      ctx.font = '700 11px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = '#ff8f8f';
+      ctx.fillText('Erase ' + this.tallyWords(t) + ' and every lap record?',
+                   cx, ry - 16);
+      ctx.font = '600 10px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.38)';
+      ctx.fillText('This cannot be undone. Settings are kept.', cx, ry - 3);
+      ctx.textAlign = 'left';
+
+      this.button(ctx, cx - 150, ry + 6, 144, 26, 'YES, ERASE IT ALL',
+                  'resetConfirm', null, { small: true, danger: true });
+      this.button(ctx, cx + 6, ry + 6, 144, 26, 'KEEP MY PROGRESS',
+                  'goto', this.MENU, { small: true });
+    } else if (hasProgress) {
+      // Only labelled when the label has somewhere to go: on a short window the
+      // caption would land in the difficulty blurb.
+      if (ry - 13 >= by + 58) {
         ctx.textAlign = 'center';
-        ctx.font = '700 11px ui-monospace, Consolas, monospace';
-        ctx.fillStyle = '#ff8f8f';
-        ctx.fillText('Erase ' + bits.join(', ') + ' and every lap record?',
-                     cx, ry - 16);
         ctx.font = '600 10px ui-monospace, Consolas, monospace';
-        ctx.fillStyle = 'rgba(255,255,255,0.38)';
-        ctx.fillText('This cannot be undone. Settings are kept.', cx, ry - 3);
+        ctx.fillStyle = 'rgba(255,255,255,0.30)';
+        ctx.fillText('A save code moves progress to another browser', cx, ry - 13);
         ctx.textAlign = 'left';
-
-        this.button(ctx, cx - 150, ry + 6, 144, 26, 'YES, ERASE IT ALL',
-                    'resetConfirm', null, { small: true, danger: true });
-        this.button(ctx, cx + 6, ry + 6, 144, 26, 'KEEP MY PROGRESS',
-                    'goto', this.MENU, { small: true });
       }
+      const bw3 = 108, bg3 = 6, x0 = cx - (bw3 * 3 + bg3 * 2) / 2;
+      this.button(ctx, x0, ry, bw3, 24, 'COPY MY CODE',
+                  'saveExport', null, { small: true });
+      this.button(ctx, x0 + bw3 + bg3, ry, bw3, 24, 'USE A CODE',
+                  'saveImport', null, { small: true });
+      this.button(ctx, x0 + (bw3 + bg3) * 2, ry, bw3, 24, 'RESET PROGRESS',
+                  'resetArm', null, { small: true });
+    } else {
+      this.button(ctx, cx - 80, ry, 160, 24, 'USE A SAVE CODE',
+                  'saveImport', null, { small: true });
     }
 
     if (!BR.SaveManager.storageOk) {
