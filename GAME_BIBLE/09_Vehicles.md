@@ -57,6 +57,11 @@ The default and the yardstick. Every other vehicle is described relative to this
 Medium-low speed, high handling, strong on rough surfaces, medium weight.
 Suffers least from `rugGrass` and `blanket` penalties. Rewards shortcut hunting.
 
+**That second sentence is flavour, not mechanics, and Phase 11 measured why it
+has to be** — see *Per-surface modifiers*, below. The field spends 0.20% of its
+driving time on `rugGrass` and 0.00% on `blanket`. There is nowhere to spend an
+off-road stat. The character stays; the stat does not exist.
+
 ### Yellow Rocket — speed
 High speed, medium acceleration, low handling, low weight.
 Fastest in a straight line, hardest to corner, loses every collision. The expert pick
@@ -203,9 +208,11 @@ because when the player wins the race ends before the rest of the field finishes
    72.1% spread across the roster against `maxSpeed`'s 35%. Not folded into
    acceleration — see the section below for why that would delete a design axis
    rather than simplify one.
-3. Do vehicles have per-surface modifiers (Blue Buggy's off-road strength), or is that
-   emergent from handling and weight? Explicit modifiers are clearer but add a data
-   dimension.
+3. ~~Do vehicles have per-surface modifiers (Blue Buggy's off-road strength), or is
+   that emergent from handling and weight?~~ **RESOLVED: neither — it is flavour
+   text, and the prototype was deleted.** Built, measured, and worth 0.008s a lap
+   on the surfaces the roster description actually names, against a 0.18s noise
+   floor. See *Per-surface modifiers*, below, for where the whole budget went.
 
 ## Related
 
@@ -321,3 +328,161 @@ lets a car be sluggish out of a corner but explosive on a boost, or the reverse.
 Folding them would delete a design axis rather than simplify one.
 
 No code change. The stat earns its place.
+
+## Per-surface modifiers — resolved (Phase 11): flavour text, and deleted
+
+Open question 3 asked whether Blue Buggy's off-road strength is a real modifier
+or emergent from handling and weight. It was built, measured against the roster
+it was supposed to differentiate, and **deleted**. It is neither: it is a
+sentence in a car description, and the reason it can only ever be a sentence is
+that the game has nowhere to put it.
+
+The prototype was an `offRoad` stat scaling the PENALTY half of a surface entry
+by `1/k` and leaving the bonus half alone — an off-road car should suffer less
+on loose sand, not go faster on hardwood. `k = 1` short-circuited to the
+existing code path, so the two arms of every A/B below differ by exactly this
+one stat. Confirmed: the `k = 1` arm reproduced `tools/reference-times.txt` to
+the hundredth on all four time trials (93.92 / 92.03 / 92.38 / 108.43).
+
+### 1. Where does a car actually drive?
+
+Every event, the calibration stand-in (Technician on `normal`, seat one), three
+seeds, accumulating the surface under the wheels every fixed step:
+
+| | share of driving time |
+| --- | --- |
+| `rugRoad` | the whole of 9 of the 18 events |
+| `sand` / `packedSand` | 82-99% of the four sandbox events |
+| `hardwood` | 22.8% of Bedside Boulevard |
+| `puddle` | 1.2-18.7% of the sandbox |
+| `looseSand` | 0.85% |
+| **`rugGrass`** | **0.79% for the Speedster, 0.00% for every other personality** |
+| **`blanket`** | **0.00%** |
+| **`bookCover`** | **0.00%** |
+| **`paper`** | never referenced by any track |
+
+**Four of the eight tracks are one surface from start to finish.** Town Rug
+Loop, Shelf Run and Dresser Drop measured 100.00% `rugRoad` for the entire
+field, on every personality, on every seed. A per-surface stat is inert there by
+construction.
+
+That table was taken with all four personalities driving, not just the tidy one,
+precisely because the Rookie's `lineAccuracy` of 0.65 is the closest thing the
+project has to a sloppy player. It did not help: the Rookie touched `rugGrass`
+for 0.00% of its time. The only car that found any grass at all was the
+Speedster, which is the personality that runs wide.
+
+### 2. What is a second on each surface worth?
+
+The AI follows an authored line and cannot go shortcut-hunting, so exposure
+alone cannot settle it. Driving the controller directly on a forced surface, ten
+seconds of full throttle, `k = 1` against a generous `k = 1.25`:
+
+| surface | top speed, k=1 → k=1.25 | distance | **seconds bought per 10s spent there** |
+| --- | --- | --- | --- |
+| `rugRoad`, `hardwood`, `bookCover`, `packedSand` | unchanged | +0.00% | **0.000** |
+| `puddle` | 325 → 328 | +1.37% | 0.135 |
+| `rugGrass` | 286 → 294 | +4.37% | **0.419** |
+| `sand` (unpacked) | 281 → 293 | +4.41% | 0.422 |
+| `blanket` | 240 → 260 | +8.46% | 0.780 |
+| `looseSand` | 233 → 255 | +9.42% | 0.861 |
+
+Multiply the two tables together. **0.20% of a 90-second lap is 0.18 seconds on
+grass, and 0.18s × 0.0419 = 0.008 seconds.** The quietest event in the game has
+a 0.18s seed-to-seed spread and the loudest has 3.50s, so Blue Buggy's signature
+ability is between **24 and 470 times smaller than the noise it would have to be
+seen through**. `blanket` — the other surface named in the description — is
+worth more per second and gets zero seconds, so it multiplies out to exactly
+nothing.
+
+For the stat to clear even the quietest noise floor a player would have to spend
+**4.3 seconds of every lap on carpet**. They will not, and the reason is in the
+same table: grass costs 18% of top speed and the most generous off-road stat
+gives back 4.4%. **The penalty is four times the biggest plausible bonus.** An
+off-road car on grass still does 294 against 350 on the road — 16% down. No
+value of this stat ever makes rough ground a line worth taking, which means
+"rewards shortcut hunting" is not a thing the stat can do.
+
+### 3. Where it does move lap times, it is not the feature that was asked for
+
+Six cars, eight tracks, five seeds, time trials, control against a designer's
+spread (Blue Buggy 1.25, Green Pickup 1.15, Red Racer and Heirloom 1.00, Purple
+Micro 0.90, Yellow Rocket 0.85):
+
+| track | biggest per-car change | roster spread from existing stats | what `offRoad` adds |
+| --- | --- | --- | --- |
+| Town Rug Loop | **0.00s** | 25.77s | 0.00s (0.0%) |
+| Shelf Run | **0.00s** | 27.40s | 0.00s (0.0%) |
+| Dresser Drop | **0.00s** | 27.12s | 0.00s (0.0%) |
+| Bedside Boulevard | 0.52s on a 120s lap | 28.17s | 0.53s (1.9%) |
+| Dune Dash | 1.52s | 21.28s | 2.75s (12.9%) |
+| Bucket Brigade | 1.55s | 20.32s | 2.77s (13.6%) |
+| Tide Pool | 1.38s | 23.50s | 2.63s (11.2%) |
+
+Bedside Boulevard is the track this whole idea was for — the only one with
+authored surface *variety* — and its largest movement, 0.52s, sits inside that
+same car's own ±1.18s seed spread. It is invisible because its 22.8% of
+non-road driving is `hardwood`, which is *faster* than rug and therefore a bonus
+the stat deliberately does not touch. The surfaces that would have been penalised
+get 0.00%.
+
+The sandbox numbers are real and above the noise, and they are still not the
+feature. **On those four tracks sand IS the road**, so there is no line choice to
+reward: `offRoad` is a fifth top-speed stat that switches on for half the game
+and off for the other half. It would also make a platinum time mean something
+different depending on which car you picked, and time-trial targets are
+absolute — the game has no machinery for that and should not grow any.
+
+### 4. And it cannot do the job even at absurd magnitude
+
+The point of the stat was to make the off-road car good off-road. Measured on
+Dune Dash, Blue Buggy laps in 103.32s and Yellow Rocket in 83.63s: the
+off-road specialist is **19.7 seconds behind** before the stat is applied,
+because 313 against 413 top speed is an order of magnitude more lap time than
+any surface modifier can pay. The treatment above claws back 1.52s — **7.7% of
+the gap**. An isolation sweep on one car with every other stat held identical
+put `k` at 2.00, twice any shippable value, and bought 4.10s: **21% of the gap,
+and Blue Buggy is still fifteen seconds slower in the sand than the car that is
+supposed to be bad in it.** Swamped by the stats that already exist.
+
+### 5. Nor is it emergent
+
+The other half of the original question. Surface grip enters the controller as
+`retention^(handling × S.grip)`, an exponent the handling stat already
+multiplies, so the roster might already degrade at different rates. Straight-line
+distance on each surface as a fraction of that same car's own `rugRoad` figure:
+
+| | handling | on `rugGrass` | on `looseSand` |
+| --- | --- | --- | --- |
+| Red Racer | 0.85 | 81.61% | 66.67% |
+| Green Pickup | 0.74 | 82.18% | 67.17% |
+| Blue Buggy | 1.00 | 82.21% | 67.20% |
+| Heirloom | 1.05 | 82.28% | 67.18% |
+| Yellow Rocket | 0.62 | 82.45% | 68.06% |
+| Purple Micro | 0.98 | 82.50% | 68.05% |
+
+**0.89 points of spread on grass and 1.39 on loose sand — and it does not track
+`handling` at all.** The best and worst rows are 0.98 and 0.85, with 0.62 in
+between; the ordering is an artifact of where each car's cruising speed sits on
+the quadratic drag curve, not a design axis. Every car loses the same fraction of
+its pace on rough ground, so there is no emergent off-road specialist either.
+
+### What would have to be true first
+
+This is a **content** finding, not a stat one, and it is the right way round: the
+stat was fine and the world had no use for it. Reopening it needs tracks to
+change first, not vehicles —
+
+- penalty surfaces painted where a **line choice** exists, rather than as the
+  base surface of a whole track or as the punishment for leaving one;
+- and a penalty small enough that going off-road is an option rather than a
+  mistake. At `rugGrass`'s current −18% top speed the detour has to be shorter
+  than the road by more than any car can make up.
+
+Until both are true, re-run the exposure census before writing any code: if
+`rugGrass` and `blanket` are still under a percent of driving time, the answer
+has not changed. No stat can be worth more than the ground it stands on.
+
+**Prototype deleted. `material` is still the only non-stat field a vehicle
+carries, and `offRoad` never became a second one.** No lap time moved — all
+eighteen events measured identical to the committed baseline.
