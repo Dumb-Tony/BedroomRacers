@@ -418,14 +418,12 @@ props only. Do not migrate the vehicle model.
    direction. `lookAhead` survives as a small extra bias, but `horizonBias` does
    most of the work. Open sub-question: is `yawRate 4.5` too much lag? It makes
    the car read 64° sideways in a 43° drift.
-5. **Air control amount.** 0.35 is arbitrary. Too much trivialises jump shortcuts;
-   too little makes landings feel arbitrary.
-6. **Wall riding.** *(New, found in Phase 1.)* A car that deflects off a wall
-   slides along it while keeping full speed, because only the normal component of
-   velocity is damped. That is correct physics and it makes glancing blows feel
-   good — but it also means leaning on a wall through a corner is free. Real
-   arcade racers usually add a tangential scrub. Needs a decision before Phase 3,
-   since it changes how barriers get placed in track design (`05_Tracks.md`).
+5. ~~**Air control amount.** 0.35 is arbitrary.~~ **RESOLVED: 0.35 stands, and
+   it is not arbitrary once measured** — it buys rotation, not relocation. See
+   below.
+6. ~~**Wall riding.**~~ **RESOLVED in Phase 1 and verified in Phase 10.** Not a
+   tangential scrub — a lower speed CEILING while contact lasts. See below and
+   the long comment in `Collision.js`.
 
 ## Related
 
@@ -540,3 +538,63 @@ are worth recording:
 The instrument that works is the one already used for the control hint: render
 the same frame with the feature suppressed, diff, and classify **only the pixels
 that differ**. Those are the pips and nothing else.
+
+## Air control, measured — question 5
+
+The question set the two failure modes: too much and a jump becomes a way to
+re-aim at a route you did not earn; too little and a landing is whatever the
+ramp decided.
+
+Those are different quantities, and 0.35 separates them. Full lock held for a
+whole 0.67-second jump, swept:
+
+| `airControl` | sideways drift | heading change |
+| --- | --- | --- |
+| 0.00 | 0.0 | 0.0° |
+| 0.15 | 4.9 | 5.7° |
+| 0.25 | 8.1 | 9.6° |
+| **0.35** | **11.4** | **13.4°** |
+| 0.50 | 16.1 | 19.2° |
+| 0.75 | 23.7 | 28.9° |
+| 1.00 | 30.9 | 38.7° |
+
+Rug Loop's road is 280 wide, so a half-width is 140. **At 0.35 a full-lock jump
+moves the car 11.4 units — eight per cent of a half-width.** You cannot steer to
+a different part of the track in the air; you land close to where the ramp sent
+you, which is what stops jumps becoming a shortcut-picker.
+
+What you can do is turn 13.4°, which is most of the way to straightening a car
+that left the ramp crooked. That is the whole of the landing complaint. **Air
+control at 0.35 is authority over the car's ROTATION, not over its POSITION**,
+and the two halves of the question turn out to want opposite things from the
+same number only if you measure the wrong one.
+
+Going to 1.00 would still only move the car 31 units — a fifth of a half-width —
+which is worth knowing: even "full" air control could not trivialise a shortcut
+on roads this wide. The value is defensible at 0.35 for the rotation it gives,
+not because translation was ever the risk.
+
+## Wall riding, verified — question 6
+
+Resolved in Phase 1 and re-measured in Phase 10 because the fix is unusual
+enough to be worth confirming it still bites.
+
+A tangential scrub is the conventional answer and it does not work here: the
+engine re-accelerates toward the speed cap every tick, so speed the car can buy
+straight back nets out to nothing. A per-tick scrub of 0.9955 — 24% a second on
+paper — moved the real cost of leaning from 0.3% to 2.9%.
+
+What the engine cannot out-accelerate is a lower **ceiling**. Contact marks the
+car, the controller drops its top speed to `wallContactMaxSpeed` while the mark
+lasts, and the mark decays in `wallContactTime`. Measured today, holding full
+throttle for two seconds:
+
+- open road: 699.2 units covered, ending at 349.6
+- leaning on the wall: 570.0 units covered, ending at 287.0
+- **leaning costs 18.5% of the distance**, against 0.3% before the fix
+- **a single glance costs 1.90%**
+
+That last pair is the design. A glance and a lean differ by **duration, not
+force**, which is exactly the axis a decaying mark separates them on: the glance
+is over before the ceiling matters, and the lean is capped for the whole corner.
+Barriers can be placed as barriers, not as punishment.
