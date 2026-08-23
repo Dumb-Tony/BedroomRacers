@@ -632,16 +632,252 @@ BR.Renderer = {
 
        so the matrix is (cos, tilt·sin, −sin, tilt·cos, …) — the camera's yaw,
        squashed vertically by groundTilt. The texture therefore rotates and lies
-       down with the floor exactly as painted-on carpet would. */
-    const pat = this.groundPattern(ctx, this.groundTile(arena));
-    if (pat) {
+       down with the floor exactly as painted-on carpet would.
+
+       `fill` does not clear the path, so every layer below goes down through
+       the same four points the base colour just used: up to four fills and one
+       path, where the rug used to cost two paths for one texture. */
+    const layers = this.groundLayers(arena);
+    for (let L = 0; L < layers.length; L++) {
+      const pat = this.groundPattern(ctx, layers[L]);
+      if (!pat) continue;
       ctx.fillStyle = pat;
-      ctx.beginPath();
-      ctx.moveTo(c[0].sx, c[0].sy);
-      for (let i = 1; i < 4; i++) ctx.lineTo(c[i].sx, c[i].sy);
-      ctx.closePath();
       ctx.fill();
     }
+
+    this.drawRugEdge(ctx, arena, c);
+  },
+
+  /* Which tiles this floor is made of, bottom to top. The weave is the
+     material and goes on last; anything before it is PRINT, and print is
+     under the pile rather than on top of it. */
+  groundLayers(arena) {
+    const key = 'layers:' + arena.id;
+    this._tiles = this._tiles || {};
+    if (this._tiles[key] !== undefined) return this._tiles[key];
+    const out = [];
+    if (arena.world === 'town-rug') {
+      out.push(this.rugPrintTile('field'));
+      out.push(this.rugPrintTile('town'));
+    }
+    out.push(this.groundTile(arena));
+    this._tiles[key] = out;
+    return out;
+  },
+
+  /* ── THE PRINTED RUG ───────────────────────────────────────────────────────
+     12_Art_Guide.md open question 6: a full illustrated texture, or tiles?
+     Tiles — but a 128-unit tile is MATERIAL, and a printed town rug is
+     IMAGERY. A pond has to be a pond, which means a tile several hundred units
+     across so a motif can be an object rather than a repeat.
+
+     TWO layers at deliberately mismatched sizes, 1024 and 768. Each tiles on
+     its own period, so the pair only truly repeats every 3,072 units, and the
+     grid a single tile would rule across the floor never appears. That is the
+     whole reason there are two and not one.
+
+     THE FIRST ATTEMPT FAILED BY BEING GENEROUS. Tiles of 640 and 448 carrying
+     four houses, a car park, two footpaths and a hedgerow apiece came out as
+     WALLPAPER: the camera sees 1,113 x 2,319 units, so a 448 tile repeats five
+     times across the frame and eight down it, and the eye locks onto the
+     period instantly. Rows of identical roofs, and the paths meeting in a
+     regular lattice.
+
+     That is the real content of the "a single illustration looks better"
+     argument in the open question — not fidelity, PERIOD. So the answer is
+     tiles that are bigger than they are detailed. Each carries one or two
+     features, nothing spans an edge (a shape crossing the tile boundary
+     becomes a continuous lattice line the moment it repeats), and the period
+     is longer than the frame is wide.
+
+     Everything is still drawn NINE times, offset by ±S on each axis, so a
+     shape that does reach an edge continues on the far side rather than being
+     cut off. Build-time only: the tile is made once and cached.
+
+     Contrast is deliberately low. 05_Tracks.md requires the road to be
+     unmistakable, so the print is hue and a few percent of value — never a
+     pale hard edge, which is the kerb's job and must stay the kerb's alone. */
+  rugPrintTile(layer) {
+    const key = 'rugprint:' + layer;
+    this._tiles = this._tiles || {};
+    if (this._tiles[key] !== undefined) return this._tiles[key];
+
+    const S = layer === 'field' ? 1024 : 768;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+
+    // Seeded, for the reasons groundTile is: a floor that differed between two
+    // renders would break every pixel check, and Math.random is the AI's.
+    let seed = layer === 'field' ? 90210 : 4471;
+    const rnd = function () {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+
+    // Draw once per wrap offset, so nothing is clipped at a seam.
+    const wrap = function (fn) {
+      for (let ox = -1; ox <= 1; ox++) {
+        for (let oy = -1; oy <= 1; oy++) {
+          g.save(); g.translate(ox * S, oy * S); fn(); g.restore();
+        }
+      }
+    };
+    const blob = function (x, y, rx, ry, fill) {
+      wrap(function () {
+        g.fillStyle = fill;
+        g.beginPath();
+        g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+        g.fill();
+      });
+    };
+    const patch = function (x, y, w, h, r, fill) {
+      wrap(function () {
+        g.fillStyle = fill;
+        g.beginPath();
+        if (g.roundRect) g.roundRect(x, y, w, h, r);
+        else g.rect(x, y, w, h);
+        g.fill();
+      });
+    };
+
+    if (layer === 'field') {
+      /* The landscape the town is printed on. Three features in a thousand
+         units, all soft-edged: a straight edge repeating is a grid line, and
+         at 30% vertical compression nothing smaller than a car survives to be
+         worth the risk anyway. */
+      blob(300, 300, 210, 150, 'rgba(150,186,104,0.20)');        // playing field
+      blob(268, 268, 120, 84, 'rgba(160,194,110,0.12)');
+      blob(760, 690, 150, 104, 'rgba(120,166,90,0.20)');         // parkland
+      blob(268, 754, 118, 70, 'rgba(92,146,186,0.26)');          // the pond
+      blob(250, 742, 74, 42, 'rgba(140,190,214,0.16)');          // shallow end
+      wrap(function () {                                         // printed rim
+        g.strokeStyle = 'rgba(38,32,26,0.20)';
+        g.lineWidth = 3;
+        g.beginPath();
+        g.ellipse(268, 754, 118, 70, 0, 0, Math.PI * 2);
+        g.stroke();
+      });
+
+      // A hedge, as a short arc of separate bushes rather than a boundary
+      // line — a line that reaches the tile edge tiles into a fence.
+      for (let i = 0; i < 8; i++) {
+        blob(190 + i * 30, 452 + Math.sin(i * 0.7) * 12, 17, 10,
+             'rgba(46,88,52,0.24)');
+      }
+      // Trees in the park.
+      for (let i = 0; i < 6; i++) {
+        blob(660 + rnd() * 200, 610 + rnd() * 160, 20 + rnd() * 9,
+             12 + rnd() * 5, 'rgba(46,88,52,0.22)');
+      }
+      /* Worn smooth by years of play. 06_World_Town_Rug.md is explicit that
+         pristine reads as a product shot. Big and faint, so they read as the
+         pile being crushed rather than as a stain. */
+      for (let i = 0; i < 4; i++) {
+        blob(rnd() * S, rnd() * S, 130 + rnd() * 90, 80 + rnd() * 54,
+             'rgba(255,246,224,0.04)');
+      }
+    } else {
+      /* The town, and it is one small town in 768 units rather than a suburb
+         in every direction. This is the layer that says RUG rather than lawn,
+         so it carries the only warm hues in the print. */
+      /* Printed line art, not a colour blotch. The dark outline is the same
+         trick that made the cars read as moulded toys rather than coloured
+         regions, and it does the same job here: without it a house at this
+         alpha is a pale smudge, and with it the eye reads a drawn shape. */
+      const house = function (x, y, w, h, roof) {
+        patch(x, y, w, h, 5, 'rgba(232,222,198,0.24)');
+        patch(x, y, w, h * 0.52, 4, roof);
+        wrap(function () {
+          g.strokeStyle = 'rgba(38,32,26,0.26)';
+          g.lineWidth = 3;
+          g.beginPath();
+          if (g.roundRect) g.roundRect(x, y, w, h, 5); else g.rect(x, y, w, h);
+          g.stroke();
+          g.beginPath();
+          g.moveTo(x, y + h * 0.52); g.lineTo(x + w, y + h * 0.52);
+          g.stroke();
+        });
+      };
+      house(150, 210, 86, 64, 'rgba(178,92,72,0.26)');
+      house(262, 232, 68, 56, 'rgba(96,110,150,0.24)');
+      house(160, 314, 74, 58, 'rgba(178,140,72,0.24)');
+      house(596, 566, 80, 62, 'rgba(120,92,142,0.22)');
+
+      /* The lane the houses sit on. It STOPS inside the tile — a path drawn
+         out to the edges met its own copy on the other side and ruled a
+         continuous diagonal lattice over the whole floor, which was the single
+         most obviously tiled thing in the first attempt. */
+      g.lineCap = 'round';
+      wrap(function () {
+        g.strokeStyle = 'rgba(214,198,158,0.14)';
+        g.lineWidth = 17;
+        g.beginPath();
+        g.moveTo(120, 400); g.quadraticCurveTo(300, 350, 372, 196);
+        g.stroke();
+      });
+
+      // Gardens: a scatter of printed flowerbeds, beside the plots only.
+      for (let i = 0; i < 11; i++) {
+        blob(130 + rnd() * 230, 190 + rnd() * 200, 5 + rnd() * 4, 3 + rnd() * 3,
+             rnd() > 0.5 ? 'rgba(216,110,96,0.20)' : 'rgba(232,196,96,0.20)');
+      }
+    }
+
+    this._tiles[key] = cv;
+    return cv;
+  },
+
+  /* ── THE EDGE OF THE RUG ───────────────────────────────────────────────────
+     The one thing no tile can give, and the reason the answer to question 6 is
+     not simply "tiles". A repeat has no edge, so a tiled floor is an infinite
+     floor — and an infinite green field is a green field, not a rug in a
+     bedroom. A rug is an OBJECT lying on a floor, and what says so is that it
+     stops.
+
+     The arena is the track plus 400 units, so the binding sits a couple of car
+     lengths beyond the outer barrier: visible from the road, never on it. */
+  drawRugEdge(ctx, arena, c) {
+    if (arena.world !== 'town-rug') return;
+    const Pj = BR.Projection;
+    const b = arena.bounds;
+    const HEM = 62;
+
+    const inner = [
+      Pj.project(b.minX + HEM, b.minY + HEM, 0),
+      Pj.project(b.maxX - HEM, b.minY + HEM, 0),
+      Pj.project(b.maxX - HEM, b.maxY - HEM, 0),
+      Pj.project(b.minX + HEM, b.maxY - HEM, 0),
+    ];
+
+    // The binding tape, as a frame: outer loop one way, inner loop the other.
+    ctx.beginPath();
+    ctx.moveTo(c[0].sx, c[0].sy);
+    for (let i = 1; i < 4; i++) ctx.lineTo(c[i].sx, c[i].sy);
+    ctx.closePath();
+    ctx.moveTo(inner[0].sx, inner[0].sy);
+    for (let i = 3; i > 0; i--) ctx.lineTo(inner[i].sx, inner[i].sy);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(96,74,58,0.60)';
+    ctx.fill();
+
+    // Stitching along the inside of the tape, and a darker outer lip so the
+    // rug reads as having a thickness the floor does not.
+    ctx.lineWidth = 2 / BR.Renderer.zoom;
+    ctx.strokeStyle = 'rgba(232,220,196,0.28)';
+    ctx.beginPath();
+    ctx.moveTo(inner[0].sx, inner[0].sy);
+    for (let i = 1; i < 4; i++) ctx.lineTo(inner[i].sx, inner[i].sy);
+    ctx.closePath();
+    ctx.stroke();
+
+    ctx.lineWidth = 3 / BR.Renderer.zoom;
+    ctx.strokeStyle = 'rgba(28,22,18,0.45)';
+    ctx.beginPath();
+    ctx.moveTo(c[0].sx, c[0].sy);
+    for (let i = 1; i < 4; i++) ctx.lineTo(c[i].sx, c[i].sy);
+    ctx.closePath();
+    ctx.stroke();
   },
 
   /**

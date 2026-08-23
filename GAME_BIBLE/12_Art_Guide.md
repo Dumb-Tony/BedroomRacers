@@ -29,23 +29,53 @@ about drawing for it was wrong.
 rug — a low chase view. You see the backs and flanks of things, and almost never
 their tops.
 
-### heightScale is not geometrically consistent
+### heightScale is 0.85, and that is now a decision (Phase 9)
 
 An axonometric camera at elevation *e* compresses ground depth by sin(*e*) and
 lifts height by cos(*e*). With `groundTilt` at 0.30, consistency would need
 `heightScale` of **0.954**. It is 0.85, so verticals sit about **11% shorter**
 than the ground plane implies.
 
-That is small enough to read as a deliberate flattening rather than an error, and
-it has never actually been chosen — 0.85 was a guess from before the tilt moved,
-and it was slightly *too tall* for 0.62 as well. Worth a decision:
+That inconsistency was treated as a debt to be paid. **It is not.** Both values
+were rendered at the same airborne moment — same seed, same car, same camera,
+`dt = 0` so nothing eased between the two — and looked at.
 
-- **0.95** — geometrically honest, everything gets visibly taller, and every jump
-  reads higher.
-- **0.85** — keep, and treat the squash as style.
+**`heightScale / groundTilt` is an exchange rate.** Height and depth spend the
+same screen axis, so one unit of height is drawn exactly where **2.83 units of
+receding ground** would be drawn. That single number decides everything below.
 
-Changing it alters how every jump reads, so it belongs to whoever is tuning feel,
-not to this document.
+| Jump | Apex | Lift at 0.85 | at 0.954 | Reads as this far up the road |
+| --- | --- | --- | --- | --- |
+| Rug Route, the book | 79 | 77px | 87px | **8.0 → 9.0 car lengths** |
+| Dresser Drop | ~112 | 110px | 123px | 11.3 → 12.7 |
+| Bucket Brigade | ~151 | 148px | 166px | **15.3 → 17.2** |
+
+What the renders showed:
+
+- **The gain is 10–19px** on a 740px view, and at the rug's book ramp it is
+  almost invisible. The claim that "every jump reads higher" is true and much
+  smaller than it sounds.
+- **The loss is legible.** At 160 units of height the car at 0.85 already sits
+  156px above a shadow drawn at 0.19 alpha; at 0.954 it is 175px, and in the
+  frame it stopped reading as a car in the air and started reading as a car
+  parked further up the tarmac. The height cue is the *association* between car
+  and shadow, and separation past a point destroys the thing it is measuring.
+- **Occlusion scales by the same ratio.** The table below — a 22-unit kerb
+  hiding 2.2 car lengths — becomes h × 3.18 at 0.954, so **every barrier in the
+  game hides 12% more road**. Rendered on the Dresser Drop deck this is visible:
+  the taller plastic sections eat into the deck behind them and into the level
+  below.
+
+What 0.954 genuinely buys, stated fairly: barriers and props read chunkier and
+more object-like, and multi-level tracks separate more — at 0.954 the floor sits
+31px further below the dresser deck. Neither is worth 12% more occlusion and 12%
+more height/depth ambiguity in a projection whose named risk is that it reads
+flat.
+
+And consistency is not a property this camera has to protect. `depthScale`
+already shrinks objects with distance and deliberately leaves the ground plane
+alone, which no orthographic camera does either. **0.85 is chosen, not
+inherited.**
 
 ---
 
@@ -395,16 +425,19 @@ do not trace it.
    above.
 3. ~~Are vehicles rendered from 3D or drawn by hand?~~ **3D.** At 32–48 angles
    per vehicle per cosmetic variant, hand-drawing is not viable.
-4. **`heightScale`: 0.85 or the geometrically consistent 0.954?** A feel decision,
-   because it changes how every jump reads.
+4. ~~`heightScale`: 0.85 or the geometrically consistent 0.954?~~ **0.85, and
+   now chosen rather than inherited.** Rendered at both, at five heights.
+   `heightScale / groundTilt` is an exchange rate between height and depth —
+   2.83 at 0.85, 3.18 at 0.954 — so the consistent value buys 12% more
+   height/depth ambiguity and 12% more occlusion for 10–19px of extra lift.
+   Measured above.
 5. ~~**Fake perspective — yes or no?**~~ **Yes, as object scaling.** Built and
    tunable. The remaining sub-question is whether the ground plane should narrow
    too, which would be true perspective and a much larger change — currently it
    does not.
-6. Does the rug get a full illustrated texture, or is it composed from tiles?
-   Tiles are cheaper and support layout variants; a single illustration looks
-   better. The 30% vertical compression argues for tiles, since fine detail is
-   lost anyway.
+6. ~~Does the rug get a full illustrated texture, or is it composed from tiles?~~
+   **Tiles — two of them, mismatched, plus the one thing a tile cannot do: an
+   edge.** Built and measured below, +30 operations a frame.
 
 ## Related
 
@@ -629,3 +662,89 @@ A pad is authored as an axis-aligned rectangle with **no heading**, so the
 direction comes from the racing line underneath it and is cached on the pad —
 the line does not move. The scroll costs nothing extra: it rides the phase
 already being advanced for the bobbing toy pieces.
+
+### The rug is a rug now (Phase 9)
+
+Open question 6, resolved by building it: **tiles, not an illustration** — but
+the question was framed wrongly, and the framing is the interesting part.
+
+The floor already had a tile. It was a *weave*: 128 units of tufts, which is
+**material**, and it made the floor read as green felt going on forever. A town
+rug is not felt. It is a printed picture of a town, and a printed picture is
+**imagery**, which needs a tile large enough for a motif to be an object rather
+than a repeat. So the floor is now three layers through the one
+`groundPattern` transform — print, print, weave, all under the road:
+
+| Layer | Size | Carries |
+| --- | --- | --- |
+| Field | 1024 | one playing field, one parkland with trees, a pond, a hedge, worn patches |
+| Town | 768 | one cluster of house plots, one lane, garden beds |
+| Weave | 128 | the pile — unchanged |
+
+**Two print layers, at deliberately mismatched sizes.** Each tiles on its own
+period, so the pair only truly repeats every 3,072 units, and the single grid a
+lone tile rules across the floor never forms.
+
+#### What had to be got wrong first
+
+The first attempt used 640 and 448 and was generous with them — four houses, a
+car park, two footpaths and a hedgerow in each. It came out as **wallpaper**.
+The camera sees 1,113 × 2,319 units, so a 448 tile repeats five times across the
+frame and eight down it; the eye locks onto that period immediately, and what
+you get is rows of identical roofs and footpaths meeting in a regular lattice.
+
+That is the real content of the "a single illustration looks better" argument in
+the original question. It was never about fidelity. **It is about period.** An
+illustration wins because it has none. A tile can win the same argument by being
+bigger than it is detailed, which is the fix:
+
+- **Tiles bigger than the frame is wide.** One or two features each, not a
+  suburb in every direction.
+- **Nothing spans a tile edge.** The lane in the town layer stops inside the
+  tile. Drawn out to the edges it met its own copy on the other side and ruled a
+  continuous diagonal across the whole floor — the single most obviously tiled
+  thing in the first attempt.
+- **Soft edges.** A straight edge that repeats is a grid line. Everything in the
+  field layer is an ellipse.
+- **Printed line art.** At the alphas readability allows, a house is a pale
+  smudge. A dark outline and a ridge line turn it into a drawn shape — the same
+  thing the outline does for the cars, for the same reason.
+
+One limit is worth stating because it is not fixable and it is not the tiling's
+fault. **A printed motif is only square from one camera angle.** The camera
+rotates with travel, so the 30% squash falls on a different axis every corner:
+driving straight up a world axis turns a house plot into a thin bar, and the
+same plot is a proper rectangle a quarter of a lap later. No amount of
+pre-stretching helps, because the trick `05_Tracks.md` uses for road markings —
+elongate along the travel axis — needs a travel axis that stays put. It is the
+reason the print is carried by **blocks of hue and value** rather than by
+iconography, and it would apply identically to a single illustration.
+
+#### The edge, which is why the answer is not simply "tiles"
+
+A repeat has no edge, so a tiled floor is an *infinite* floor, and an infinite
+green field is a field rather than a rug in a bedroom. **A rug is an object
+lying on the floor, and what says so is that it stops.**
+
+So the rug gets a bound edge: binding tape, stitching along its inside, and a
+dark lip against the boards. The arena is the outer road edge plus 400 units and
+the tape is 62 wide, so the binding sits about **twelve car lengths past the
+barrier** — in shot from the road at the edges of the map, never anywhere a car
+can reach it. This is the piece neither option in the original question would
+have produced, because both were about *texture*.
+
+#### Readability and cost
+
+`05_Tracks.md` requires the road to be unmistakable, so the print is hue and a
+few percent of value, and never a pale hard edge — that is the kerb's job and
+stays the kerb's alone. Measured on the same frame with the layers switched off
+and on, mean luminance: **road 66.5 either way**, rug 124.9 → 125–136. The
+value gap the track is read by is untouched, and the greyscale pass still has
+the road as the darkest thing on screen and the kerb as the brightest line.
+
+Cost, same frame, layers off then on: **3,955 → 3,985 operations. Thirty** —
+two extra pattern fills and the hem. Measured the other way, by swapping the
+old two-path `drawGround` back in on a live frame, the rug's ground quad costs
+**+24** and **sand and the stunt floor are 6 operations *cheaper* than before**:
+the quad's path is now built once and filled per layer rather than rebuilt per
+texture, which was already paying for two paths to draw one.
