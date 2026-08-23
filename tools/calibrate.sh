@@ -29,14 +29,14 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHROME="${CHROME:-/c/Program Files/Google/Chrome/Application/chrome.exe}"
-OUT="${TMPDIR:-/tmp}/br-calib"
+OUT="${TMPDIR:-/tmp}/br-calib-$$"
 BASE="$ROOT/tools/reference-times.txt"
 mkdir -p "$OUT"
 
 # Fresh profile per run; Chrome exits silently on a locked user-data-dir and the
 # empty output is indistinguishable from the game hanging. See smoke.sh.
 PROFILE="$OUT/profile-$$"
-trap 'rm -rf "$PROFILE" 2>/dev/null' EXIT
+trap 'rm -rf "$OUT" 2>/dev/null' EXIT
 
 [ -x "$CHROME" ] || { echo "chrome not found at: $CHROME" >&2; exit 2; }
 

@@ -24,14 +24,14 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHROME="${CHROME:-/c/Program Files/Google/Chrome/Application/chrome.exe}"
-OUT="${TMPDIR:-/tmp}/br-pays"
+OUT="${TMPDIR:-/tmp}/br-pays-$$"
 mkdir -p "$OUT"
 
 # A fresh profile per run — see the note in smoke.sh. Chrome exits instantly and
 # silently if another instance holds the profile, which reads exactly like the
 # page hanging.
 PROFILE="$OUT/profile-$$"
-trap 'rm -rf "$PROFILE" 2>/dev/null' EXIT
+trap 'rm -rf "$OUT" 2>/dev/null' EXIT
 
 [ -x "$CHROME" ] || { echo "chrome not found at: $CHROME" >&2
                       echo "set CHROME=/path/to/chrome" >&2; exit 2; }

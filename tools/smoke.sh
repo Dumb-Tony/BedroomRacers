@@ -19,9 +19,17 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHROME="${CHROME:-/c/Program Files/Google/Chrome/Application/chrome.exe}"
-OUT="${TMPDIR:-/tmp}/br-smoke"
+OUT="${TMPDIR:-/tmp}/br-smoke-$$"
 mkdir -p "$OUT"
 
+# A FRESH WORKING DIRECTORY PER RUN, removed on exit.
+# The whole output directory is per-run, not just the Chrome profile. Two of
+# these running at once — a subagent in its own worktree while the main session
+# runs the same script — wrote their bundle and their DOM dump to the SAME path,
+# and one reported the other worktree's result: a single invocation printed
+# "SMOKE PASS (49 checks)" and "SMOKE PASS (43 checks)" one after the other, from
+# two different builds. A check that can report somebody else's answer is worse
+# than no check.
 # A FRESH PROFILE PER RUN, removed on exit.
 # Chrome refuses to start on a user-data-dir another instance still holds, and
 # it does so by exiting immediately with no output — which this script reported
@@ -29,7 +37,7 @@ mkdir -p "$OUT"
 # cost a real debugging detour: a rendering change was blamed for a lock left
 # behind by an unrelated browser window. A unique directory cannot collide.
 PROFILE="$OUT/profile-$$"
-trap 'rm -rf "$PROFILE" 2>/dev/null' EXIT
+trap 'rm -rf "$OUT" 2>/dev/null' EXIT
 
 [ -x "$CHROME" ] || { echo "chrome not found at: $CHROME" >&2
                       echo "set CHROME=/path/to/chrome" >&2; exit 2; }
