@@ -89,6 +89,37 @@ BR.PHYSICS = {
   boostMinToFire:   0.15,   // meter needed to trigger. Stops useless dribbles.
                             // NOT in the bible — added in Phase 1
 
+  /* ── MAGNETIC BOOSTERS ───────────────────────────────────────────────────
+     A booster is a rail (Rails.js), not a pad: it grabs the car, pulls it onto
+     its groove, holds it for a beat and throws it out the far end faster than
+     it arrived. These five numbers are the whole character of that.
+
+     A pad hands you meter and lets you choose when to spend it; a booster
+     spends it for you, immediately, and takes the wheel while it does. That is
+     the trade, and it is why a booster gives no meter at all.               */
+  boosterHoldFrac:  0.18,  // fraction of the strip spent clamped at arrival
+                           // speed before the throw. The wind-up. Against a car
+                           // already at its cap this is free — it is doing what
+                           // driving would have done — and it costs only
+                           // against one that was still accelerating. What a
+                           // longer hold really does is spend strip that could
+                           // have been throwing, so it pays less
+  boosterExitMul:   1.55,  // release speed, as a multiple of arrival speed.
+                           // Measured 0.32s a lap at this value
+                           // (07_World_Stunt_Track.md). A much smaller multiple
+                           // mostly evaporates: overspeedDecay hauls the car
+                           // back to its cap at 400/sec^2
+  boosterExitCap:   1.60,  // ceiling on release speed, in the car's own max.
+                           // Bites only when you arrive already boosting, so
+                           // a boost into a booster cannot compound
+  boosterPull:      0.65,  // fraction of the car's lateral offset the magnet
+                           // takes away. NOT 1.0 — see Rails.laneAnchor: a
+                           // full snap puts a whole grid in one groove, and
+                           // cars on a rail cannot collide
+  boosterSnapFrac:  0.12,  // how much of the ride the pull takes. Short: the
+                           // yank sideways is the magnet's signature, and a
+                           // gate's leisurely 0.25 reads as drifting across
+
   /* ── DRIFT CHARGE ────────────────────────────────────────────────────────
      Continuous on slip angle — deliberately NOT tiered (no blue/orange
      sparks). Tiers reward HOLDING a drift, which trains players to slide on

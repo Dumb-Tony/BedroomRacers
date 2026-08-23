@@ -159,6 +159,66 @@ BR.TRACKS['stunt-dresser-drop'] = {
       minSpeed: 210,
       exitBoost: 0.3,
     },
+
+    /* ── THE MAGNETIC BOOSTER ─────────────────────────────────────────────
+       On the floor, on the long straight out of the start/finish line and into
+       the crossing. Mouth centred on the measured centreline point at index
+       127, (1972,2785), heading -49 degrees; the ride runs 520 units to
+       (2305,2385), which is centreline index 133.5. Measured deviation from
+       the road at the midpoint of that chord: 6 units, against a half-width of
+       150 — the straightest stretch on the track, which is what a fixed
+       direction needs.
+
+       WHY HERE AND NOT ON THE DRESSER. Three reasons, in order of how much
+       they cost to learn:
+
+         - The straight is 1100 units long and the car is already at its cap
+           for all of it, so a booster is the only thing that can make it
+           faster. Somewhere the car is slowing anyway, a ride that holds speed
+           through a corner would be worth far more, and would also delete the
+           corner.
+         - A rail takes its deck height from the first car to ride it
+           (Rails.check sets `deckZ` at capture), so a booster on the raised
+           deck would draw on the bedroom floor until someone rode it. The
+           corkscrew already has that quirk; a second one is not worth adding.
+         - It ends 1050 units short of the loop's mouth. Chaining the throw
+           straight into the loop was tempting and is wrong: two rides back to
+           back is 2.1 seconds of not driving, and the rule that keeps rails
+           tolerable is that the ride is short (Rails.js).
+
+       NO METER (`exitBoost: 0`), unlike the loop and the corkscrew. The throw
+       IS the reward, paid immediately. A booster that also filled the meter
+       would be a boost pad with extra steps, which is the thing this was built
+       not to be.
+
+       The mouth is 150 square, which on this diagonal grabs anything within
+       106 units of the line — the whole width the AI ever uses here, measured
+       at -98 on the lap out of the grid and -20 on the flying laps. */
+    {
+      x: 1897, y: 2710, w: 150, h: 150,
+      dir: [0.6398, -0.7685],      // the chord to centreline index 133.5
+      kind: 'booster',
+      length: 520,
+      width: 190,                  // a magnetised track SECTION, not a groove:
+                                   // wider than the loop's ribbon, and leaving
+                                   // 55 units of violet either side so it reads
+                                   // as a strip laid on the road rather than as
+                                   // the road
+      minSpeed: 200,               // lower than the loop's 230 — a booster is
+                                   // help rather than spectacle — but not zero:
+                                   // a car nudged onto it while spun should not
+                                   // be straightened out and fired down the road
+      exitBoost: 0,
+      /* HARD ALTERNATING BANDS, dark against bright, which is what a magnet
+         looks like and — more to the point — is nothing like a boost pad. The
+         first version was flat mid-teal, and rendered it sat 800 units from the
+         pad at t 0.88, which the renderer draws in mint (#4fd8a8). Two
+         differently-shaped teal patches on the same stretch of floor is exactly
+         the readability the legal note's palette was supposed to buy. */
+      colour:     '#17414a',
+      altColour:  '#31c7bd',
+      railColour: '#9ff5ea',
+    },
   ],
 
   boostPads: [

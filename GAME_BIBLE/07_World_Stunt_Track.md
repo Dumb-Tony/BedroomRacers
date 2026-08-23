@@ -360,13 +360,147 @@ The decision is also **committed** rather than re-evaluated every tick: a driver
 that recomputes as the mouth closes straddles the divider at the moment its
 speed crosses the threshold, and arrives in neither lane.
 
+## Magnetic boosters — built
+
+The prediction below was that a booster is "a boost pad with a rail's entry
+test", and content rather than a system. Both held: it cost a `kind` on the
+existing rail shape, two branches inside `Rails.js`, five numbers in
+`tuning.js`, and one entry in Dresser Drop's `rails` array. Nothing else in the
+game knows it exists — `TrackManager` did not change, the renderer did not
+change, and Audio's board/exit blips came for free.
+
+### What separates it from a boost pad
+
+A pad tops the meter up and lets you choose when to spend it; you drive straight
+over it and nothing about the car changes. A booster **takes the car**: pulls it
+onto its groove, holds it there at the speed it arrived, and throws it out the
+far end. It gives **no meter at all** — `exitBoost: 0`, against the loop's 0.35
+— because it has already spent the boost for you. That is the trade, and it is
+the only thing stopping the two features being the same feature at two
+strengths.
+
+The ride is 520 units and 1.25s of not driving, which is the same order as the
+loop's, and the same rule applies: it is kept short because being on a rail
+means not being driven.
+
+### The profile, and why it had to be measured
+
+| | |
+| --- | --- |
+| hold | first 18% of the strip, clamped at arrival speed |
+| throw | the rest, ramping on t² to 1.55× arrival, capped at 1.60× the car's own max |
+
+Releasing above the car's cap **looks** like the payoff and is nearly worthless
+on its own: `overspeedDecay` pulls 400 units/sec² back toward the cap, so a
+modest excess is gone in a fifth of a second and buys a few dozen units of road.
+The strip itself has to be quicker than driving it. Measured on a synthetic pass
+entering at 366 — the speed the technician actually carries here:
+
+| | |
+| --- | --- |
+| driving 520 units at 366 | 1.421s |
+| riding the strip | **1.250s** |
+| released at | 560 (the cap; 1.55 × 366 would have been 567) |
+| exit direction | dot 1.0000 with the strip |
+
+So the strip saves 0.171s on its own ground, and the rest of the lap's gain
+arrives as speed carried out of it.
+
+The hold is the part that could cost. Against a car already at its cap it is
+free — it is doing exactly what driving would have done — and it costs only
+against one that was still accelerating. What a longer hold really does is spend
+strip that could have been throwing, so a fifth is the wind-up and the remaining
+four fifths do the work.
+
+### The magnet does not snap
+
+Pulling the car all the way onto the strip's centre line is what the fiction
+wants and it is wrong. A car on a rail cannot be shoved — `resolveCarContacts`
+sits rail cars out — so a whole grid boarding one strip would be eight cars in
+one groove driving through each other. The magnet removes **65%** of the lateral
+offset instead: entering 100 off the line starts the ride 35 off it, which is a
+visible sideways yank of several car widths, over the first 12% of the ride
+rather than a gate's leisurely quarter. Two cars entering abreast stay abreast,
+closer together.
+
+Longitudinal position is kept exactly. Snapping that too would jerk the car up
+to half a mouth along the road, and backwards is unforgivable.
+
+### The painted strip is longer than the ride
+
+A ride starts where the car **touched** the mouth. The entry box is axis-aligned
+and this road runs at −49°, so a mouth 150 square reaches 106 units either side
+of centre along the road as well as across it. The ribbon therefore runs from a
+mouth-reach behind the centre to a mouth-reach past the release point — 731
+units of paint for 520 units of ride — and every ride is over paint for its
+whole length. Drawn ride-length only, a car that boarded late spent its last
+fifth flying along bare road, which reads as the strip running out from under
+it.
+
+### Placement on Dresser Drop
+
+On the floor, on the long straight out of the start/finish line and into the
+crossing. Mouth centred on the measured centreline point at index 127,
+(1972,2785); the ride runs 520 units along the chord to index 133.5,
+(2305,2385). **Deviation from the road at the midpoint of that chord: 6 units,
+against a half-width of 150** — the straightest stretch on the track, which is
+what a fixed-direction ride needs.
+
+Three things ruled out the more obvious spots, in ascending order of what they
+cost to learn:
+
+- The car is already at its cap for the whole of that straight, so a booster is
+  the only thing that can make it faster. Somewhere it is slowing anyway, a ride
+  that holds speed through a corner would be worth far more — and would delete
+  the corner.
+- A rail takes its deck height from the first car to ride it (`deckZ` is set at
+  capture), so a booster on the raised deck draws on the bedroom floor until
+  someone rides it. The corkscrew already has that quirk; a second one is not
+  worth adding.
+- It ends 1050 units short of the loop's mouth. Chaining the throw straight into
+  the loop was tempting and is wrong: two rides back to back is 2.1s of not
+  driving.
+
+**The colour is readability, not decoration.** The first version was flat
+mid-teal, and rendered, it sat 800 units from the boost pad at t 0.88 — which
+the renderer draws in mint. Two differently-shaped teal patches on one stretch
+of floor is exactly the confusion the legal note's palette was supposed to buy.
+It is now hard alternating bands, dark against bright, which is what a magnet
+looks like and is nothing like a pad.
+
+### Measured: it is not a trap
+
+The lesson of the loops is that a feature has to be compared against **not being
+there**, so this was measured that way. `tools/pays.sh` strips every rail at
+once and cannot see one booster, so the A/B strips only the booster — same
+seeded RNG, same three seeds, same driver, quickest lap of each:
+
+| | best lap | race | booster rides |
+| --- | --- | --- | --- |
+| with the booster | **32.45** | **98.35** | 9 of 9 |
+| (control) | 32.45 | 98.35 | 9 of 9 |
+| without it | 32.77 | 101.78 | 0 |
+
+**+0.32s a lap, +3.43s a race**, with the control landing on the baseline to
+0.000 — so nothing in that table is noise. It fires on every lap of every seed,
+and never twice on one pass: the closest two rides are 32.4s apart.
+
+`pays.sh` now reads **+0.08** in Dresser Drop's rail column, against −0.24 for
+the same track measured the same way with only the loop and the corkscrew on it.
+The booster is what turns this track's rails from a small net loss into a small
+net gain.
+
+**Owed:** `tt-dresser` and the Dresser Drop race are calibrated against a
+reference lap that no longer exists. By this measurement the track is 3.4s a
+race quicker than the times in `events.js` assume, and every medal on it is that
+much cheaper until they are re-measured the way `05_Tracks.md` says.
+
 ## Still unbuilt
 
-Magnetic boosters, falling track sections and wall-mounted routes. All three are
-content on top of what now exists rather than new systems — a booster is a boost
-pad with a rail's entry test.
+Falling track sections and wall-mounted routes. Both are content on top of what
+now exists rather than new systems.
 
-The **legal note above still binds** every one of them. Dresser Drop uses violet
+The **legal note above still binds** both of them. Dresser Drop uses violet
 and teal rather than the obvious orange and blue, and draws no connector
 geometry at all.
 
