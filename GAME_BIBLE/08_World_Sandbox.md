@@ -97,6 +97,159 @@ finished line, and the "replayable tracks" pillar dies. Per race means a fresh
 grid is a fresh problem, and it keeps ghost replay honest — a ghost recorded on a
 worn line replays against a track that starts flat again.
 
+## Dunes — RESOLVED, surface effect only
+
+Open question 4 asked whether dunes are purely a surface effect or need slope in
+the physics model. **Surface only. Nothing was built.**
+
+Slope was prototyped as a real force in the flat simulation — `a = −g·∇h` over a
+field of Gaussian bumps, applied in `VehicleController` after the overspeed
+decay, reading a height field and never the projection — measured against a
+matched control, and then deleted. What follows is why.
+
+### The bar a dune had to clear
+
+The ground under this world already varies, and it varies a lot. Terminal speed
+at full throttle on the flat, and what 4000 units of straight costs:
+
+| surface | terminal speed | 4000 units |
+|---|---|---|
+| `looseSand` | 233 | 17.40s |
+| `sand` (loose) | 281 | 14.50s |
+| `packedSand` | 349 | 11.72s |
+| `rugRoad` | 350 | 11.68s |
+
+Compaction is worth **68 units/sec of top speed and 2.78s over 4000 units**, and
+the player is the one who puts it there.
+
+### 1. The engine out-muscles gravity, so slope barely changes speed
+
+Terminal speed on sand, full throttle, on a constant grade:
+
+| grade | uphill | downhill | 2000 up + 2000 down, vs 4000 flat |
+|---|---|---|---|
+| 4% | 279.9 | 281.8 | +0.02s |
+| 8% | 279.0 | 287.1 | 0.00s |
+| 14% | 277.7 | 287.4 | +0.08s |
+| 20% | 276.3 | 288.4 | +0.22s |
+
+A **20% grade — steeper than a sandbox could hold — costs 4.5 units/sec**. The
+engine has 684 units/sec² of authority on sand; gravity at 20% has 280, and the
+car is speed-capped rather than power-capped, so it simply sits at its ceiling
+either way. Slope is a fifteenth of the mechanic already in the ground.
+
+### 2. There is no free speed on the way down
+
+Rolling friction on sand is 0.986 a tick — 241 units/sec² at the ceiling — plus
+132 of drag. A descent has to beat 373 units/sec² before it hands anything back,
+and gravity does not reach that until a **27% grade**. Coasting from 287 with the
+throttle off, speed left after 1500 units:
+
+| grade | 5% | 10% | 20% | 27% | 35% | 50% |
+|---|---|---|---|---|---|---|
+| speed | 72 | 131 | 228 | 286 | 289 | 292 |
+
+Below 27% a dune charges you for the climb and refunds nothing over the crest.
+Above it the ceiling takes the refund instead: at 20% the car spends **412 ticks
+of a 4000-unit descent above its own top speed**, being bled off by
+`overspeedDecay`.
+
+**This is the loop trap wearing different clothes** (`18_Roadmap.md`, Phase 9). A
+lap is a closed height loop, so gravity does exactly zero net work over one. All
+that is left are the terms that do not cancel — quadratic drag costs more on the
+fast half than the slow half returns, and the cap discards the rest — and every
+one of them is a loss.
+
+### 3. On a real lap it is a rounding error, or a tax
+
+Dune Dash, three laps, technician on `normal`, seeded, quickest of three seeds,
+in the style of `tools/pays.sh`. The control changes nothing and reads exactly
+0.00, so the runs are reproducible and everything else is the feature:
+
+| config | best lap | race | vs baseline |
+|---|---|---|---|
+| flat sand (baseline) | 28.93 | 94.14 | — |
+| flat sand (control) | 28.93 | 94.14 | **0.00** |
+| crest dunes, h30 | 29.03 | 93.96 | +0.10 |
+| crest dunes, h60 | 29.03 | 94.31 | +0.10 |
+| crest dunes, h100 | 28.97 | 94.89 | +0.03 |
+| flank dunes, h60 | 29.63 | 95.37 | +0.70 |
+| flank dunes, h100 | 30.02 | 96.47 | +1.08 |
+
+**Crest dunes** — where the whole road rises and falls — land inside a tenth of a
+second in either direction. **Flank dunes** — a side slope across the racing line
+— cost **1.08s a lap**, past the 0.60s bar `pays.sh` calls a trap.
+
+### 4. And it does not move the racing line, it only jostles it
+
+Mean lateral offset from the centreline, sampled ten times a second all race, on
+a road 320 wide:
+
+| config | signed offset | mean \|offset\| | worst | airborne | launches |
+|---|---|---|---|---|---|
+| flat sand | −34.8 | 34.8 | 88.6 | 1.65s | 3 |
+| crest slope, h100 | −51.6 | 53.6 | 149.1 | 1.60s | 3 |
+| flank slope, h100 | −24.5 | 46.3 | 148.5 | 1.60s | 3 |
+
+A route *decision* would show up as the signed offset settling somewhere new. It
+does not. Under flank slope the mean drifts back toward the centre while the
+spread and the peak both grow to 149 units on a 160-unit half-width — the driver
+is not picking a different line, it is being shoved off the one it wanted and
+steering back. That is the second half of why the 1.08s is a tax: it is time
+spent correcting, not time spent choosing.
+
+**A crest also never launches anything.** Airborne time and launch count are
+unchanged across every configuration — the three jumps are the plank on the
+bucket that was already there. A slope force cannot throw a car into the air in
+this model, because `v.z` is height above a flat plane and nothing follows the
+ground. The spectacle half of a dune already belongs to `ramps`, which `pays.sh`
+prices at −0.08s a lap on this very track for about two seconds of air.
+
+### It could not have been drawn anyway
+
+`Renderer.drawGround` projects the entire world as one flat quad at z = 0, and
+`07`'s elevation model is one height per **centreline** point — a function of lap
+fraction, not a field over the sandbox. A flank dune is not expressible in
+either. So every sideways shove measured above is a shove from a hill that is not
+on screen, and `AIDriver.readSand` states the rule that breaks in its own
+comment: the AI is allowed to read the compaction grid precisely *because the
+grid is drawn*, and "the moment an AI knows something invisible, the racing stops
+feeling fair".
+
+Making a dune visible and legible therefore means a 2D height field in the
+renderer, in the AI and in collision — which is option 3 from the sand
+deformation question, "expensive, and reintroduces the elevation problem this
+world exists to avoid". The measurements price the reward for that at a tenth of
+a second a lap of nothing.
+
+### A dune you can *see* is already free
+
+The look does not need the physics. Twelve elevation keys on Dune Dash — six
+dunes round the lap, `z` easing between 0 and 34 — draw a rolling ridge using the
+`07` model exactly as it ships:
+
+| | best lap | race | falls |
+|---|---|---|---|
+| no elevation | 28.93 | 94.14 | 0 |
+| six dunes drawn, z 0..34 | 28.93 | 94.14 | 0 |
+
+Identical to the tick, because `z` is a render property there and the simulation
+never learns about it. The 34 is the one constraint worth writing down:
+`Recovery.FLOOR_Z` is 40, and a deck below that counts as the bedroom floor, so
+leaving the road stays ordinary off-road driving. Author a sandbox ridge taller
+than 40 and wandering wide becomes a fall off a cliff, which is not what a
+sandbox does to you.
+
+### The trap in measuring it
+
+**The sign of the crest result flips with the height.** At h30 the race comes out
+0.18s *quicker* than flat; at h100, 0.75s slower. Measure one height, and the
+honest report is either "dunes make the track faster" or "dunes cost most of a
+second" — both confident, both wrong. A perturbation whose direction depends on
+how big you made it is not a mechanic, and only sweeping the height showed that.
+The control column reading exactly 0.00 is what made a 0.10s difference legible
+enough to notice the flip at all.
+
 ## Water — BUILT
 
 Puddles are a zone type at grip 0.42, less than half the road. Three sit just off
@@ -166,9 +319,23 @@ The collapsing wet-sand tunnel from the original wishlist is **not built**.
    **correct**: the field already packs the racing line, so there is nothing
    better to find. The trait bites when the packed sand is somewhere the AI would
    not otherwise be — which is exactly when it should.
-4. **Are dunes purely a surface effect, or do they need slope in the physics
-   model?** Still open. Dune Dash sidesteps it — the sand is flat and only its
-   firmness varies. A dune that is actually a *hill* needs `07`'s elevation model.
+4. ~~Are dunes purely a surface effect, or do they need slope in the physics
+   model?~~ **Resolved: surface effect. Slope was prototyped, measured and
+   deleted** — see "Dunes" above.
+
+   The short version: a lap is a closed height loop, so gravity does zero net
+   work over one, and the car is speed-capped rather than power-capped, so the
+   engine out-muscles the slope on the way up and the ceiling confiscates it on
+   the way down. A **20% grade is worth 4.5 units/sec of terminal speed against
+   compaction's 68**. On Dune Dash a crest dune lands inside a tenth of a second
+   either way and a flank dune costs **1.08s a lap** without moving the racing
+   line — it shoves the driver off the line it wanted, which is time spent
+   correcting rather than choosing.
+
+   A dune that is actually a *hill you can see* still uses `07`'s elevation
+   model, and it is free: six drawn dunes on Dune Dash returned an identical lap
+   to the tick, because `z` is a render property there. Keep them under
+   `Recovery.FLOOR_Z` (40) or leaving the road becomes a fall.
 5. ~~Does the game's look survive daylight?~~ **Resolved: yes, with per-track
    colour.** Tracks now carry their own `groundColour`, `roadColour`,
    `weaveColour` and `haze`; the sandbox runs a bright `236,214,170` haze against
