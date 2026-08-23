@@ -177,7 +177,7 @@ BR.TRACKS['stunt-shelf-run'] = {
 
   boostPads: [
     { x: 2765, y: 2119, w: 175, h: 165, gain: 0.4 },   // t 0.05, the run in
-    { x: 4300, y: 1600, w: 165, h: 180, gain: 0.4 },   // t 0.30, on the dresser
+    { x: 4534, y: 1566, w: 165, h: 180, gain: 0.4 },   // t 0.30, on the dresser
   ],
   hazards: [],
 

@@ -223,7 +223,7 @@ BR.TRACKS['stunt-dresser-drop'] = {
 
   boostPads: [
     { x: 1322, y: 2938, w: 185, h: 165, gain: 0.4 },   // t 0.88, on the floor
-    { x: 4230, y: 1700, w: 165, h: 185, gain: 0.4 },   // t 0.20, on the climb
+    { x: 4235, y: 1920, w: 165, h: 185, gain: 0.4 },   // t 0.20, on the climb
   ],
 
   hazards: [],
