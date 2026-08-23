@@ -48,7 +48,7 @@ BR.EVENTS = [
     laps: 3,
     opponents: 3,
     difficulty: 'easy',
-    platinumTime: 87,
+    platinumTime: 85,           // 0.93 x 91.7, re-measured after the item fix
     unlockStars: 0,
     objectives: [
       { id: 'finish',   label: 'Finish the race' },
@@ -65,7 +65,7 @@ BR.EVENTS = [
     laps: 3,
     opponents: 4,
     difficulty: 'normal',
-    platinumTime: 87,
+    platinumTime: 85,           // 0.93 x 91.6, re-measured after the item fix
     unlockStars: 2,
     objectives: [
       { id: 'win',      label: 'Win the race' },
@@ -82,7 +82,7 @@ BR.EVENTS = [
     laps: 5,
     opponents: 7,
     difficulty: 'hard',
-    platinumTime: 143,
+    platinumTime: 140,          // 0.93 x 150.4, re-measured after the item fix
     unlockStars: 5,
     objectives: [
       { id: 'win',      label: 'Win the race' },
@@ -109,8 +109,8 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 0,
     difficulty: 'normal',
-    times: { gold: 86, silver: 94, bronze: 105 },
-    platinumTime: 80,
+    times: { gold: 88, silver: 96, bronze: 107 },   // clean reference 92.4
+    platinumTime: 82,
     unlockStars: 3,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
@@ -127,7 +127,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 5,
     difficulty: 'normal',
-    platinumTime: 103,
+    platinumTime: 100,          // 0.93 x 108.0, re-measured after the item fix
     unlockStars: 6,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -169,7 +169,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 4,
     difficulty: 'normal',
-    platinumTime: 85,
+    platinumTime: 83,           // 0.93 x 88.7, re-measured after the item fix
     unlockStars: 8,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -209,7 +209,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 5,
     difficulty: 'normal',
-    platinumTime: 75,           // 0.93 x 81.0, re-measured from a mid-grid start
+    platinumTime: 73,           // 0.93 x 78.3, re-measured after the item fix
     unlockStars: 14,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -226,7 +226,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 6,
     difficulty: 'normal',
-    platinumTime: 83,           // 0.93 x 88.8, re-measured from a mid-grid start
+    platinumTime: 80,           // 0.93 x 86.0, re-measured after the item fix
     unlockStars: 17,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -243,7 +243,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 7,
     difficulty: 'hard',
-    platinumTime: 85,           // 0.93 x 91.5, re-measured from a mid-grid start
+    platinumTime: 83,           // 0.93 x 88.8, re-measured after the item fix
     unlockStars: 20,
     objectives: [
       { id: 'win',      label: 'Win the race' },
@@ -285,10 +285,13 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 6,
     difficulty: 'normal',
-    /* 0.93 x 101.9. RE-MEASURED after rides were re-paced by ground distance
+    /* RE-MEASURED TWICE. First after rides were re-paced by ground distance
        (Rails.js): this track lost 9.1 seconds a race, because its loop had been
-       parking the car for nearly two seconds every lap. */
-    platinumTime: 96,           // 0.93 x 103.6, re-measured from a mid-grid start
+       parking the car for nearly two seconds every lap. Then again for the
+       magnetic boosters, worth another 4.2 -- this track's target has never
+       survived a change to Rails.js, so if you touch that file, re-measure here
+       first. It is where the cost shows up largest. */
+    platinumTime: 92,           // 0.93 x 99.0, re-measured with the boosters
     unlockStars: 26,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -305,8 +308,8 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 0,
     difficulty: 'normal',
-    times: { gold: 98, silver: 107, bronze: 120 },   // clean reference 102.8
-    platinumTime: 91,
+    times: { gold: 94, silver: 103, bronze: 115 },   // clean reference 98.7
+    platinumTime: 87,
     unlockStars: 29,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
@@ -326,7 +329,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 7,
     difficulty: 'hard',
-    platinumTime: 97,           // 0.93 x 104.7, re-measured from a mid-grid start
+    platinumTime: 95,           // 0.93 x 101.8, re-measured after the item fix
     unlockStars: 32,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -343,8 +346,8 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 0,
     difficulty: 'normal',
-    times: { gold: 98, silver: 108, bronze: 121 },   // clean reference 103.6
-    platinumTime: 92,
+    times: { gold: 96, silver: 105, bronze: 117 },   // clean reference 100.8
+    platinumTime: 89,
     unlockStars: 35,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
@@ -374,7 +377,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 7,
     difficulty: 'normal',
-    platinumTime: 89,           // 0.93 x 95.9, re-measured from a mid-grid start
+    platinumTime: 86,           // 0.93 x 92.7, re-measured after the item fix
     unlockStars: 4,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -392,7 +395,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 7,
     difficulty: 'hard',
-    platinumTime: 86,           // 0.93 x 92.0, re-measured from a mid-grid start
+    platinumTime: 83,           // 0.93 x 89.1, re-measured after the item fix
     unlockStars: 18,
     objectives: [
       { id: 'finish',   label: 'Finish the race' },
