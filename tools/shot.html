@@ -1,0 +1,61 @@
+<!-- =============================================================================
+     RENDER ONE FRAME AND SAVE IT, so a claim about how something LOOKS can be
+     checked by looking.
+     =============================================================================
+     Appended to a built dist/play.html by tools/shot.sh.
+
+     ── why this drives the game's own loop ───────────────────────────────────
+     The obvious harness starts an event, steps the simulation by hand, calls
+     Renderer.render() and screenshots. It produces an almost EMPTY FRAME: the
+     HUD, the minimap and the speed streaks draw, and the ground, the road, the
+     kerbs and every car do not.
+
+     Nothing is broken. Renderer.setCullBounds() is called from the real frame
+     path, and a hand-rolled step loop never calls it, so onScreen() rejects
+     everything that goes through the cull while the overlays — which do not —
+     carry on drawing. It looks exactly like a rendering regression, and it cost
+     an hour of blaming an art change that turned out to be innocent: the same
+     harness produced the identical empty frame against the build from BEFORE
+     that change, which is what proved it was the harness.
+
+     So this touches none of that. It starts the event, puts a driver in the
+     player's seat, and lets the game render itself.
+
+     ── the driver ───────────────────────────────────────────────────────────
+     The player's car has no human, so left alone it sits on the grid and the
+     camera stares at a stationary bumper. A technician on `normal` drives it —
+     the same stand-in tools/calibrate.sh uses, for the same reason: it is
+     reproducible and it is what the game's own numbers mean.
+     ========================================================================= -->
+<script>
+(function () {
+  function boot() {
+    var q = new URLSearchParams(location.search);
+    var eventId = window.__SHOT_EVENT || 'rug-route-01';
+
+    // The click-to-drive veil belongs to the artifact page, not the game, and
+    // it dims the canvas it covers.
+    var f = document.getElementById('focus');
+    if (f) f.remove();
+
+    try {
+      BR.Particles.init();
+      var ev = BR.eventById(eventId);
+      if (!ev) { document.title = 'SHOT ERROR: no event ' + eventId; return; }
+      BR.Game.startEvent(ev);
+
+      // Drive the player's seat, or the camera watches a parked car.
+      var me = BR.Game.racers[0];
+      me.ai = BR.AIDriver.create('technician', 'normal');
+      for (var i = 0; i < BR.Game.actors.length; i++) {
+        if (BR.Game.actors[i].racer === me) BR.Game.actors[i].kind = 'ai';
+      }
+      document.title = 'SHOT ' + eventId;
+    } catch (e) {
+      document.title = 'SHOT ERROR: ' + (e && e.message ? e.message : e);
+    }
+  }
+  if (document.readyState === 'complete') boot();
+  else window.addEventListener('load', boot);
+})();
+</script>
