@@ -222,18 +222,46 @@ opponents from the front after the player moved to mid-grid. The comment above i
 described the old behaviour and read as correct. A harness printing where every
 car actually is found it in one run.
 
-## The three blunt instruments
+## The tools
 
-- `tools/smoke.sh` — does anything throw, anywhere? 43 checks across every track,
+- `tools/smoke.sh` — does anything throw, anywhere? 49 checks across every track,
   screen, event and split-screen layout. Run before every commit.
 - `tools/pays.sh` — does each track feature earn its place? Strips ramps, pads and
   rails in turn and compares. Slow; run when driving or track features change.
 - `tools/calibrate.sh` — did any lap time move? Run when anything could have
-  changed one.
+  changed one. A **render-only change must show 0.00 on all 22 events**; if one
+  moves, the change leaked into the simulation.
+- `tools/shot.sh <eventId> [seconds] [outfile]` — render one frame and save it,
+  so a claim about how something LOOKS can be checked by looking. Deterministic
+  and seeded, so a before/after pair means something. `AIR=1` holds until the car
+  is airborne, for anything about height, shadows or landings.
 
 Per-feature harnesses stay **throwaway and in the scratchpad**. They are sharp
 because each answers one question. Only promote one to `tools/` when the question
 it answers will recur.
+
+### Rendering a frame by hand: four ways to get an empty picture
+
+Use `shot.sh`. If you ever must roll your own, these all produce a frame with the
+HUD and the speed streaks floating over an empty floor, which looks precisely
+like the renderer having broken:
+
+- **`render(game, alpha, dt)` takes THREE arguments.** `render(game, 0)` reads
+  naturally as "no time step" and actually passes `dt: undefined`. The camera
+  feel maths goes NaN and every world-space thing projects to nowhere.
+- **The view cameras are updated inside the frame path.** A correct `render()`
+  call on its own still draws the world through a camera that was never pointed.
+- **Stopping the loop stops the compositing.** A page that has ceased drawing
+  hands Chrome a surface from before it ever painted, so the capture is blank
+  even when hundreds of frames rendered correctly first. `shot.sh` freezes the
+  CLOCK instead — `dt` goes to 0, the loop keeps running — and then reads the
+  canvas with `toDataURL` rather than racing `--screenshot`.
+- **Unseeded `Math.random`** makes two runs of the same command different races,
+  so a before/after pair shows you the AI wandering, not your change.
+
+An hour went into blaming an innocent art change for the first two before the
+argument list was simply read. Suspect the harness first, and give it a control:
+rendering the same scene from the build *before* the change is what settled it.
 
 ## Audio
 
