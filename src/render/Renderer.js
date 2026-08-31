@@ -732,6 +732,36 @@ BR.Renderer = {
       pit: true,                         // ...and has sides holding it up
       wall: '#6b5a3f', skirt: '#7d6a4a', skirtH: 40, wallH: 210,
     },
+
+    /* Anything not listed above. Every play space in this game is somewhere in
+       a house, so the safe default is the room they are all in — and a world
+       that wants something else can say so by adding a key here rather than by
+       building its own backdrop out of scenery, which is what the sofa had to
+       do before this existed. */
+    _default: {
+      floor: '#7a5734',
+      tile: 'boards',
+      sill: 10,
+      wall: '#a8a08e', skirt: '#d8d1bf', skirtH: 96, wallH: 820,
+    },
+  },
+
+  /**
+   * The room a world sits in, with a FALLBACK.
+   *
+   * `ROOMS` was keyed by world with no default, so a world it had not heard of
+   * got no floor, no walls and no shadow — the play surface simply stopped, and
+   * the backdrop showed a bare seam behind it. The sofa was the first world
+   * added after the surround existed and hit exactly that, working around it in
+   * its own track data by reaching decoration out past the kerbs.
+   *
+   * A world should not have to know about this file to look finished. Anything
+   * unlisted now gets the bedroom it is most likely to be in: floorboards, a
+   * skirting board and a wall, which is true of every play space in the game so
+   * far except the sandbox, and that one is listed.
+   */
+  roomFor(arena) {
+    return this.ROOMS[arena.world] || this.ROOMS._default;
   },
 
   /* Small props standing in the surround, placed against the BOUNDS rather
@@ -799,7 +829,7 @@ BR.Renderer = {
      the light is going. Getting that for one quad is the whole reason it is
      drawn underneath rather than clipped. */
   drawRoomFloor(ctx, arena) {
-    const R = this.ROOMS[arena.world];
+    const R = this.roomFor(arena);
     if (!R) return;
     const Pj = BR.Projection;
     const b = arena.bounds;
@@ -879,7 +909,7 @@ BR.Renderer = {
      it draws is outside the bounds, so the only ground it can ever paint over
      is ground further away than itself. */
   drawRoom(ctx, arena) {
-    const R = this.ROOMS[arena.world];
+    const R = this.roomFor(arena);
     if (!R) return;
     this.drawDeckShadow(ctx, arena);
     this.drawRoomWalls(ctx, arena, R);
