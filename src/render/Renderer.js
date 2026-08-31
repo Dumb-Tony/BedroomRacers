@@ -1799,8 +1799,17 @@ BR.Renderer = {
       order.sort(function (a, b) { return a.key - b.key; });
       for (let e = 0; e < order.length; e++) {
         const i = order[e].i, j = order[e].j;
+        /* Each side shaded by the way it actually faces, so a block has a lit
+           edge and a dark one and stops reading as a flat sticker. The footprint
+           is in the prop's local frame, so the normal is rotated into world
+           space before it is asked about the light. */
+        const ex = foot[j][0] - foot[i][0], ey = foot[j][1] - foot[i][1];
+        const lnx = ey, lny = -ex;                       // outward for CCW feet
+        const wnx = lnx * c - lny * s, wny = lnx * s + lny * c;
+        const shade = Pj.faceLight(Math.atan2(wny, wnx)) * 0.22;
         poly([lp(foot[i][0], foot[i][1], h0), lp(foot[j][0], foot[j][1], h0),
-              lp(foot[j][0], foot[j][1], h1), lp(foot[i][0], foot[i][1], h1)], side);
+              lp(foot[j][0], foot[j][1], h1), lp(foot[i][0], foot[i][1], h1)],
+             BR.Renderer.shade(side, shade));
       }
       const top = foot.map(function (q) { return lp(q[0], q[1], h1); });
       poly(top, lid, line, 1.2);
@@ -2107,14 +2116,30 @@ BR.Renderer = {
     ctx.lineTo(b1.sx, b1.sy);
     ctx.lineTo(a1.sx, a1.sy);
     ctx.closePath();
-    ctx.fillStyle = jumpable ? '#9c5f2a' : tone[0];
+    /* LIT BY WHICH WAY IT FACES. A barrier ring used to be one flat tone the
+       whole way round the track, so a wall on the near side and a wall on the
+       far side were the same colour and the ring read as a printed band rather
+       than as a row of standing objects.
+
+       The face drawn is the one turned toward the camera, so the normal is the
+       segment's perpendicular with the sign that points that way. Kept to a
+       gentle range: these carry the track's readable colour coding, and a light
+       strong enough to be dramatic would start hiding which barrier is which. */
+    const nx0 = -(w.by - w.ay), ny0 = (w.bx - w.ax);
+    const mx = (w.ax + w.bx) / 2, my = (w.ay + w.by) / 2;
+    const sgn = ((Pj.camX - mx) * nx0 + (Pj.camY - my) * ny0) < 0 ? -1 : 1;
+    const lit = Pj.faceLight(Math.atan2(ny0 * sgn, nx0 * sgn));
+
+    ctx.fillStyle = jumpable ? this.shade('#9c5f2a', lit * 0.16)
+                             : this.shade(tone[0], lit * 0.18);
     ctx.fill();
 
-    // The lit top edge, in the segment's own lighter tone.
+    // The top edge, in the segment's own lighter tone — brighter still when
+    // this face is the one turned into the light.
     ctx.beginPath();
     ctx.moveTo(a1.sx, a1.sy);
     ctx.lineTo(b1.sx, b1.sy);
-    ctx.strokeStyle = jumpable ? '#e0b46a' : tone[1];
+    ctx.strokeStyle = jumpable ? '#e0b46a' : this.shade(tone[1], lit * 0.12);
     ctx.lineWidth = 2.5 / BR.Renderer.zoom;
     ctx.stroke();
 
