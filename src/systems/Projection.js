@@ -156,6 +156,55 @@ BR.Projection = {
     return 1 - t * this.shadowFalloff;
   },
 
+  /* ── THE LIGHT ───────────────────────────────────────────────────────────
+     One source for the whole game, in WORLD space.
+
+     World space, not screen space, and that is the whole point. The camera
+     rotates so the direction of travel is always up the screen; a light fixed
+     to the screen would swing round the room every time the car turned, and
+     the floor would read as a turntable. Fixed in the world, the shadows sweep
+     across the screen as you corner — which is exactly what a room does.
+
+     `dir` is the direction the light TRAVELS, so it is also the direction a
+     shadow is thrown. `elevation` is how high the source sits: low sun, long
+     shadows. 0.90 rad is 51.6 degrees, throwing 0.79 units of shadow per unit
+     of height — a car at the top of the rug jump lands its shadow about four
+     car lengths from its wheels, which is unmissable and still on the road.
+
+     Nothing in src/systems or src/entities may read this. It is a render-time
+     fiction like the camera, and for the same reason.                        */
+  light: {
+    dir:       2.30,   // world radians, the way the light goes
+    elevation: 0.90,   // radians above the floor
+  },
+
+  /** World units a shadow is thrown per unit of height. */
+  lightThrow() {
+    return 1 / Math.tan(this.light.elevation);
+  },
+
+  /**
+   * Where the shadow of something `h` above its deck lands, as a WORLD offset.
+   * Add it to the caster's x/y before projecting.
+   */
+  lightOffset(h) {
+    const t = h * this.lightThrow();
+    return { dx: Math.cos(this.light.dir) * t, dy: Math.sin(this.light.dir) * t };
+  },
+
+  /**
+   * How lit a face is, given the WORLD angle its outward normal points along.
+   * Returns -1 (facing fully away) to 1 (facing straight into the light), so
+   * it feeds Renderer.shade() directly.
+   *
+   * Faces were shaded by hardcoded constants — a roof always -0.18, a side
+   * always -0.45 — which is why nothing in the game read as LIT. The constants
+   * were chosen to look right from one angle and the camera turns.
+   */
+  faceLight(a) {
+    return -Math.cos(a - this.light.dir);
+  },
+
   /** Shrink a projected point toward an anchor. */
   shrink(p, anchor, s) {
     return { sx: anchor.sx + (p.sx - anchor.sx) * s,

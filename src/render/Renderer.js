@@ -1807,12 +1807,22 @@ BR.Renderer = {
       return top;
     };
 
-    // Ground shadow, from a generous circle — every prop casts one.
-    const sh = [];
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      sh.push(lp(Math.cos(a) * p.r, Math.sin(a) * p.r, 0));
+    /* Ground shadow: the sweep of the prop's footprint from where it stands to
+       where the light throws it, not a disc parked underneath. A tall crayon
+       and a flat block used to cast the same circle, so height was invisible on
+       anything that was not moving. `lp` takes LOCAL coordinates, so the world
+       offset is rotated into the prop's own frame first. */
+    const soff = Pj.lightOffset(p.h || 0);
+    const slx =  soff.dx * c + soff.dy * s;
+    const sly = -soff.dx * s + soff.dy * c;
+    const sbase = [];
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      const bx = Math.cos(a) * p.r, by = Math.sin(a) * p.r;
+      sbase.push([bx, by]);
+      sbase.push([bx + slx, by + sly]);
     }
+    const sh = this.hull2d(sbase).map(function (q) { return lp(q[0], q[1], 0); });
     poly(sh, 'rgba(0,0,0,' + (0.32 * Pj.shadowAlphaAt(anchor.depth)).toFixed(3) + ')');
 
     const R = p.r, H = p.h;
@@ -1939,9 +1949,15 @@ BR.Renderer = {
       return Pj.shrink(Pj.project(wx, wy, wz), anchor, k);
     };
 
+    // The train is the tallest thing that moves, so it is where a shadow that
+    // ignores the light is most obvious. Same sweep as the props.
+    const toff = Pj.lightOffset(H);
+    const tsh = this.hull2d(world.concat(world.map(function (p) {
+      return [p[0] + toff.dx, p[1] + toff.dy];
+    })));
     ctx.beginPath();
-    for (let i = 0; i < 4; i++) {
-      const p = PT(world[i][0], world[i][1], 0);
+    for (let i = 0; i < tsh.length; i++) {
+      const p = PT(tsh[i][0], tsh[i][1], 0);
       if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
     }
     ctx.closePath();
@@ -2232,17 +2248,31 @@ BR.Renderer = {
        (03_Driving_Physics.md) — so it has to mean JUMP height. Casting it on
        the floor of the room would make a car parked on a raised section look
        permanently airborne and destroy the cue everywhere it matters. */
-    const lift = BR.M.clamp((z - ground) / 90, 0, 1);
+    const height = z - ground;
+    const lift = BR.M.clamp(height / 90, 0, 1);
+
+    /* THROWN ALONG THE LIGHT, and no longer faded out by height.
+
+       It used to sit directly beneath the car and be multiplied by
+       (1 - lift * 0.55), so at the top of a jump the only height cue in the
+       game was at 0.19 alpha on a dark road. It vanished exactly when it was
+       needed, and a jump stopped reading as a jump.
+
+       Both halves of that were wrong about shadows. One does not stay under
+       its caster as the caster rises, and it does not dissolve — it slides away
+       along the light and goes softer. So the cue is now the DISPLACEMENT,
+       which grows along a fixed world axis and cannot be mistaken for the car
+       merely being drawn further up the screen, and the opacity holds. */
+    const off = Pj.lightOffset(height);
     ctx.beginPath();
     for (let i = 0; i < 4; i++) {
-      const p = PT(world[i][0], world[i][1], ground);
+      const p = PT(world[i][0] + off.dx, world[i][1] + off.dy, ground);
       if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
     }
     ctx.closePath();
-    // Height fades it (the car is further from its own shadow), and so does
-    // distance.
+    // Softer with height, never absent. Distance still lifts it toward the haze.
     ctx.fillStyle = 'rgba(0,0,0,' +
-      (0.42 * (1 - lift * 0.55) * Pj.shadowAlphaAt(anchor.depth)).toFixed(3) + ')';
+      (0.42 * (1 - lift * 0.18) * Pj.shadowAlphaAt(anchor.depth)).toFixed(3) + ')';
     ctx.fill();
 
     // ── boost ring, on the ground around the car (vehicle-attached meter).
@@ -2562,6 +2592,37 @@ BR.Renderer = {
     };
     const r = f((n >> 16) & 255), g = f((n >> 8) & 255), b = f(n & 255);
     return 'rgb(' + r + ',' + g + ',' + b + ')';
+  },
+
+  /**
+   * Convex hull of [x, y] pairs, counter-clockwise (Andrew's monotone chain).
+   *
+   * For shadows. A solid lit from one side does not cast its own footprint
+   * where it stands — it casts the SWEEP of that footprint from where it
+   * stands to where the light throws it. That sweep is the hull of the base
+   * and the base offset, and taking the hull rather than drawing both shapes
+   * matters: two overlapping fills at the same alpha double-darken down the
+   * middle and the join reads as a crease.
+   */
+  hull2d(pts) {
+    if (pts.length < 4) return pts.slice();
+    const p = pts.slice().sort(function (a, b) {
+      return a[0] === b[0] ? a[1] - b[1] : a[0] - b[0];
+    });
+    const cross = function (o, a, b) {
+      return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    };
+    const build = function (src) {
+      const out = [];
+      for (let i = 0; i < src.length; i++) {
+        while (out.length >= 2 &&
+               cross(out[out.length - 2], out[out.length - 1], src[i]) <= 0) out.pop();
+        out.push(src[i]);
+      }
+      out.pop();
+      return out;
+    };
+    return build(p).concat(build(p.reverse()));
   },
 
   /* Eight points: a rectangle with its corners cut. Cheap, and it removes the

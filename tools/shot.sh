@@ -4,6 +4,11 @@
 # =============================================================================
 #   ./tools/shot.sh <eventId> [seconds] [outfile]
 #
+# Set AIR=1 to hold until the car is actually airborne, for anything about
+# height, shadows or landings:
+#
+#   AIR=1 ./tools/shot.sh rug-route-01 20 jump.png
+#
 #   ./tools/shot.sh rug-route-01                 # 6s in, /tmp/br-shot/shot.png
 #   ./tools/shot.sh st-02 14 dresser.png         # 14 seconds into Shelf Run
 #
@@ -12,13 +17,15 @@
 # slivers, and a cull that silently dropped two thirds of the visible walls —
 # every one of them measured perfectly and every one was obvious in a frame.
 #
-# `seconds` is how much game time passes before the shot, so the camera has
-# settled and the car is actually racing. It is virtual time, not wall time:
-# the page runs as fast as it can and Chrome captures when the budget expires.
+# `seconds` is game time, advanced by stepping the simulation exactly that many
+# ticks. It is deterministic: the same arguments give the same frame, which is
+# what makes a before/after pair worth anything. Do NOT pace it by wall clock —
+# performance.now() is frozen under headless virtual time, and the same budget
+# produced the countdown on one run and three minutes of race on another.
 #
-# DO NOT replace this with a hand-rolled step-and-render loop. See the header
-# in tools/shot.html for what that produces and why it looks like a bug in the
-# renderer rather than a bug in the harness.
+# See the header in tools/shot.html before changing how it renders. Calling
+# Renderer.render(game, 0) — which reads perfectly reasonably — yields an empty
+# floor with the HUD floating on it, and looks exactly like a broken renderer.
 # =============================================================================
 set -uo pipefail
 
@@ -43,24 +50,44 @@ trap 'rm -rf "$OUT" 2>/dev/null' EXIT
 {
   printf '<meta charset="utf-8">\n'
   cat "$ROOT/dist/play.html"
-  printf '<script>window.__SHOT_EVENT = %s;</script>\n' "\"$EVENT\""
+  printf '<script>window.__SHOT_EVENT = "%s"; window.__SHOT_SECS = %s; window.__SHOT_AIR = %s;</script>\n' \
+    "$EVENT" "$SECS" "${AIR:-0}"
   cat "$ROOT/tools/shot.html"
 } > "$OUT/shot.html"
 
-# Virtual time: the budget IS the game time that elapses before the capture.
-BUDGET=$(( SECS * 1000 + 2000 ))
+# Generous, and unrelated to game time: the page steps the simulation itself and
+# is done long before this expires. It only has to outlast the stepping, which
+# runs as fast as the machine can, not in real seconds.
+# The airborne hold may step a long way through a lap before the car leaves a
+# ramp, and every frame spends virtual time.
+BUDGET=30000
+if [ "${AIR:-0}" = "1" ]; then BUDGET=180000; fi
 
+# --dump-dom, NOT --screenshot. The page puts the canvas out as a data URL at
+# the exact frame it chose; Chrome's own screenshot fires when the virtual time
+# budget expires, which is a race this kept losing — the same command gave a
+# good frame and an empty one on alternate runs.
 "$CHROME" --headless=new --disable-gpu \
   --window-size="${SHOT_W:-1280}","${SHOT_H:-900}" \
   --virtual-time-budget="$BUDGET" \
   --user-data-dir="$OUT/profile" \
-  --screenshot="$OUTFILE" \
+  --dump-dom \
   "file://$(cygpath -m "$OUT/shot.html" 2>/dev/null || echo "$OUT/shot.html")" \
-  2>/dev/null
+  2>/dev/null > "$OUT/dom.html"
+
+TITLE="$(grep -o '<title>[^<]*</title>' "$OUT/dom.html" | head -1 |
+         sed 's/<title>//; s/<\/title>//')"
+case "$TITLE" in
+  *"SHOT ERROR"*) echo "$TITLE" >&2; exit 2 ;;
+esac
+
+# One long line inside the <pre>; strip the data: prefix and decode.
+grep -o 'data:image/png;base64,[A-Za-z0-9+/=]*' "$OUT/dom.html" | head -1 \
+  | sed 's|data:image/png;base64,||' | base64 -d > "$OUTFILE" 2>/dev/null
 
 if [ ! -s "$OUTFILE" ]; then
-  echo "no image written — the page did not finish" >&2
+  echo "no image — the page did not reach its frame (title: ${TITLE:-none})" >&2
   exit 2
 fi
 
-echo "$OUTFILE"
+echo "$OUTFILE   [$TITLE]"
