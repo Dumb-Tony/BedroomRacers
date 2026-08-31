@@ -2373,6 +2373,65 @@ BR.Renderer = {
     };
 
     const S = this.shapeFor(spec);
+    const MAT = S.mat;
+
+    const quad = function (pts, fill, stroke) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].sx, pts[0].sy);
+      for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].sx, pts[k].sy);
+      ctx.closePath();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
+    };
+
+    /* ── WHERE THE LIGHT IS, IN THE CAR'S OWN FRAME ────────────────────────
+       `light.dir` is the direction the light TRAVELS, so the direction back
+       toward the source is dir + PI. Resolved into the car's local axes it
+       gives one number, `litY`: which flank the sheen belongs on, +1 for the
+       car's left, -1 for its right.
+
+       This is the whole reason the light was worth having. The camera keeps
+       the direction of travel pointing up the screen, so a car's silhouette
+       never rotates — the ONLY thing that changes as it goes round a corner
+       is where the highlight sits. A gloss streak painted on a fixed side, as
+       this had, is a decal. One that walks across the roof through a corner is
+       a curved plastic surface. */
+    const litY = Math.sin(Pj.light.dir + Math.PI - heading);
+    const lineW = Math.max(0.6, 1.6 * shrinkK / this.zoom);
+    const sheen = MAT.spec * (0.45 + 0.55 * Math.abs(litY));
+    const sheenCol = sheen > 0.02
+      ? 'rgba(255,255,255,' + sheen.toFixed(3) + ')' : null;
+
+    /* ── THE MOULD LINE ────────────────────────────────────────────────────
+       The thing that says "this was made in a factory, in two halves", and the
+       detail this pass was asked for first. It runs down the centre of the
+       shell, over the nose, the bonnet and the roof.
+
+       TWO hairlines a hair apart, never one. A single dark line is a scratch;
+       a dark line with a pale one beside it is a raised ridge, and which side
+       gets which is decided by the light — so the ridge catches on one side
+       going up the straight and on the other coming back.
+
+       Drawn per PANEL, because the shell and the roof are at different heights
+       and this camera lifts the roof three units up the screen. Ruled in one
+       pass at the end it painted the bonnet's own seam across the cabin above
+       it and left the whole visible field behind the cabin bare — one line in
+       the wrong place and a conspicuous gap where it belonged. */
+    const seamPair = function (x0, x1, h) {
+      const sw = Math.max(W * 0.06, lineW * 0.62);
+      const off = litY >= 0 ? sw : -sw;
+      ctx.lineWidth = lineW * 0.8;
+      ctx.globalAlpha = (v.isGhost ? 0.38 : 1) * MAT.seam;
+      for (let k = 0; k < 2; k++) {
+        const a = lp(x0, (k ? off : -off), h), b = lp(x1, (k ? off : -off), h);
+        ctx.beginPath();
+        ctx.moveTo(a.sx, a.sy);
+        ctx.lineTo(b.sx, b.sy);
+        ctx.strokeStyle = k ? S.seamLit : S.seamDark;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = v.isGhost ? 0.38 : 1;
+    };
 
     /* ── WHEELS ────────────────────────────────────────────────────────────
        The single strongest "this is a toy car and not a box" cue there is, and
@@ -2396,13 +2455,13 @@ BR.Renderer = {
          ground, poking out past the body, which is what a wheel looks like from
          above and is the strongest silhouette cue the car has. */
       const wy0 = side * (W * 0.74), wy1 = side * (W + S.track);
-      const quad = [
+      const wq = [
         lp(fx - wr, wy0, S.ride * 0.5), lp(fx + wr, wy0, S.ride * 0.5),
         lp(fx + wr * 0.9, wy1, S.ride * 0.5), lp(fx - wr * 0.9, wy1, S.ride * 0.5),
       ];
       ctx.beginPath();
-      ctx.moveTo(quad[0].sx, quad[0].sy);
-      for (let k = 1; k < 4; k++) ctx.lineTo(quad[k].sx, quad[k].sy);
+      ctx.moveTo(wq[0].sx, wq[0].sy);
+      for (let k = 1; k < 4; k++) ctx.lineTo(wq[k].sx, wq[k].sy);
       ctx.closePath();
       ctx.fill();
     }
@@ -2426,15 +2485,55 @@ BR.Renderer = {
     }
     edges.sort(function (a, b) { return a.key - b.key; });
 
-    ctx.fillStyle = spec.colorBody;
+    /* EVERY FLANK LIT SEPARATELY. They were all one flat `colorBody`, which is
+       what made a car read as a coloured region with an outline round it rather
+       than as a solid object: eight faces pointing eight ways, all exactly the
+       same value. Each footprint edge carries the outward normal it has in the
+       car's own frame (cached on the shape — the footprint never changes), so
+       the world angle is that plus the heading and faceLight() does the rest.
+
+       The amplitude is per MATERIAL and deliberately small. Die-cast swings
+       widest because painted metal does; wood barely moves because a matte
+       surface is nearly Lambertian and does not glint. Pushed further it looks
+       better on one car standing still and starts eating the body colour, which
+       is the one thing on a vehicle that is load-bearing — hue is how a player
+       knows who just took the inside line, on screen and on the minimap. */
+    /* ── AND HALF OF THEM ARE NEVER SEEN ───────────────────────────────────
+       Traced, because lighting the faces individually made it worth knowing
+       what they cost: a car emitted eight side quads a frame and at least four
+       of them were painted and then covered.
+
+       A side face is an extrusion DOWNWARD from its own footprint edge — the
+       quad runs from the top face's edge down to the ride height — so on the
+       far side of the car it hangs into the middle of the top polygon, which
+       is drawn immediately afterwards and covers it completely. Only the near
+       edges hang out past the silhouette where they can be seen. Confirmed in
+       the trace: Red Racer's nose quad occupies screen rows -10.8 to -6.5 and
+       the bonnet drawn over it covers -10.8 to -2.4.
+
+       The projection is a rotation and a positive squash, so it preserves
+       orientation: a footprint wound counter-clockwise stays counter-clockwise
+       on screen, and for such a polygon the outward screen normal of an edge
+       is (dsy, -dsx). Nearer is further DOWN the screen, so a face is visible
+       exactly when dsx < 0. One subtraction per edge.
+
+       ONLY WHEN UPRIGHT. On a loop or a corkscrew the extrusion is not
+       vertical — `up` swings the body out sideways and through the vertical —
+       and a face on the far side is then genuinely visible. Those frames draw
+       all eight, which is what they did before. */
+    const upright = U.z > 0.999;
+    const faces = [];
+    for (let i = 0; i < n; i++) faces[i] = Pj.faceLight(heading + S.normals[i]);
     for (let e = 0; e < edges.length; e++) {
       const i = edges[e].i, j = edges[e].j;
+      if (upright && bot[j].sx >= bot[i].sx) continue;
       ctx.beginPath();
       ctx.moveTo(bot[i].sx, bot[i].sy);
       ctx.lineTo(bot[j].sx, bot[j].sy);
       ctx.lineTo(top[j].sx, top[j].sy);
       ctx.lineTo(top[i].sx, top[i].sy);
       ctx.closePath();
+      ctx.fillStyle = this.tintOf(S.tints, spec.colorBody, faces[i] * MAT.body - 0.04);
       ctx.fill();
     }
 
@@ -2450,8 +2549,119 @@ BR.Renderer = {
     ctx.fillStyle = spec.colorTop;
     ctx.fill();
     ctx.strokeStyle = S.line;
-    ctx.lineWidth = Math.max(0.6, 1.6 * shrinkK / this.zoom);
+    ctx.lineWidth = lineW;
     ctx.stroke();
+
+    /* ── THE SHOULDERS OF THE SHELL ────────────────────────────────────────
+       The single most valuable thing on the car, and it took a render to see
+       why. At this camera the whole nose elevation of a car is hidden behind
+       its own bonnet — measured on Red Racer, the nose face occupies screen
+       rows -10.8 to -6.5 and the top face covers -10.8 to -2.4 — so the flat
+       `colorTop` bonnet is most of what a player ever looks at, and it was one
+       unshaded colour with nothing on it.
+
+       A moulded shell is CROWNED: it curves over, so the flank facing the
+       light is bright and the other is not, and the transition happens at the
+       shoulder rather than at the outline. Two inset bands along the long
+       edges give that for two quads, and they run the full length of the car —
+       which matters, because the length axis is squashed to 30% and anything
+       short comes out as a blob rather than a band. */
+    if (MAT.body > 0.01) {
+      const shz = S.ride + S.bodyH + 0.01;
+      for (let sd = -1; sd <= 1; sd += 2) {
+        const a = sd > 0 ? foot[2] : foot[6], b = sd > 0 ? foot[3] : foot[7];
+        const t = this.tintOf(S.tintsTop, spec.colorTop,
+                              Pj.faceLight(heading + sd * Math.PI / 2) * MAT.body * 0.95);
+        quad([lp(a[0], a[1] * 0.95, shz), lp(b[0], b[1] * 0.95, shz),
+              lp(b[0], b[1] * 0.64, shz), lp(a[0], a[1] * 0.64, shz)], t, null);
+      }
+    }
+
+    /* ── THE CATCH ON THE EDGE ─────────────────────────────────────────────
+       The parting line of the mould runs round the widest point of the shell,
+       and that line is exactly this outline. On a real toy it is the edge that
+       catches the light: a hard bright rim on the side facing the window, and
+       nothing at all on the other side.
+
+       So the same ring is stroked twice — once dark, all the way round, for
+       separation, and once white over only the edges actually facing the light.
+       One extra path per car, and it is the single cheapest thing here that
+       says "shiny". */
+    if (MAT.rim > 0.01) {
+      ctx.beginPath();
+      let open = false;
+      for (let i = 0; i < n; i++) {
+        if (faces[i] > 0.30) {
+          const j = (i + 1) % n;
+          if (!open) ctx.moveTo(top[i].sx, top[i].sy);
+          ctx.lineTo(top[j].sx, top[j].sy);
+          open = true;
+        } else open = false;
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,' + MAT.rim.toFixed(2) + ')';
+      ctx.lineWidth = lineW * 1.15;
+      ctx.stroke();
+    }
+
+    /* ── WEAR ──────────────────────────────────────────────────────────────
+       12_Art_Guide.md: "a brand-new toy car is boring; a loved one has
+       history". Three rubbed patches on the corners of the bonnet and the
+       boot, which is where a toy car that lives in a box actually loses its
+       paint. Seeded off the vehicle id, so a given car always wears the same
+       way and two cars never wear alike — and never off Math.random(), which
+       would both differ between renders and desync the AI by drawing from the
+       shared stream.
+
+       Colour comes from the material, because what is UNDER the paint differs:
+       pale grey metal on the die-cast, lighter raw plastic on the mouldings,
+       bare wood on the Heirloom. Kept off the cabin, which is drawn over it. */
+    const wz = S.ride + S.bodyH + 0.03;
+    ctx.globalAlpha = (v.isGhost ? 0.38 : 1) * MAT.wear;
+    ctx.beginPath();                       // one path, three patches, one fill
+    for (let i = 0; i < S.wear.length; i++) {
+      const m = S.wear[i];
+      const p0 = lp(m[0] - m[2], m[1] - m[3], wz), p1 = lp(m[0] + m[2], m[1] - m[3], wz);
+      const p2 = lp(m[0] + m[2], m[1] + m[3], wz), p3 = lp(m[0] - m[2], m[1] + m[3], wz);
+      ctx.moveTo(p0.sx, p0.sy); ctx.lineTo(p1.sx, p1.sy);
+      ctx.lineTo(p2.sx, p2.sy); ctx.lineTo(p3.sx, p3.sy);
+      ctx.closePath();
+    }
+    ctx.fillStyle = MAT.chip;
+    ctx.fill();
+    ctx.globalAlpha = v.isGhost ? 0.38 : 1;
+
+    /* The sheen on the SHELL, drawn here rather than with the roof's so the
+       cabin lands on top of it and breaks it — a highlight that runs nose to
+       tail, interrupted where the cabin stands, is what a glossy toy looks
+       like from above. Running its full length is also the only way it reads
+       as a streak at all: the first version lit the bonnet alone, and 30%
+       depth squash turned a 7-unit panel into a 2-unit square that came out
+       as a pale blob sitting on the paint. */
+    if (sheenCol) {
+      const bc = litY * W * 0.42, bh = W * 0.13, bz = S.ride + S.bodyH + 0.02;
+      quad([lp(L * 0.90, bc - bh, bz), lp(-L * 0.90, bc - bh, bz),
+            lp(-L * 0.90, bc + bh, bz), lp(L * 0.90, bc + bh, bz)], sheenCol, null);
+    }
+
+    // The parting line down the shell, nose to tail. Same reason as the sheen
+    // for drawing it here: the cabin has to be able to interrupt it.
+    if (MAT.seam > 0.01) seamPair(L * 0.97, -L * 0.97, S.ride + S.bodyH + 0.05);
+
+    /* Wood takes no mould line, so the Heirloom gets the thing it would
+       actually have instead: two long grain marks down the shell. */
+    if (MAT.grain) {
+      ctx.beginPath();
+      [0.34, -0.46].forEach(function (g) {
+        const a = lp(L * 0.92, W * g, S.ride + S.bodyH + 0.05);
+        const b = lp(-L * 0.92, W * g * 0.72, S.ride + S.bodyH + 0.05);
+        ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
+      });
+      ctx.strokeStyle = S.seamDark;
+      ctx.lineWidth = lineW * 0.7;
+      ctx.globalAlpha = (v.isGhost ? 0.38 : 1) * 0.45;
+      ctx.stroke();
+      ctx.globalAlpha = v.isGhost ? 0.38 : 1;
+    }
 
     /* ── CABIN ─────────────────────────────────────────────────────────────
        Set back from the nose, narrower than the body. This is what gives the
@@ -2476,6 +2686,9 @@ BR.Renderer = {
     cEdges.sort(function (a, b) { return a.key - b.key; });
     for (let e = 0; e < cEdges.length; e++) {
       const i = cEdges[e].i, j = cEdges[e].j;
+      // Same back-face test as the body, for the same reason: the roof is
+      // drawn straight after and covers whatever hangs inward.
+      if (upright && cbot[j].sx >= cbot[i].sx) continue;
       ctx.beginPath();
       ctx.moveTo(cbot[i].sx, cbot[i].sy);
       ctx.lineTo(cbot[j].sx, cbot[j].sy);
@@ -2484,21 +2697,16 @@ BR.Renderer = {
       ctx.closePath();
       // The forward face is glass. Dark and cool against the body colour, so
       // the car has a front without needing the old nose triangle.
-      ctx.fillStyle = cEdges[e].front ? S.glass : spec.colorBody;
+      ctx.fillStyle = cEdges[e].front ? S.glass
+        : this.tintOf(S.tints, spec.colorBody,
+                      Pj.faceLight(heading + this.CABIN_N[i]) * MAT.body - 0.04);
       ctx.fill();
     }
 
     /* Roof. A DIFFERENT colour from the bonnet, which is the whole reason the
        cabin reads as a cabin — drawn in `colorTop` like the bonnet, the two
        merged into one lighter slab and the car went back to being a block. */
-    const quad = function (pts, fill, stroke) {
-      ctx.beginPath();
-      ctx.moveTo(pts[0].sx, pts[0].sy);
-      for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].sx, pts[k].sy);
-      ctx.closePath();
-      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-      if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
-    };
+    ctx.lineWidth = lineW;
     quad(ctop, S.roof, S.line);
 
     /* ── WINDSCREEN AND REAR WINDOW ────────────────────────────────────────
@@ -2514,26 +2722,71 @@ BR.Renderer = {
           lp(cb - L * 0.13, cw * 0.86, cz1 - 0.2), lp(cb - L * 0.13, -cw * 0.86, cz1 - 0.2)],
          S.glassBack, null);
 
-    // Gloss: one pale streak along the roof. Painted plastic has a highlight
-    // and matte cardboard does not.
-    quad([lp(cf * 0.86, -cw * 0.56, cz1 + 0.02), lp(cb * 0.86, -cw * 0.56, cz1 + 0.02),
-          lp(cb * 0.86, -cw * 0.14, cz1 + 0.02), lp(cf * 0.86, -cw * 0.14, cz1 + 0.02)],
-         'rgba(255,255,255,0.18)', null);
+    /* ── SHEEN, THE ROOF HALF ──────────────────────────────────────────────
+       The gloss used to be one pale streak nailed to the car's left, at a
+       fixed 0.18. That is a sticker: it stayed on the left through every
+       corner of the game while the shadow under the car swung right round.
+       Now it sits on whichever flank faces the light and walks across as the
+       car turns, and it is the same streak as the one on the shell below —
+       one highlight down a car that happens to have a cabin in the way.
 
-    /* Headlights. Two dots, and they do more than they should — they give the
-       car a FACE, which is the difference between a toy and a wedge. */
-    const hz = S.ride + S.bodyH + 0.02;
-    ctx.fillStyle = S.lamp;
+       `litY` is 0 when the light is straight up the car's nose, so the streak
+       is weakest there and strongest side-on, which is what a crowned surface
+       does. It is CENTRED then OFFSET rather than spanning from the middle out
+       to the lit edge: the first version did the latter and at the two
+       headings where the light ran along the car the streak collapsed to zero
+       width, so the sheen blinked out twice a lap.
+
+       Wood gets `spec: 0` and is skipped entirely — an old wooden car does not
+       shine, and that is the point of it. */
+    if (sheenCol) {
+      const rc = litY * cw * 0.44, rh = cw * 0.17;
+      quad([lp(cf * 0.90, rc - rh, cz1 + 0.02), lp(cb * 0.90, rc - rh, cz1 + 0.02),
+            lp(cb * 0.90, rc + rh, cz1 + 0.02), lp(cf * 0.90, rc + rh, cz1 + 0.02)],
+           sheenCol, null);
+    }
+
+    /* The roof's own length of the parting line. It skips the glass at both
+       ends: the windscreen and rear window are painted on this shell rather
+       than moulded into it, and a mould line ruled across them would cut the
+       one shape that makes the car read as a car in half. */
+    if (MAT.seam > 0.01) seamPair(cf, cb, cz1 + 0.05);
+
+    /* ── THE NOSE ──────────────────────────────────────────────────────────
+       A moulded bar across the very front in the trim colour, with the two
+       lamps set into its outer ends. All on the TOP face.
+
+       THE BUMPER WAS ON THE FRONT ELEVATION, and that was the worst thing on
+       the car. At `groundTilt` 0.30 a body 5 units tall lifts 4.3 units up the
+       screen while its own top face reaches 8.4 units down it, so the nose
+       face is entirely behind the bonnet — traced on Red Racer, the nose
+       occupies screen rows -10.8 to -6.5 and the top face covers -10.8 to
+       -2.4. Drawn last, the bumper was therefore painted straight over the
+       middle of the bonnet: a pale slab two thirds of the width of the car,
+       lying across the paint like a racing stripe. It is plainly there in the
+       before shot and reads as a marking rather than as a part.
+
+       This is the same rule the windscreen already learned two phases ago and
+       the guide states outright — a vertical pane at this camera is worth
+       about two pixels. It applies to every face, not just the glass.
+
+       ONE BAND, NOT THREE. The bumper and the two lamps were separate features
+       0.10 and 0.12 of a car-length apart, which the 30% depth squash turns
+       into 0.4 of a pixel at racing zoom: three pale marks landing on top of
+       each other, and the nose came out as a smear rather than as a face.
+       There is room for exactly one feature across the front of a car at this
+       size, so the lamps now sit INSIDE the bumper, at its outer ends, with
+       the trim colour showing between them. That is also what a toy car's
+       front looks like from above — a bar with two lights in it. */
+    const hz = S.ride + S.bodyH + 0.04;
+    quad([lp(L * 0.99, -W * 0.58, hz), lp(L * 0.99, W * 0.58, hz),
+          lp(L * 0.86, W * 0.64, hz), lp(L * 0.86, -W * 0.64, hz)],
+         spec.colorTrim, null);
     [-1, 1].forEach(function (side) {
-      quad([lp(L * 0.95, side * W * 0.34, hz), lp(L * 0.95, side * W * 0.60, hz),
-            lp(L * 0.84, side * W * 0.62, hz), lp(L * 0.84, side * W * 0.36, hz)],
+      quad([lp(L * 0.97, side * W * 0.32, hz), lp(L * 0.97, side * W * 0.56, hz),
+            lp(L * 0.88, side * W * 0.60, hz), lp(L * 0.88, side * W * 0.34, hz)],
            S.lamp, null);
     });
-    // And a bumper, in the trim colour, so the nose is not bare.
-    quad([lp(L * 0.99, -W * 0.66, S.ride + S.bodyH * 0.42),
-          lp(L * 0.99, W * 0.66, S.ride + S.bodyH * 0.42),
-          lp(L * 0.99, W * 0.66, S.ride + S.bodyH * 0.06),
-          lp(L * 0.99, -W * 0.66, S.ride + S.bodyH * 0.06)], spec.colorTrim, null);
 
     if (v.isGhost) ctx.restore();
   },
@@ -2545,13 +2798,78 @@ BR.Renderer = {
      The derivations are characterisation, not arithmetic for its own sake:
      a heavy vehicle sits taller on bigger wheels, a nimble one is squat with
      its cabin further back. 09_Vehicles.md: "material is characterisation". */
+  /* ── WHAT A CAR IS MADE OF, AS LIGHT ───────────────────────────────────────
+     09_Vehicles.md has carried an open item since Phase 10 titled "Still open:
+     the visual half": every vehicle declares a `material`, 13_Audio.md gives
+     each one a voice, and "a die-cast car should catch light differently from a
+     moulded plastic one and a wooden one should not shine at all, and none of
+     that is drawn yet — the field exists and the renderer ignores it". This
+     table is the renderer no longer ignoring it.
+
+     None of it is a stat. Every number here is an alpha or a tint, and the
+     amplitudes are small on purpose: a vehicle's HUE is the only thing telling
+     a player who just went past, here and on the minimap, so material may
+     modulate the colour and may never compete with it.
+
+       body   how far a flank swings between facing the light and facing away
+       spec   the sheen on the top faces. Wood is 0 and means it
+       rim    the white catch along the moulded shoulder
+       seam   how plainly the parting line of the mould shows
+       wear   opacity of the rubbed patches; chip is what is under the paint  */
+  MATERIAL_LOOK: {
+    // Injection-moulded shell: a hard bright rim, a tight sheen, and the
+    // clearest parting line of the four — a cheap toy is not tidied up.
+    plastic: { body: 0.13, spec: 0.30, rim: 0.30, seam: 1.00,
+               wear: 0.26, chip: '#f4f1e8' },
+    // Die-cast: painted metal swings widest between its lit and unlit faces,
+    // and the seam is a filed-down line on the base rather than a ridge.
+    metal:   { body: 0.19, spec: 0.24, rim: 0.44, seam: 0.45,
+               wear: 0.34, chip: '#c9ccd2' },
+    // Wood does not shine. It is nearly Lambertian, it has no mould at all,
+    // and the Heirloom is the one car in the room a player should be able to
+    // pick out by the fact that nothing on it catches the light.
+    wood:    { body: 0.09, spec: 0.00, rim: 0.10, seam: 0.00,
+               wear: 0.36, chip: '#d8bb8e', grain: 1 },
+    // Lithographed tin: the shiniest thing on the grid, and a folded seam
+    // rather than a moulded one, so it is there but faint.
+    windup:  { body: 0.16, spec: 0.42, rim: 0.48, seam: 0.35,
+               wear: 0.32, chip: '#e6e0cd' },
+  },
+
+  /* Outward normals of the cabin's four faces, in the car's own frame: nose,
+     left, tail, right. The cabin is a rectangle at every size, so unlike the
+     footprint these never need computing. */
+  CABIN_N: [0, Math.PI / 2, Math.PI, -Math.PI / 2],
+
+  /* A QUANTISED TINT CACHE. shade() parses a hex string and builds a new one on
+     every call, and lighting the faces individually asks for a dozen per car —
+     a hundred string allocations a frame at a full grid, for maybe fifteen
+     distinct values. Rounded to 1/24 the eye cannot tell the difference and the
+     map settles after the first corner.
+
+     ONE CACHE PER BASE COLOUR, which is why the cache is a parameter rather
+     than looked up from the shape: a single map keyed only on the amount would
+     hand back a tint of the body colour when the shoulder asked for a tint of
+     the roof colour, and the bug would look like a paint fault rather than a
+     cache fault. */
+  tintOf(cache, hex, amt) {
+    const k = amt < -1 ? -24 : amt > 1 ? 24 : Math.round(amt * 24);
+    let t = cache[k];
+    if (t === undefined) t = cache[k] = this.shade(hex, k / 24);
+    return t;
+  },
+
   shapeFor(spec) {
     if (spec._shape) return spec._shape;
     const heavy = BR.M.clamp((spec.weight - 0.6) / 0.9, 0, 1);
     const H = spec.height;
     const s = {
-      wheelR: Math.max(3.2, spec.length * (0.15 + 0.02 * heavy)),
-      track:  spec.width * 0.17,          // how far the wheels stand proud
+      /* CHUNKIER than they were. A toy car's wheels are over-scaled — the
+         mould has to survive a child — and they are the strongest thing in the
+         silhouette saying this is an object rather than a marker. Raised from
+         0.15 and a 0.17 track; beyond this they start to read as a buggy. */
+      wheelR: Math.max(3.4, spec.length * (0.17 + 0.025 * heavy)),
+      track:  spec.width * 0.20,          // how far the wheels stand proud
       ride:   H * (0.20 + 0.10 * heavy),
       bodyH:  H * 0.46,
       cabinH: H * (0.34 + 0.08 * heavy),
@@ -2574,7 +2892,55 @@ BR.Renderer = {
       glassBack: 'rgba(126,178,206,0.62)',
       lamp:  'rgba(255,244,214,0.95)',
       foot: this.chamferedFootprint,
+      mat:  this.MATERIAL_LOOK[spec.material] || this.MATERIAL_LOOK.plastic,
+      tints: {},        // tints of colorBody, for the flanks
+      tintsTop: {},     // tints of colorTop, for the shoulders of the shell
+      // The two sides of the parting ridge. Both are tints of the body, never
+      // a third hue — the same rule the roof and the outline already follow.
+      seamDark: this.shade(spec.colorBody, -0.50),
+      seamLit:  this.shade(spec.colorTop, 0.42),
     };
+
+    /* Outward normal of every footprint edge, in the car's OWN frame. The
+       footprint is fixed for a given vehicle, so these are computed once here
+       and the per-frame cost of lighting a flank is one addition and the cosine
+       inside faceLight(). Normal of edge a->b is (dy, -dx): checked against the
+       nose edge, which must come out pointing along +x. */
+    const foot = this.chamferedFootprint(spec.length / 2, spec.width / 2);
+    s.normals = [];
+    for (let i = 0; i < foot.length; i++) {
+      const j = (i + 1) % foot.length;
+      s.normals.push(Math.atan2(-(foot[j][0] - foot[i][0]), foot[j][1] - foot[i][1]));
+    }
+
+    /* Rubbed paint, seeded off the vehicle id — never off Math.random(), which
+       would differ between two renders of the same frame and, worse, consume
+       the shared stream the AI draws from. Kept to the corners of the bonnet
+       and the boot, clear of the cabin drawn over them, and inside the chamfer
+       so a patch cannot hang off the edge of the shell it is worn into. */
+    let h = 2166136261;
+    for (let i = 0; i < spec.id.length; i++) {
+      h = Math.imul(h ^ spec.id.charCodeAt(i), 16777619);
+    }
+    const rnd = function () {
+      h = (h + 0x6D2B79F5) | 0;
+      let x = Math.imul(h ^ (h >>> 15), 1 | h);
+      x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+    };
+    const L = spec.length / 2, W = spec.width / 2;
+    /* One patch forward, one aft, one either way, and the sides alternate.
+       Three free draws put two of them within half a patch of each other on
+       Red Racer and they read as one smudge rather than as wear. */
+    const side = rnd() < 0.5 ? -1 : 1;
+    const ends = [1, -1, rnd() < 0.5 ? -1 : 1];
+    s.wear = [];
+    for (let i = 0; i < 3; i++) {
+      const fx = ends[i] * L * (0.63 + rnd() * 0.24);
+      const fy = side * (i === 1 ? -1 : 1) * W * (0.24 + rnd() * 0.32);
+      s.wear.push([fx, fy, L * (0.05 + rnd() * 0.05), W * (0.07 + rnd() * 0.07)]);
+    }
+
     spec._shape = s;
     return s;
   },

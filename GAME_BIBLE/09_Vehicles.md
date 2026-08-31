@@ -287,11 +287,40 @@ What that sounds like, and the measured numbers behind it, are in
 metal's tyre rattle sits at 660 Hz against plastic's 1100, and the wind-up's
 ratchet runs 9 Hz at idle to 39 Hz flat out.
 
-### Still open: the visual half
+### The visual half — built (Phase 12)
 
-`12_Art_Guide.md` has not been touched. A die-cast car should catch light
-differently from a moulded plastic one and a wooden one should not shine at all,
-and none of that is drawn yet — the field exists and the renderer ignores it.
+This section used to read: *"a die-cast car should catch light differently from
+a moulded plastic one and a wooden one should not shine at all, and none of
+that is drawn yet — the field exists and the renderer ignores it."* The
+renderer now reads it. `Renderer.MATERIAL_LOOK` is the visual twin of
+`Audio.MATERIALS`, keyed by the same field, and every number in it is an alpha
+or a tint:
+
+| | flank swing | sheen | lit-edge catch | mould line | wear |
+| --- | --- | --- | --- | --- | --- |
+| plastic | 0.13 | 0.30 | 0.30 | **1.00** | pale raw plastic |
+| die-cast | **0.19** | 0.24 | **0.44** | 0.45 | grey metal |
+| wood | 0.09 | **0.00** | 0.10 | **none** | bare wood |
+| wind-up tin | 0.16 | **0.42** | **0.48** | 0.35 | pale tin |
+
+The reasoning is the same as the audio table's: painted metal swings widest
+between its lit and unlit faces and keeps the hardest edge highlight; wood is
+nearly Lambertian, has no mould at all, and is the one car on the grid that
+**nothing on it catches the light** — so the Heirloom gets two grain marks down
+the shell where every other car gets a parting line. Lithographed tin is the
+shiniest thing on the grid.
+
+Rendered side by side at six headings each: the wooden car reads flat and matte
+against eight cars that all move their highlight as they turn, which is
+precisely the characterisation this document has asked for since Phase 10 and
+`13_Audio.md` delivered on its own half of.
+
+**Still not a stat.** No speed, no grip, no weight, no collision. All 22 events
+measured identical to the committed baseline, 0.00 across the board.
+
+The geometry behind it — why the top face is the one that matters, why the
+sheen has to run the full length of the car, and the bumper bug it turned up —
+is in `12_Art_Guide.md` → *Cars are moulded, not coloured*.
 
 ## `boostPower` — resolved (Phase 8): a real stat, and a strong one
 
