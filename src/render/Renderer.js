@@ -372,7 +372,13 @@ BR.Renderer = {
        costing 92-98% as much to draw. */
     this.setCullBounds(view);
 
+    /* The room comes in two halves and the ground goes between them. The floor
+       beyond the play surface, and the shadow the surface drops on it, must be
+       UNDER it; everything that stands up must be over it, because drawGround
+       fills the whole bounds quad in one pass with no regard for depth. */
+    this.drawRoomFloor(ctx, arena);
     this.drawGround(ctx, arena);
+    this.drawRoom(ctx, arena);
     this.drawRoad(ctx, arena);
     this.drawDecoration(ctx, arena);
     this.drawBoostPads(ctx, arena);
@@ -559,6 +565,658 @@ BR.Renderer = {
      the under-bed and night-light states want their own. */
   DEFAULT_HAZE: '198,176,140',
   _fadeCache: null,
+
+  /* ══ THE ROOM ══════════════════════════════════════════════════════════════
+     What lies BEYOND the play surface.
+
+     Until now the world stopped at `arena.bounds` and outside it was the
+     cleared canvas — flat dark nothing. That is the one thing left undoing the
+     rug. 12_Art_Guide.md argues at length that a rug is an OBJECT LYING ON A
+     FLOOR and what says so is that it stops; then it stopped against nothing,
+     and a thing lying on nothing is not lying on anything. Same for the rest:
+     a sandpit with no ground under it is a sand-coloured rectangle, and a
+     table with a 420-unit drop off the side is only a table if you can see
+     what you would land on.
+
+     WHAT THIS IS NOT is a modelled bedroom. Every rule below exists to keep the
+     room from competing with the track:
+
+       - It is DIM. Floors are darkened and desaturated against the surface
+         they surround, and nothing out here carries a bright hue or a hard
+         pale edge — pale hard edges are the kerb's, and stay the kerb's.
+       - It is BEYOND THE BARRIER, always. The nearest thing the room draws is
+         at `arena.bounds`, which is the outer road edge plus 400: past the
+         wall, and on the rug past the binding tape as well.
+       - It is HAZED, for free. `drawDepthFade` runs in screen space after
+         everything, and the room lives in the top of the frame where the fade
+         is strongest, so it comes out of the same atmosphere the far track
+         does rather than being desaturated by hand twice.
+       - NOTHING HERE COLLIDES. It is drawn and nothing else — no entry in
+         `arena.walls`, `props` or `hazards`, nothing the simulation can see.
+
+     TWO KINDS OF SURROUND, and the difference is the whole point:
+
+       town-rug, sandbox   the play surface is an OBJECT resting on the floor,
+                           so the surround is a DIFFERENT material and the
+                           break is meant to be seen: boards under the rug,
+                           grass under the sandpit.
+       stunt, kitchen      the arena's own ground plane already IS the room
+                           floor — `groundColour` on those tracks is commented
+                           "the bedroom floor" and "the kitchen floor, four
+                           hundred units down". So the surround is derived from
+                           that colour and simply CONTINUES, and the seam at
+                           the bounds must not be visible at all.
+
+     THE LIGHT AGREES WITH EVERYTHING ELSE. Faces are shaded through
+     `Pj.faceLight` from the world angle of their outward normal, and the play
+     surface throws a shadow onto the floor below it through `Pj.lightOffset` —
+     the rug's own thickness on the boards, the sandpit's frame on the grass,
+     the track's raised deck onto the bedroom floor, and the table onto the
+     kitchen tiles. That last one is worth more than the furniture.          */
+
+  /* How far past `arena.bounds` the walls stand, and it is a MEASURED number
+     rather than a taste one. groundTilt 0.30 buys a very short horizon: the top
+     of the viewport is `h * horizonBias / zoom / groundTilt` world units ahead
+     of the camera, which on the 595-tall canvas the shot harness renders is
+     1,069 — barely nine car lengths. `arena.bounds` is already the outer road
+     edge plus 400, so a wall at 900 past THAT is 1,300 ahead of a car on the
+     outside of the circuit and is never on screen at all. The first version
+     used 900 and rendered an empty band of floor every time.
+
+     420 puts the skirting 820 units past the outer kerb: seven car lengths, far
+     enough that nothing can be mistaken for road and nothing can be reached,
+     close enough to be inside the horizon from the outer half of any track. A
+     full-window canvas sees nearly twice as far and simply gets more room. */
+  ROOM_OUT: 420,
+
+  ROOMS: {
+    'town-rug': {
+      floor: '#7a5734',                  // varnished pine, warm and dark
+      tile: 'boards',
+      sill: 18,                          // the rug's own thickness
+      wall: '#a8a08e', skirt: '#d8d1bf', skirtH: 96, wallH: 820,
+    },
+    'stunt': {
+      floor: null,                       // continue arena.groundColour
+      tile: 'boards',
+      sill: 0,
+      wall: '#575064', skirt: '#6d667a', skirtH: 96, wallH: 820,
+    },
+    'kitchen': {
+      floor: null,                       // continue arena.groundColour
+      tile: 'flags',
+      sill: 0,
+      wall: '#9aa0a4', skirt: '#c4c8c8', skirtH: 96, wallH: 820,
+    },
+    'sandbox': {
+      /* Outdoors — 08_World_Sandbox.md opens on "a backyard sandbox". So no
+         skirting and no plaster: grass, and a fence at the end of it. */
+      floor: '#5f7042',
+      tile: 'grass',
+      sill: 84,                          // the pit stands proud of the lawn
+      pit: true,                         // ...and has sides holding it up
+      wall: '#6b5a3f', skirt: '#7d6a4a', skirtH: 40, wallH: 210,
+    },
+  },
+
+  /* Small props standing in the surround, placed against the BOUNDS rather
+     than in world coordinates, so one list serves every track in a world and a
+     new track inherits its room for nothing.
+
+       side   0 = -x, 1 = +x, 2 = -y, 3 = +y
+       along  0..1 down that edge
+       out    0..1 across the band, 0 at the bounds and 1 at the wall
+       w      along the wall,  d  out from it,  h  up
+
+     Deliberately few. The brief for this world is "the odd furniture leg, a
+     scattered toy", and a dozen objects out here would be a second scene
+     rather than a hint of one.
+
+     Every depth obeys `out * ROOM_OUT + d / 2 <= ROOM_OUT`, or the back of the
+     thing goes through the wall. And every height is kept well under 420,
+     because heightScale draws a 400-tall object 340 pixels up a 595-pixel
+     view — furniture out here occupies a startling amount of screen and the
+     first pass at these numbers put a chest of drawers across the top third
+     of the frame. */
+  ROOM_PROPS: {
+    'town-rug': [
+      { kind: 'box', side: 3, along: 0.30, out: 0.52, w: 1900, d: 360, h: 330,
+        colour: '#7d5c3e' },                        // a chest of drawers
+      { kind: 'leg', side: 1, along: 0.24, out: 0.42, r: 54, h: 260,
+        colour: '#6b4e35' },                        // the foot of the bed
+      { kind: 'leg', side: 1, along: 0.53, out: 0.42, r: 54, h: 260,
+        colour: '#6b4e35' },
+      { kind: 'box', side: 0, along: 0.61, out: 0.30, w: 118, d: 118, h: 118,
+        colour: '#3f6cb4' },                        // a block, off the rug
+      { kind: 'leg', side: 2, along: 0.44, out: 0.42, r: 82, h: 150,
+        colour: '#b0503c' },                        // the tin the crayons live in
+    ],
+    'stunt': [
+      { kind: 'box', side: 3, along: 0.44, out: 0.50, w: 2300, d: 380, h: 400,
+        colour: '#5d4d58' },                        // the dresser, named on the box
+      { kind: 'box', side: 0, along: 0.36, out: 0.40, w: 720, d: 400, h: 230,
+        colour: '#4c4351' },                        // the toy box
+      { kind: 'leg', side: 1, along: 0.58, out: 0.40, r: 58, h: 300,
+        colour: '#493e47' },
+    ],
+    'kitchen': [
+      { kind: 'box', side: 3, along: 0.50, out: 0.54, w: 2600, d: 340, h: 360,
+        colour: '#8e8070' },                        // the run of units
+      { kind: 'leg', side: 0, along: 0.34, out: 0.40, r: 40, h: 240,
+        colour: '#7b5d3f' },                        // a chair, pushed in
+      { kind: 'leg', side: 0, along: 0.46, out: 0.40, r: 40, h: 240,
+        colour: '#7b5d3f' },
+      { kind: 'leg', side: 2, along: 0.63, out: 0.38, r: 40, h: 240,
+        colour: '#7b5d3f' },
+    ],
+    'sandbox': [
+      { kind: 'leg', side: 2, along: 0.33, out: 0.44, r: 108, h: 210,
+        colour: '#9a5f40' },                        // a terracotta pot
+      { kind: 'box', side: 1, along: 0.56, out: 0.34, w: 130, d: 420, h: 40,
+        colour: '#8b7450' },                        // a plank, put down and left
+    ],
+  },
+
+  /* ── the floor, and the shadow the play surface drops on it ───────────────
+     Drawn BEFORE drawGround, because the play surface is meant to cover the
+     inner part of both: the shadow is a full offset copy of the surface's
+     footprint and what survives is the crescent that sticks out on the side
+     the light is going. Getting that for one quad is the whole reason it is
+     drawn underneath rather than clipped. */
+  drawRoomFloor(ctx, arena) {
+    const R = this.ROOMS[arena.world];
+    if (!R) return;
+    const Pj = BR.Projection;
+    const b = arena.bounds;
+    const OUT = this.ROOM_OUT;
+    const z = -R.sill;
+
+    /* A RING, not a rectangle. The room floor under the arena is never seen —
+       the play surface covers it — and filling it anyway costs two full-screen
+       fills a frame at the widest part of the view, paid again per viewport.
+       The hole is pulled INSIDE the bounds by sill * 2.83, which is exactly
+       how far a plane `sill` below the surface slides down the screen relative
+       to it (heightScale / groundTilt, the exchange rate in Projection.js), so
+       the sandpit's lawn cannot open a gap along the near edge. */
+    const IN = R.sill * (Pj.heightScale / Pj.groundTilt) + 120;
+    const o = [
+      Pj.project(b.minX - OUT, b.minY - OUT, z),
+      Pj.project(b.maxX + OUT, b.minY - OUT, z),
+      Pj.project(b.maxX + OUT, b.maxY + OUT, z),
+      Pj.project(b.minX - OUT, b.maxY + OUT, z),
+    ];
+    const i = [
+      Pj.project(b.minX + IN, b.minY + IN, z),
+      Pj.project(b.maxX - IN, b.minY + IN, z),
+      Pj.project(b.maxX - IN, b.maxY - IN, z),
+      Pj.project(b.minX + IN, b.maxY - IN, z),
+    ];
+    ctx.beginPath();
+    ctx.moveTo(o[0].sx, o[0].sy);
+    for (let k = 1; k < 4; k++) ctx.lineTo(o[k].sx, o[k].sy);
+    ctx.closePath();
+    ctx.moveTo(i[0].sx, i[0].sy);                   // wound the other way, so
+    for (let k = 3; k > 0; k--) ctx.lineTo(i[k].sx, i[k].sy);   // it is a hole
+    ctx.closePath();
+
+    ctx.fillStyle = R.floor || this.shade(arena.groundColour, 0.05);
+    ctx.fill();
+    const pat = this.roomPattern(ctx, this.roomTile(arena, R), z);
+    if (pat) { ctx.fillStyle = pat; ctx.fill(); }
+
+    /* CONTACT SHADOW. A rug is 18 units thick and a sandpit frame stands 110
+       above the lawn, so neither throws much — 14 and 87 units. Two copies at
+       different offsets rather than one, because the near half of a shadow
+       this shallow is nearly opaque and the far half is nearly gone, and a
+       single flat alpha reads as a painted border instead. */
+    if (R.sill > 0) {
+      // The pit throws from the TOP of its frame and from the frame's outer
+      // face, not from the sand — 96 out and 30 higher than the sand it holds.
+      const G = R.pit ? 96 : 0;
+      const H = R.sill + (R.pit ? 30 : 0);
+      const steps = [[2.1, 0.10], [1.0, 0.17]];
+      for (let s = 0; s < steps.length; s++) {
+        const off = Pj.lightOffset(H * steps[s][0]);
+        ctx.beginPath();
+        const q = [[b.minX - G, b.minY - G], [b.maxX + G, b.minY - G],
+                   [b.maxX + G, b.maxY + G], [b.minX - G, b.maxY + G]];
+        for (let k = 0; k < 4; k++) {
+          const p = Pj.project(q[k][0] + off.dx, q[k][1] + off.dy, z);
+          if (k === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+        }
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(24,18,14,' + steps[s][1] + ')';
+        ctx.fill();
+      }
+    }
+  },
+
+  /* ── everything in the room that stands up ────────────────────────────────
+     Drawn AFTER drawGround and BEFORE drawRoad, and both halves of that matter.
+
+     After the ground, because anything with height reaches up the screen over
+     ground that is behind it, and drawGround fills the whole bounds quad in
+     one go regardless of depth — a wall drawn first would be erased by the
+     floor it stands behind.
+
+     Before the road, because the road is nearer than all of it. The painter's
+     order comes out right on its own here: the room is convex and everything
+     it draws is outside the bounds, so the only ground it can ever paint over
+     is ground further away than itself. */
+  drawRoom(ctx, arena) {
+    const R = this.ROOMS[arena.world];
+    if (!R) return;
+    this.drawDeckShadow(ctx, arena);
+    this.drawRoomWalls(ctx, arena, R);
+    this.drawRoomProps(ctx, arena, R);
+  },
+
+  /**
+   * The shadow the raised deck drops on the floor a long way below it.
+   *
+   * This is the cheapest height cue in the game and the one the elevated
+   * worlds were missing. Dresser Drop puts you 300 units up and Shelf Run 440,
+   * and the only thing that ever said so was a pillar every sixth segment.
+   *
+   * ONE PATH, ONE FILL, however many pieces go into it. Overlapping fills at
+   * the same alpha double-darken where they meet and every join reads as a
+   * crease — the same trap `hull2d` exists to avoid on props. Collected as
+   * subpaths of a single path and filled once, the alpha is applied to the
+   * union instead.
+   *
+   * The kitchen is the exception and it is a deliberate one: a table is a
+   * SOLID, so its shadow is the whole outer ring filled in, not a ribbon.
+   * Drawing the ribbon there would put a doughnut of daylight on the kitchen
+   * floor under the middle of the table.
+   */
+  drawDeckShadow(ctx, arena) {
+    if (!arena.elevated) return;
+    const Pj = BR.Projection;
+    const o = arena.outer, ip = arena.inner;
+    if (!o || !o.length) return;
+    const n = o.length;
+    const FLOOR = 40;                 // Recovery's FLOOR_Z: below it is not a drop
+    let drew = false;
+
+    ctx.beginPath();
+    if (arena.world === 'kitchen') {
+      const off = Pj.lightOffset(o[0][2] || 0);
+      for (let k = 0; k < n; k += 2) {
+        const p = Pj.project(o[k][0] + off.dx, o[k][1] + off.dy, 0);
+        if (!drew) { ctx.moveTo(p.sx, p.sy); drew = true; }
+        else ctx.lineTo(p.sx, p.sy);
+      }
+      ctx.closePath();
+    } else {
+      /* Every SECOND segment, spanning two. A shadow 240 units from the thing
+         casting it does not need the deck's own 80-unit resolution, and this
+         is the widest part of the view — the same argument the road makes for
+         culling, one step further. */
+      for (let k = 0; k < n; k += 2) {
+        const j = (k + 2) % n;
+        const zk = o[k][2] || 0;
+        if (zk <= FLOOR) continue;
+        const a = Pj.lightOffset(zk), c = Pj.lightOffset(o[j][2] || 0);
+        if (!this.onScreen(o[k][0] + a.dx, o[k][1] + a.dy, 0) &&
+            !this.onScreen(ip[k][0] + a.dx, ip[k][1] + a.dy, 0)) continue;
+        const q = [
+          Pj.project(o[k][0]  + a.dx, o[k][1]  + a.dy, 0),
+          Pj.project(o[j][0]  + c.dx, o[j][1]  + c.dy, 0),
+          Pj.project(ip[j][0] + c.dx, ip[j][1] + c.dy, 0),
+          Pj.project(ip[k][0] + a.dx, ip[k][1] + a.dy, 0),
+        ];
+        ctx.moveTo(q[0].sx, q[0].sy);
+        for (let m = 1; m < 4; m++) ctx.lineTo(q[m].sx, q[m].sy);
+        ctx.closePath();
+        drew = true;
+      }
+    }
+    if (!drew) return;
+    ctx.fillStyle = 'rgba(16,12,18,0.30)';
+    ctx.fill();
+  },
+
+  /**
+   * A straight run of upright board: a skirting, a stretch of wall, the side
+   * of a sandpit.
+   *
+   * BACKFACE CULLED, and not as an optimisation. The camera is INSIDE the room,
+   * so at most two of the four walls are ever turned toward it; drawing the
+   * other two paints the near ones across the floor in front of the car,
+   * because their quads run up the screen exactly like the far ones do.
+   *
+   * `nrm` is the WORLD angle of the face's outward normal — the direction it
+   * looks. `Projection.project` builds camera-space y as x*_sin + y*_cos and
+   * documents larger as nearer, so a face is turned toward the viewer exactly
+   * when its normal has a positive one. That same angle goes to `faceLight`,
+   * so the wall you are driving toward is lit by the room's own light rather
+   * than by a constant chosen from one camera angle.
+   */
+  roomBoard(ctx, ax, ay, bx, by, z0, z1, nrm, colour, amt) {
+    const Pj = BR.Projection;
+    if (Math.cos(nrm) * Pj._sin + Math.sin(nrm) * Pj._cos <= 0) return;
+
+    // Sampled along its length, not by its corners: these runs are thousands
+    // of units long and a corner test drops a wall whose middle is in shot.
+    let on = false;
+    for (let s = 0; s <= 10 && !on; s++) {
+      const t = s / 10;
+      const x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+      on = this.onScreen(x, y, z0) || this.onScreen(x, y, z1);
+    }
+    if (!on) return;
+
+    const p = [Pj.project(ax, ay, z0), Pj.project(bx, by, z0),
+               Pj.project(bx, by, z1), Pj.project(ax, ay, z1)];
+    ctx.beginPath();
+    ctx.moveTo(p[0].sx, p[0].sy);
+    for (let k = 1; k < 4; k++) ctx.lineTo(p[k].sx, p[k].sy);
+    ctx.closePath();
+    ctx.fillStyle = this.shade(colour, (amt === undefined ? -0.10 : amt) +
+                                       Pj.faceLight(nrm) * 0.14);
+    ctx.fill();
+  },
+
+  /* The four sides of the room, plus — in the sandbox — the four sides of the
+     pit. The pit is the part that makes the sand read as being CONTAINED: a
+     timber frame standing 30 units proud of the sand, with the lawn 84 below
+     it, so the sand is visibly held up rather than painted on. */
+  drawRoomWalls(ctx, arena, R) {
+    const b = arena.bounds;
+    const OUT = this.ROOM_OUT;
+    const HALF = Math.PI / 2;
+    const z = -R.sill;
+
+    // side: 0 = -x, 1 = +x, 2 = -y, 3 = +y. `nrm` looks INTO the room.
+    const runs = [
+      { x0: b.minX - OUT, y0: b.minY - OUT, x1: b.minX - OUT, y1: b.maxY + OUT, n: 0 },
+      { x0: b.maxX + OUT, y0: b.maxY + OUT, x1: b.maxX + OUT, y1: b.minY - OUT, n: Math.PI },
+      { x0: b.maxX + OUT, y0: b.minY - OUT, x1: b.minX - OUT, y1: b.minY - OUT, n: HALF },
+      { x0: b.minX - OUT, y0: b.maxY + OUT, x1: b.maxX + OUT, y1: b.maxY + OUT, n: -HALF },
+    ];
+    for (let k = 0; k < runs.length; k++) {
+      const r = runs[k];
+      this.roomBoard(ctx, r.x0, r.y0, r.x1, r.y1,
+                     z + R.skirtH, z + R.wallH, r.n, R.wall, -0.06);
+      this.roomBoard(ctx, r.x0, r.y0, r.x1, r.y1,
+                     z, z + R.skirtH, r.n, R.skirt, -0.14);
+    }
+
+    if (!R.pit) return;
+
+    /* THE PIT FRAME. Corners overlap by the frame's own width so the four runs
+       meet as a mitre rather than leaving a notch of lawn at each corner. */
+    const W = 96, TOP = 30;
+    const sides = [
+      { x0: b.minX, y0: b.minY - W, x1: b.minX, y1: b.maxY + W, n: 0,  ox: -W, oy: 0 },
+      { x0: b.maxX, y0: b.maxY + W, x1: b.maxX, y1: b.minY - W, n: Math.PI, ox: W, oy: 0 },
+      { x0: b.maxX + W, y0: b.minY, x1: b.minX - W, y1: b.minY, n: HALF, ox: 0, oy: -W },
+      { x0: b.minX - W, y0: b.maxY, x1: b.maxX + W, y1: b.maxY, n: -HALF, ox: 0, oy: W },
+    ];
+    const Pj = BR.Projection;
+    for (let k = 0; k < sides.length; k++) {
+      const s = sides[k];
+      // The inside of the board, from the sand it holds up to its top edge.
+      this.roomBoard(ctx, s.x0, s.y0, s.x1, s.y1, 0, TOP, s.n, R.wall, -0.20);
+      // The outside, dropping to the lawn — only ever seen from behind.
+      this.roomBoard(ctx, s.x0 + s.ox, s.y0 + s.oy, s.x1 + s.ox, s.y1 + s.oy,
+                     -R.sill, TOP, s.n + Math.PI, R.wall, -0.12);
+      // The top edge, which is the piece that reads as a plank on its side.
+      if (!this.onScreen((s.x0 + s.x1) / 2, (s.y0 + s.y1) / 2, TOP)) continue;
+      const q = [Pj.project(s.x0, s.y0, TOP), Pj.project(s.x1, s.y1, TOP),
+                 Pj.project(s.x1 + s.ox, s.y1 + s.oy, TOP),
+                 Pj.project(s.x0 + s.ox, s.y0 + s.oy, TOP)];
+      ctx.beginPath();
+      ctx.moveTo(q[0].sx, q[0].sy);
+      for (let m = 1; m < 4; m++) ctx.lineTo(q[m].sx, q[m].sy);
+      ctx.closePath();
+      ctx.fillStyle = this.shade(R.skirt, 0.04);
+      ctx.fill();
+    }
+  },
+
+  /* Furniture and dropped toys, placed against the bounds. Each one is an
+     axis-aligned box or an upright cylinder with a cast shadow — the same
+     sweep `drawProp` uses, for the same reason: a shadow parked under a thing
+     says nothing about how tall it is. */
+  drawRoomProps(ctx, arena, R) {
+    const list = this.ROOM_PROPS[arena.world];
+    if (!list) return;
+    const b = arena.bounds;
+    const OUT = this.ROOM_OUT;
+    const z = -R.sill;
+
+    for (let i = 0; i < list.length; i++) {
+      const d = list[i];
+      let cx, cy, hx, hy;
+      if (d.side < 2) {
+        cx = d.side === 0 ? b.minX - d.out * OUT : b.maxX + d.out * OUT;
+        cy = b.minY + d.along * (b.maxY - b.minY);
+        hx = (d.d || 0) / 2; hy = (d.w || 0) / 2;      // long axis runs in y
+      } else {
+        cy = d.side === 2 ? b.minY - d.out * OUT : b.maxY + d.out * OUT;
+        cx = b.minX + d.along * (b.maxX - b.minX);
+        hx = (d.w || 0) / 2; hy = (d.d || 0) / 2;
+      }
+      if (d.kind === 'leg') { hx = d.r; hy = d.r; }
+      /* Both ends and the top, not just the centre. A run of kitchen units is
+         2,600 units long and the centre point is off screen for most of the
+         stretch where one end of it is in plain view — the same mistake the
+         wall cull made before it started sampling. */
+      if (!this.onScreen(cx, cy, z) && !this.onScreen(cx, cy, z + d.h) &&
+          !this.onScreen(cx - hx, cy - hy, z + d.h) &&
+          !this.onScreen(cx + hx, cy + hy, z + d.h)) continue;
+      this.roomSolid(ctx, cx, cy, hx, hy, z, z + d.h, d.colour, d.kind === 'leg');
+    }
+  },
+
+  /**
+   * One box or upright cylinder standing on the room floor.
+   *
+   * Two visible faces at most and usually two, because an axis-aligned box has
+   * exactly two faces turned toward any camera. Same backface test as
+   * `roomBoard`, same light.
+   */
+  roomSolid(ctx, cx, cy, hx, hy, z0, z1, colour, round) {
+    const Pj = BR.Projection;
+    const HALF = Math.PI / 2;
+
+    // Shadow first: the sweep of the footprint from where it stands to where
+    // the light throws it, hulled so the two ends do not double-darken.
+    const off = Pj.lightOffset(z1 - z0);
+    const base = [];
+    const N = round ? 10 : 4;
+    for (let i = 0; i < N; i++) {
+      const a = round ? (i / N) * Math.PI * 2 : Math.PI / 4 + (i / 4) * Math.PI * 2;
+      const bx = cx + Math.cos(a) * hx * (round ? 1 : Math.SQRT2);
+      const by = cy + Math.sin(a) * hy * (round ? 1 : Math.SQRT2);
+      base.push([bx, by]);
+      base.push([bx + off.dx, by + off.dy]);
+    }
+    const hull = this.hull2d(base);
+    ctx.beginPath();
+    for (let i = 0; i < hull.length; i++) {
+      const p = Pj.project(hull[i][0], hull[i][1], z0);
+      if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(20,14,12,0.26)';
+    ctx.fill();
+
+    const quad = function (ax, ay, bx, by, fill) {
+      const p = [Pj.project(ax, ay, z0), Pj.project(bx, by, z0),
+                 Pj.project(bx, by, z1), Pj.project(ax, ay, z1)];
+      ctx.beginPath();
+      ctx.moveTo(p[0].sx, p[0].sy);
+      for (let k = 1; k < 4; k++) ctx.lineTo(p[k].sx, p[k].sy);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+    };
+
+    const faces = [
+      [0,        cx + hx, cy - hy, cx + hx, cy + hy],
+      [Math.PI,  cx - hx, cy + hy, cx - hx, cy - hy],
+      [HALF,     cx + hx, cy + hy, cx - hx, cy + hy],
+      [-HALF,    cx - hx, cy - hy, cx + hx, cy - hy],
+    ];
+    for (let i = 0; i < 4; i++) {
+      const f = faces[i];
+      if (Math.cos(f[0]) * Pj._sin + Math.sin(f[0]) * Pj._cos <= 0) continue;
+      quad(f[1], f[2], f[3], f[4],
+           this.shade(colour, -0.24 + Pj.faceLight(f[0]) * 0.20));
+    }
+
+    // The lid, in the light. Round things get an ellipse instead of a square,
+    // which is the whole of the difference between a bed leg and a shoebox at
+    // groundTilt 0.30 — the top face is most of what a player sees.
+    ctx.beginPath();
+    if (round) {
+      const c = Pj.project(cx, cy, z1);
+      ctx.ellipse(c.sx, c.sy, hx, hy * Pj.groundTilt, 0, 0, Math.PI * 2);
+    } else {
+      const c = [Pj.project(cx - hx, cy - hy, z1), Pj.project(cx + hx, cy - hy, z1),
+                 Pj.project(cx + hx, cy + hy, z1), Pj.project(cx - hx, cy + hy, z1)];
+      ctx.moveTo(c[0].sx, c[0].sy);
+      for (let k = 1; k < 4; k++) ctx.lineTo(c[k].sx, c[k].sy);
+      ctx.closePath();
+    }
+    ctx.fillStyle = this.shade(colour, 0.08);
+    ctx.fill();
+  },
+
+  /**
+   * groundPattern, for a plane that is not the play surface's.
+   *
+   * The same matrix, with the plane's own height folded into the translation.
+   * The play surface's textures keep going through `groundPattern` untouched;
+   * this exists because the floor under a sandpit is 84 units BELOW the sand,
+   * and a pattern built for z = 0 slides 71 pixels out of register with the
+   * quad it is filling (heightScale, the same exchange rate as everywhere).
+   */
+  roomPattern(ctx, tile, z) {
+    if (!tile) return null;
+    const pat = ctx.createPattern(tile, 'repeat');
+    if (!pat || !pat.setTransform) return null;
+    const Pj = BR.Projection;
+    const cs = Pj._cos, sn = Pj._sin, t = Pj.groundTilt;
+    const ox = -Pj.camX, oy = -Pj.camY;
+    pat.setTransform(new DOMMatrix([
+      cs, t * sn,
+      -sn, t * cs,
+      cs * ox - sn * oy,
+      t * (sn * ox + cs * oy) + ((Pj.camZ || 0) - z) * Pj.heightScale,
+    ]));
+    return pat;
+  },
+
+  /**
+   * The material the room floor is made of. Built once and cached, like every
+   * other tile here.
+   *
+   * TRANSLUCENT MARKS ONLY, no opaque colour except in the grass. The base is
+   * a flat fill underneath — sometimes authored, sometimes derived from the
+   * track's own `groundColour` so the seam at the bounds cannot be seen — and
+   * a tile that painted its own base would put a visible rectangle around
+   * every arena on the two worlds where the floor is meant to continue.
+   *
+   * Tiles are 512, four times the weave's 128. A floorboard is a big object
+   * and the room is at the top of the frame where the period would be most
+   * obvious, so the boards are wide and the joints are staggered across two
+   * rows — a butt joint repeating every 512 would rule a ladder across the
+   * whole floor, which is the failure the rug print already had to solve.
+   */
+  roomTile(arena, R) {
+    const key = 'room:' + R.tile;
+    this._tiles = this._tiles || {};
+    if (this._tiles[key] !== undefined) return this._tiles[key];
+
+    const S = 512;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+
+    // Seeded, as every tile in this file is: a floor that differed between two
+    // renders would break every pixel check, and Math.random is the AI's.
+    let seed = 20918;
+    const rnd = function () {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+
+    if (R.tile === 'boards') {
+      const BW = 128;                                   // board width
+      for (let r = 0; r < S / BW; r++) {
+        const y = r * BW;
+        // The joint between boards: a dark gap with the lit arris just below
+        // it, which is what actually reads as "these are separate planks".
+        g.fillStyle = 'rgba(0,0,0,0.30)';
+        g.fillRect(0, y, S, 3);
+        g.fillStyle = 'rgba(255,238,206,0.055)';
+        g.fillRect(0, y + 3, S, 2);
+        // Butt joints, offset per row so they never line up into a ladder.
+        const at = ((r * 197) % S);
+        g.fillStyle = 'rgba(0,0,0,0.22)';
+        g.fillRect(at, y + 4, 2.5, BW - 5);
+        // Grain: long shallow streaks along the board, never across it.
+        for (let i = 0; i < 7; i++) {
+          const gy = y + 10 + rnd() * (BW - 20);
+          const x0 = rnd() * S, len = 90 + rnd() * 200;
+          g.strokeStyle = rnd() > 0.45 ? 'rgba(46,30,16,0.10)'
+                                       : 'rgba(255,230,190,0.045)';
+          g.lineWidth = 1 + rnd() * 2.4;
+          g.beginPath();
+          g.moveTo(x0, gy);
+          g.quadraticCurveTo(x0 + len / 2, gy + (rnd() - 0.5) * 5, x0 + len, gy);
+          g.stroke();
+        }
+      }
+
+    } else if (R.tile === 'flags') {
+      // Kitchen floor tiles: one 256 flag in each quarter, with grout between
+      // and each flag a slightly different value so the grid is a floor rather
+      // than graph paper.
+      const F = 256;
+      for (let r = 0; r < 2; r++) {
+        for (let c = 0; c < 2; c++) {
+          const v = (rnd() - 0.5) * 0.05;
+          g.fillStyle = v > 0 ? 'rgba(255,255,255,' + v.toFixed(3) + ')'
+                              : 'rgba(0,0,0,' + (-v).toFixed(3) + ')';
+          g.fillRect(c * F, r * F, F, F);
+        }
+      }
+      g.fillStyle = 'rgba(0,0,0,0.16)';
+      g.fillRect(0, 0, S, 5); g.fillRect(0, F, S, 5);
+      g.fillRect(0, 0, 5, S); g.fillRect(F, 0, 5, S);
+
+    } else {
+      /* Grass. Mottle and tufts, and NOT ONE STRAIGHT LINE — a lawn has no
+         period at all, so anything ruled here would be the only thing in the
+         room the eye could lock onto. */
+      for (let i = 0; i < 26; i++) {
+        g.fillStyle = rnd() > 0.5 ? 'rgba(126,150,84,0.16)'
+                                  : 'rgba(38,58,30,0.16)';
+        g.beginPath();
+        g.ellipse(rnd() * S, rnd() * S, 40 + rnd() * 70, 26 + rnd() * 50,
+                  rnd() * Math.PI, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.lineCap = 'round';
+      for (let i = 0; i < 150; i++) {
+        const x = rnd() * S, y = rnd() * S, a = -1.2 - rnd() * 0.9, L = 7 + rnd() * 9;
+        g.strokeStyle = rnd() > 0.4 ? 'rgba(30,50,26,0.30)'
+                                    : 'rgba(150,176,104,0.24)';
+        g.lineWidth = 1.6;
+        g.beginPath();
+        g.moveTo(x, y);
+        g.lineTo(x + Math.cos(a) * L, y + Math.sin(a) * L);
+        g.stroke();
+      }
+    }
+
+    this._tiles[key] = cv;
+    return cv;
+  },
 
   /* Chequered finish line, painted on the ground plane. */
   drawFinishLine(ctx, arena) {
