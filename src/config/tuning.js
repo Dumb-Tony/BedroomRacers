@@ -255,8 +255,26 @@ BR.CAMERA = {
   shakeHz:         38,  // oscillation rate. High enough to read as an impact
                         // rather than as a wobble
 
+  rumbleMax:      1.7,  /* pixels of tremor at full speed. TINY on purpose: a
+                           rumble you can consciously see is a broken camera,
+                           and this has to survive being on screen constantly
+                           rather than for the half-second an impact lasts.
+                           Scaled by the SQUARE of the speed fraction, so it is
+                           absent through most of the range and only arrives
+                           near the top. */
+  rumbleHz:        27,  // slower than an impact, so the two never read as the
+                        // same event
+
   streakSpeed:    240,  // speed at which motion streaks start to appear
   streakMax:     0.34,  // opacity ceiling
+  streakFlow:     3.2,  /* how much faster than the ground the edge streaks
+                           scroll. 1.0 is honest and useless: measured, a point
+                           on the floor crosses a 595px view at 110 px/sec at
+                           336 units/sec, so the screen takes five seconds to
+                           scroll once and the periphery reads as still. The
+                           streaks have to move at a rate the eye calls motion
+                           while still rising and falling with the car — which
+                           is what keeps it a speedometer rather than a decal. */
   followRate:     7.0,  // positional catch-up. Low = laggy and cinematic,
                         // high = locked to the car and can feel jittery
   yawRate:        4.5,  // how fast the view swings round to follow travel.

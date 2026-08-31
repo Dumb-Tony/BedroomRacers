@@ -108,7 +108,34 @@ BR.Renderer = {
    * never has them, which is what keeps them meaning "fast" rather than
    * meaning "moving".
    */
-  drawSpeedStreaks(ctx, v, W, H) {
+  /* ── THE SENSE OF SPEED ─────────────────────────────────────────────────
+     Measured before it was touched: at 336 units/sec a point fixed to the
+     ground crosses the screen at 110 px/sec, on a view 595px tall. The screen
+     takes FIVE SECONDS to scroll once. That is the whole of the "it doesn't
+     feel fast enough" complaint, and it is arithmetic rather than taste.
+
+     groundTilt is 0.30, so forward motion is compressed to 30% on screen — and
+     forward is the direction you are travelling. Sideways motion is drawn at
+     full rate; the one axis that matters is the one that is squashed. The tilt
+     cannot move (every piece of art in the game is built at 0.30, 12_Art_Guide)
+     and the projection has no perspective to stretch, so the flow the eye reads
+     has to be supplied.
+
+     THE OLD STREAKS SUPPLIED NONE OF IT, in two separate ways:
+
+       - They did not MOVE. Fourteen lines at fixed positions, redrawn in the
+         same places every frame. Static marks are an overlay, not motion; the
+         eye reads speed from things TRAVELLING across the retina.
+       - They ran the WRONG WAY. They were horizontal, and the camera rotates so
+         travel is up the screen — so they lay across the direction of motion.
+         Perpendicular streaks say "moving sideways", which is what a car does
+         in a slide, not what it does at 340.
+
+     Now they run ALONG the axis of travel and scroll down it at the ground's
+     own rate, so what the edge of the screen does is honest: it is the flow the
+     projection cannot give you, drawn where peripheral vision reads speed
+     rather than over the road you are trying to look at. */
+  drawSpeedStreaks(ctx, v, W, H, cam) {
     if (!v) return;
     const C = BR.CAMERA;
     const speed = Math.hypot(v.vel.x, v.vel.y);
@@ -119,23 +146,32 @@ BR.Renderer = {
     const a = Math.min(C.streakMax, over * C.streakMax);
     if (a <= 0.01) return;
 
+    // How far the streaks have travelled, accumulated in updateFeel from the
+    // real ground flow. Falls back to 0 so a view without feel state still
+    // draws something rather than throwing.
+    const phase = (cam && cam.flowPhase) || 0;
+
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,' + a.toFixed(3) + ')';
     ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
     ctx.beginPath();
+
     /* Deterministic placement from a fixed table rather than Math.random, for
-       the same reason the pays check is seeded: streaks that jump about at
-       random every frame read as static, and a renderer that consumes the
-       random stream makes anything downstream of it unreproducible. */
-    const N = 14;
+       the same reason pays.sh is seeded: a renderer that consumes the shared
+       random stream makes everything downstream of it unreproducible. The
+       MOTION now comes from the phase, not from re-rolling positions. */
+    const N = 18;
+    const len = 46 + 120 * over;            // longer the faster you go
+    const span = H + len;
     for (let i = 0; i < N; i++) {
       const f = (i * 0.6180339887) % 1;                 // golden-ratio spread
-      const yy = f * H;
-      const len = 40 + ((i * 37) % 60);
-      // Left and right bands only, mirrored, well clear of the middle.
-      const inset = ((i * 53) % 70);
-      ctx.moveTo(inset, yy);       ctx.lineTo(inset + len, yy);
-      ctx.moveTo(W - inset, yy);   ctx.lineTo(W - inset - len, yy);
+      // Scrolls DOWN the screen, wrapping. Travel is up the screen, so the
+      // world goes the other way.
+      const yy = ((f * span) + (phase % span) + span) % span - len;
+      const inset = 6 + ((i * 53) % 74);
+      ctx.moveTo(inset, yy);       ctx.lineTo(inset, yy + len);
+      ctx.moveTo(W - inset, yy);   ctx.lineTo(W - inset, yy + len);
     }
     ctx.stroke();
     ctx.restore();
@@ -236,6 +272,25 @@ BR.Renderer = {
     // Phase advances in REAL time so the wobble does not stall when the
     // simulation is paused mid-shake.
     cam.shakeT = (cam.shakeT || 0) + dt;
+
+    /* ── how far the ground has actually flowed ────────────────────────────
+       The streaks scroll at the rate a point fixed to the ground crosses the
+       screen: speed * groundTilt * zoom. Taking the REAL number rather than a
+       pleasant-looking constant is the point — the edge of the screen then
+       tells the truth about how fast you are going, and it speeds up and slows
+       down with the car instead of running at its own tempo.
+
+       A multiplier on top, because honest is not the same as legible: at
+       ground rate the streaks are as slow as the floor, which is the very
+       thing that does not read. `streakFlow` is how much faster than the world
+       the periphery is allowed to move. */
+    cam.flowPhase = (cam.flowPhase || 0) +
+      speed * BR.Projection.groundTilt * (cam.zoom || C.zoom) * C.streakFlow * dt;
+
+    // Speed rumble: a state, not an event. Eased rather than snapped, or it
+    // flickers on and off at the threshold every time the car brushes it.
+    const rumTarget = C.rumbleMax * frac * frac;      // squared: only near the top
+    cam.rumble = M.lerp(cam.rumble || 0, rumTarget, 1 - Math.exp(-6 * dt));
   },
 
   /**
@@ -358,6 +413,26 @@ BR.Renderer = {
       const t = (cam.shakeT || 0) * BR.CAMERA.shakeHz;
       shx = Math.sin(t) * cam.shake;
       shy = Math.cos(t * 1.37) * cam.shake * 0.7;   // 1.37 so it is not a line
+    }
+
+    /* ── speed rumble ──────────────────────────────────────────────────────
+       A second, much smaller tremor that rises with speed and never stops
+       while you are quick. The impact shake above is an EVENT; this is a
+       STATE, and the two are deliberately different in size and rate — a
+       rumble you can consciously see is a broken camera, so the ceiling is a
+       couple of pixels.
+
+       It is here because the honest cue is not available: the ground only
+       flows past at 110 px/sec at full speed (groundTilt compresses the one
+       axis you travel along), and a still camera over a slow-moving floor is
+       what reads as sliding. A car at the limit should feel slightly out of
+       control, and the cheapest true version of that is that the picture will
+       not sit perfectly still. */
+    const rum = cam.rumble || 0;
+    if (rum > 0.01) {
+      const rt = (cam.shakeT || 0) * BR.CAMERA.rumbleHz;
+      shx += Math.sin(rt * 1.11) * rum;
+      shy += Math.sin(rt) * rum * 0.8;
     }
     ctx.translate(W / 2 + shx, H * BR.CAMERA.horizonBias + shy);
     const zoomNow = this.zoom * (1 + (cam.kick || 0));
@@ -517,7 +592,7 @@ BR.Renderer = {
     ctx.restore();
 
     // Viewport space, after the camera transform is unwound.
-    this.drawSpeedStreaks(ctx, v, W, H);
+    this.drawSpeedStreaks(ctx, v, W, H, view.cam);
     this.drawDepthFade(ctx, arena, W, H);
     BR.HUD.draw(ctx, view, game, W, H);
     BR.CornerHint.draw(ctx, game, view, W, H);
