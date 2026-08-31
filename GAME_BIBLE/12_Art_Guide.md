@@ -749,7 +749,190 @@ old two-path `drawGround` back in on a live frame, the rug's ground quad costs
 the quad's path is now built once and filled per layer rather than rebuilt per
 texture, which was already paying for two paths to draw one.
 
-### Cars are moulded, not coloured (Phase 12)
+## Five floors, five materials (Phase 9)
+
+Direct feedback, and it was about the floor: **"real materials, visible — you
+should be able to tell what each surface is MADE of."** Closer to a photograph of
+real toys on a real floor than to a flat illustration.
+
+The floor failed that twice over, and the two failures are different.
+
+### The rug read as a golf course
+
+Rendered and looked at, `rug-route-01` at ten seconds is a fairway. A big soft
+green field, pale mown-looking blobs, scattered tan rectangles that read as
+bunkers, a kidney pond in the corner that reads as a water hazard, and a wide
+dark ribbon through the middle that reads as a service road. Nothing in the
+frame is fabric and nothing in it looks drawn by a person.
+
+**The pile was a suggestion of texture rather than a texture.** One set of
+dashes at 5% black. The floor is 1.15 screen pixels to the world unit across and
+0.35 down, so a 16-unit tuft is 18px by 5px — there is plenty of room — and it
+was being spent on a value change too small to see.
+
+**And everything printed on it was organic.** Soft green ellipses, a soft tan
+ellipse, a soft blue ellipse. The tiling rules that beat the wallpaper problem —
+*soft edges, everything is an ellipse, nothing spans a tile edge* — are right
+about period and are, taken together, a recipe for landscape. A play rug is a
+printed picture of a town, and what says so is the **man-made geometry**.
+
+### A tuft is drawn three times
+
+A dark root offset **the way the light throws shadows**, the gap between it (the
+base colour, showing through), and a pale crest offset **toward the light**.
+
+That is the difference between pile and hatching, and it has the property that
+makes the contrast affordable: **the crest gives back what the root takes**, so
+local contrast triples while mean luminance barely moves.
+
+| Same patch of rug, same frame | mean | sd |
+| --- | --- | --- |
+| before | 118.63 | 6.82 |
+| after | **116.73** | **15.25** |
+| the road, before | 69.03 | 14.39 |
+| the road, after | 69.39 | 15.63 |
+
+The value gap `05_Tracks.md` reads the road by is 49 points either way. A texture
+2.2 times stronger cost 1.9 points of brightness.
+
+The first pass at this used 0.17 and 0.115 and reached sd 10.1 — a real texture,
+and still not one anybody notices at racing speed without going looking for it.
+0.30 and 0.22 is what "you can tell it is fabric" costs.
+
+### One lamp, baked into the tiles
+
+`groundPattern` hands a tile to the ground plane's affine transform, and that
+transform maps tile space onto **world** space one for one: tile x *is* world x.
+So a highlight drawn toward a fixed direction in a tile is lit from that
+direction in the room for ever, however the camera turns — which is exactly what
+`Projection.light` is.
+
+The pile of the rug, the pits in the sand, the chamfer on a floorboard and the
+bevel on a kitchen tile are all lit by the same lamp, and none of them costs a
+per-frame calculation.
+
+### A road that never needed an edge
+
+The print's rule is *nothing spans a tile edge*: a shape crossing the boundary
+meets its own copy and rules a lattice across the whole floor. That rule is why
+the town layer had no roads, and no roads is why it had no town.
+
+The answer is a **closed loop** — a rounded rectangle of printed lane, complete
+inside its own tile, with worn dashes down the middle, a crossing where a second
+lane meets it, a spur that ends in a car park with painted bays, and six houses
+along it with roofs, outlines, doors and windows. A closed shape needs no edge,
+so the rule costs nothing. The field layer gained a five-a-side pitch with a
+halfway line and a centre circle for the same reason: **a painted diagram is
+unmistakably something a person drew.**
+
+The layer grew from 768 to **960** against the field's 1024, so the pair shares
+no period shorter than 15,360 units — about fourteen frame widths.
+
+And the base green took a flat warm wash before anything is printed on it, which
+moves it from (92,138,74) to about (105,134,80). Outdoor green plus soft shapes
+was most of the fairway; **wool is duller and warmer than a lawn.** It is done in
+the tile rather than in the track data because the authored `groundColour` is
+also the mini-map's and the haze's.
+
+**Readability.** A printed lane is 46 units against the racing road's 320, a
+seventh of it, and pale grey against near-black. One is a narrow lighter stripe
+with a dash down it; the other is twenty car widths of the darkest value on
+screen with a lit kerb down each side.
+
+### Four floors that did not exist
+
+`groundTile` had two branches, `sandy` and everything-else, so the sandpit was
+the rug's tuft geometry in brown, the bedroom floor under the stunt track was
+the same geometry in near-black, and **the kitchen floor had carpet pile printed
+on its tiles**. `roadTile` was worse: the kitchen fell through to the rug branch,
+so the one surface in the game whose entire character is *wipe-clean* had a
+weave on it.
+
+| World | The floor is now | Carried by |
+| --- | --- | --- |
+| Town rug | woven pile, printed with a town | lit tufts, a road loop, houses, a pitch, a car park |
+| Sandbox | loose dry sand over damp | grains, lit pits, mica, drift, damp geography at 768 |
+| Stunt | the bedroom floorboards | six planks in 256, grain, dark joints, a varnish chamfer |
+| Kitchen floor | glazed 150-unit tiles | grout, a lit bevel, glaze speckle |
+| Kitchen table | wiped laminate | printed grain under a hard flat sheen |
+
+Measured the same way — same event, same seed, same second, same rectangle of
+pixels — before and after:
+
+| Surface | mean | sd |
+| --- | --- | --- |
+| town rug | 118.63 → 116.73 | 6.82 → **15.25** |
+| kitchen floor | 136.66 → 135.41 | 2.51 → **8.44** |
+| loose sand | 175.41 → 175.11 | 2.99 → **5.81** |
+| kitchen table | 211.79 → 208.93 | 3.42 → 6.18 |
+| bedroom floor (stunt) | 53.47 → **63.84** | 5.74 → 6.80 |
+
+Every mean is within three points of where it was except the stunt floor's, and
+that one is the wood arriving rather than the texture: it is a floor deliberately
+kept dark so the plastic pops off it, and a dark surface has less absolute
+luminance to spend, so what reads there is the **joints and the hue**, not the
+value spread. It is the honest exception in the table.
+
+### Cost
+
+**4,266 → 4,298 operations a frame. Thirty-two.** Rug Loop, ten seconds in, same
+seed, counted by wrapping every drawing method on `CanvasRenderingContext2D` for
+exactly one frame.
+
+Thirty-two buys four new floor materials, a printed town, five kinds of zone and
+a textured elevated deck, because almost none of it is geometry: a tile is built
+once at load and every layer after the first is **one more fill through a path
+that has already been built**. The two that are per-frame — an extra fill per
+elevated surface quad, and the pattern for each zone — are counted in that
+thirty-two.
+
+### Zones were invisible, and that was a gameplay bug
+
+Bedside Boulevard's whole north side is `hardwood` — **12% more top speed on 22%
+less grip** — and nothing on screen said so. The kitchen's place mats, spilled
+sugar, crumbs and scattered post were the same: six surfaces, six changes to how
+the car behaves, and one uniform colour under all of them. This guide says
+plainly that surface is a **gameplay signal and not decoration**, and a signal
+nobody can see is not one.
+
+Three rules keep them from costing readability:
+
+- **Nothing is opaque.** A zone tints the floor it lies on, so the road keeps its
+  own value through every one of them.
+- **They are drawn between the road fill and the kerbs**, exactly where the
+  packed sand goes, so no patch can cover the edge a driver reads the track by.
+- **The authored rectangle is kept exactly**, however un-spill-like a
+  rectangular spill of sugar is. `surfaceAt` tests `x <= p <= x + w`: the
+  rectangle is not a bounding box, it *is* the surface change, and a prettier
+  shape that disagreed with what it triggers is the same class of lie as a
+  barrier drawn shorter than it collides. Boost pads keep their plate for the
+  same reason. **Decoration has no collision, so a pond is free to be the
+  ellipse it looks like** — and now is.
+
+Zones sit at their deck's own height, cached per zone the way a boost pad caches
+its heading. Drawn at zero, the kitchen's place mats were on the floor 420 units
+below the table.
+
+### Three things that had to be got wrong first
+
+- **The elevated road had no texture at all.** A flat road is filled twice
+  through one path, colour then material, and that second fill never reached the
+  `elevated` branch — so the laminate tile was dead code the day it was written
+  and the kitchen table stayed a cream rectangle. It is one more fill per
+  surface quad, through the same path, and nothing on the skirts, which are seen
+  edge-on and would only alias.
+- **Packed sand was a chequerboard.** `SandGrid` is a grid and the renderer was
+  drawing the grid — hard-edged square cells following the car, which reads as a
+  debug overlay. The inscribed ellipse is the obvious fix and came out as **polka
+  dots**: inscribed ellipses meet only at the edge midpoints, so every cell
+  corner stays dry. They have to be over-inflated to 1.3 before neighbours merge
+  into a track, with the alpha down to pay for the area.
+- **A tile of noise has a visible period even when its content does not.** Sand
+  at 128 units repeats every 147px across the frame and the eye finds the
+  lattice in it — the same failure the print layers had at 448. At 256 the
+  repeat is 294px and there is nothing in it to lock onto.
+
+## Cars are moulded, not coloured (Phase 12)
 
 The same note as Phase 9, one level down: *"real materials, visible — you should
 be able to tell what each thing is made of."* The floor, the road, the kerbs,

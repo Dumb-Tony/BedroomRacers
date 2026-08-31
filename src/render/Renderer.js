@@ -1317,10 +1317,66 @@ BR.Renderer = {
     if (arena.world === 'town-rug') {
       out.push(this.rugPrintTile('field'));
       out.push(this.rugPrintTile('town'));
+    } else if (arena.sandy) {
+      /* Damp, at a period long enough to be geography rather than texture.
+         A sandpit is not uniformly dry and the difference is the first thing
+         anyone sees in one. */
+      out.push(this.dampTile(arena));
     }
     out.push(this.groundTile(arena));
     this._tiles[key] = out;
     return out;
+  },
+
+  /* ── ONE LAMP, BAKED INTO THE TILES ──────────────────────────────────────
+     `groundPattern` hands a tile straight to the ground plane's affine
+     transform, and that transform maps tile space onto WORLD space one for
+     one: tile x IS world x. So a highlight drawn toward a fixed direction in a
+     tile is lit from that direction in the room for ever, however the camera
+     turns — which is exactly what BR.Projection.light is, a source fixed to
+     the room rather than to the screen.
+
+     Every material below therefore lights its bumps with these two vectors and
+     nothing else, so the pile of the rug, the pits in the sand, the chamfer on
+     a floorboard and the bevel on a kitchen tile all agree about where the
+     window is. Baked at build time: the light does not move during a race. */
+  tileLight() {
+    const L = BR.Projection.light;
+    return {
+      hx: -Math.cos(L.dir), hy: -Math.sin(L.dir),   // toward the light
+      sx:  Math.cos(L.dir), sy:  Math.sin(L.dir),   // the way a shadow falls
+    };
+  },
+
+  /* Deterministic pseudo-randomness for tile building. Math.random is the
+     AI's — a tile that consumed it would desync every ghost, and a tile that
+     differed between two renders would break every pixel check in the
+     project. */
+  tileRnd(seed) {
+    let s = seed | 0;
+    return function () {
+      s = (s * 1103515245 + 12345) & 0x7fffffff;
+      return s / 0x7fffffff;
+    };
+  },
+
+  /* Restate a colour at a different alpha.
+
+     `weaveColour` is authored per track and carries the HUE of that floor's
+     own shadow — Tide Pool's is cool and grey where Dune Dash's is warm — and
+     that is worth keeping. Its ALPHA was chosen for a texture that was barely
+     there, and "you cannot tell what anything is made of" is the complaint
+     this pass exists to answer, so the tiles restate it rather than obey it. */
+  ink(col, a) {
+    const m = /rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)/.exec(col || '');
+    if (m) return 'rgba(' + m[1] + ',' + m[2] + ',' + m[3] + ',' + a + ')';
+    const h = /^#([0-9a-f]{6})$/i.exec(col || '');
+    if (h) {
+      const n = parseInt(h[1], 16);
+      return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) +
+             ',' + a + ')';
+    }
+    return 'rgba(0,0,0,' + a + ')';
   },
 
   /* ── THE PRINTED RUG ───────────────────────────────────────────────────────
@@ -1360,18 +1416,15 @@ BR.Renderer = {
     this._tiles = this._tiles || {};
     if (this._tiles[key] !== undefined) return this._tiles[key];
 
-    const S = layer === 'field' ? 1024 : 768;
+    const S = layer === 'field' ? 1024 : 960;
     const cv = document.createElement('canvas');
     cv.width = S; cv.height = S;
     const g = cv.getContext('2d');
+    const LT = this.tileLight();
 
     // Seeded, for the reasons groundTile is: a floor that differed between two
     // renders would break every pixel check, and Math.random is the AI's.
-    let seed = layer === 'field' ? 90210 : 4471;
-    const rnd = function () {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      return seed / 0x7fffffff;
-    };
+    const rnd = this.tileRnd(layer === 'field' ? 90210 : 4471);
 
     // Draw once per wrap offset, so nothing is clipped at a seam.
     const wrap = function (fn) {
@@ -1400,85 +1453,221 @@ BR.Renderer = {
     };
 
     if (layer === 'field') {
-      /* The landscape the town is printed on. Three features in a thousand
-         units, all soft-edged: a straight edge repeating is a grid line, and
-         at 30% vertical compression nothing smaller than a car survives to be
-         worth the risk anyway. */
-      blob(300, 300, 210, 150, 'rgba(150,186,104,0.20)');        // playing field
-      blob(268, 268, 120, 84, 'rgba(160,194,110,0.12)');
-      blob(760, 690, 150, 104, 'rgba(120,166,90,0.20)');         // parkland
-      blob(268, 754, 118, 70, 'rgba(92,146,186,0.26)');          // the pond
-      blob(250, 742, 74, 42, 'rgba(140,190,214,0.16)');          // shallow end
+      /* WOOL, not grass. Before anything is printed, the whole tile takes a
+         flat warm wash. The rug's authored green is a bright, saturated
+         outdoor green, and outdoor green plus soft shapes is the entire reason
+         the floor read as a fairway; a rug is dyed yarn and dyed yarn is
+         duller and warmer than a lawn. Measured on the base colour it moves
+         (92,138,74) to about (105,134,80) — a sixth of the chroma out and a
+         little warmth in, which is a change of MATERIAL rather than of hue,
+         and small enough that 05_Tracks.md's value gap does not notice.
+
+         It belongs here rather than in the track data because it is a
+         rendering decision about what the surface is made of, and because the
+         floor colour is also the mini-map's and the haze's. */
+      g.fillStyle = 'rgba(150,120,100,0.22)';
+      g.fillRect(0, 0, S, S);
+
+      /* The landscape the town is printed on. Soft-edged, because a straight
+         edge that repeats is a grid line, and because the only hard geometry
+         on a play rug is the man-made part — which is the other layer's job. */
+      blob(300, 300, 210, 150, 'rgba(150,186,104,0.22)');        // playing field
+      blob(268, 268, 120, 84, 'rgba(160,194,110,0.14)');
+      blob(770, 700, 160, 108, 'rgba(112,160,86,0.26)');         // parkland
+      blob(268, 754, 118, 70, 'rgba(78,140,186,0.42)');          // the pond
+      blob(250, 742, 74, 42, 'rgba(150,196,220,0.26)');          // shallow end
       wrap(function () {                                         // printed rim
-        g.strokeStyle = 'rgba(38,32,26,0.20)';
-        g.lineWidth = 3;
+        g.strokeStyle = 'rgba(38,32,26,0.26)';
+        g.lineWidth = 4;
         g.beginPath();
         g.ellipse(268, 754, 118, 70, 0, 0, Math.PI * 2);
         g.stroke();
+        // Ripples, printed as three flat arcs. A pond on a rug is a blue shape
+        // with lines on it; a pond without them is a puddle of ink.
+        g.strokeStyle = 'rgba(236,248,255,0.20)';
+        g.lineWidth = 3;
+        for (let i = 0; i < 3; i++) {
+          g.beginPath();
+          g.ellipse(268, 736 + i * 18, 62 - i * 12, 9, 0, 0.15, Math.PI - 0.15);
+          g.stroke();
+        }
+      });
+
+      /* THE PITCH, and it is the most important thing in this layer.
+
+         The rug read as a golf course, and the reason is that everything
+         printed on it was organic: soft green blobs, soft tan blobs, a soft
+         pond. Nothing said a PERSON had drawn it. A five-a-side pitch is the
+         cheapest possible fix — a rounded rectangle with a painted line round
+         it, a halfway line and a centre circle is unmistakably a printed
+         diagram of somewhere, and it costs six strokes. */
+      wrap(function () {
+        g.save();
+        g.translate(300, 300);
+        g.strokeStyle = 'rgba(244,250,238,0.22)';
+        g.lineWidth = 4;
+        g.strokeRect(-150, -96, 300, 192);
+        g.beginPath(); g.moveTo(0, -96); g.lineTo(0, 96); g.stroke();
+        g.beginPath(); g.ellipse(0, 0, 44, 30, 0, 0, Math.PI * 2); g.stroke();
+        g.strokeRect(-150, -46, 34, 92);
+        g.strokeRect(116, -46, 34, 92);
+        g.restore();
       });
 
       // A hedge, as a short arc of separate bushes rather than a boundary
       // line — a line that reaches the tile edge tiles into a fence.
       for (let i = 0; i < 8; i++) {
         blob(190 + i * 30, 452 + Math.sin(i * 0.7) * 12, 17, 10,
-             'rgba(46,88,52,0.24)');
+             'rgba(46,88,52,0.28)');
       }
-      // Trees in the park.
-      for (let i = 0; i < 6; i++) {
-        blob(660 + rnd() * 200, 610 + rnd() * 160, 20 + rnd() * 9,
-             12 + rnd() * 5, 'rgba(46,88,52,0.22)');
+      // Trees in the park, each with a printed shadow on the shadow side and a
+      // lit crown — the same lamp as the pile under them.
+      for (let i = 0; i < 7; i++) {
+        const tx = 650 + rnd() * 220, ty = 600 + rnd() * 180;
+        const tr = 20 + rnd() * 9;
+        blob(tx + LT.sx * 9, ty + LT.sy * 9, tr, tr * 0.62,
+             'rgba(28,52,32,0.20)');
+        blob(tx, ty, tr, tr * 0.62, 'rgba(52,100,58,0.30)');
+        blob(tx + LT.hx * 5, ty + LT.hy * 5, tr * 0.6, tr * 0.38,
+             'rgba(126,176,96,0.22)');
       }
       /* Worn smooth by years of play. 06_World_Town_Rug.md is explicit that
          pristine reads as a product shot. Big and faint, so they read as the
          pile being crushed rather than as a stain. */
       for (let i = 0; i < 4; i++) {
         blob(rnd() * S, rnd() * S, 130 + rnd() * 90, 80 + rnd() * 54,
-             'rgba(255,246,224,0.04)');
+             'rgba(255,246,224,0.05)');
       }
     } else {
-      /* The town, and it is one small town in 768 units rather than a suburb
-         in every direction. This is the layer that says RUG rather than lawn,
-         so it carries the only warm hues in the print. */
+      /* ── THE TOWN, which is the layer that has to say RUG ─────────────────
+         06_World_Town_Rug.md: "printed with roads, buildings, parking spaces,
+         railways, rivers, houses, schools and fire stations. THESE PRINTED
+         ELEMENTS ARE THE TRACK NETWORK." The old version of this layer had
+         four pale house plots and one lane that stopped in mid air, and the
+         result was a park with some patches in it.
+
+         What was missing is the ROADS. A town rug is read by its road network
+         before anything else — it is the one motif nobody mistakes for
+         landscape — and the reason there was not one is the tiling rule:
+         anything that reaches a tile edge meets its own copy and rules a
+         lattice across the entire floor. A road that stops in mid air looks
+         wrong, so the answer is a road that never needed an edge: a CLOSED
+         LOOP, complete inside its own tile, with a spur to a car park that
+         ends somewhere on purpose.
+
+         It sits at 960 units against the field layer's 1024, so the two share
+         no period shorter than 15,360 — sixteen frame widths — and the single
+         grid a lone tile would rule never forms.
+
+         READABILITY. 05_Tracks.md requires the racing road to be unmistakable.
+         A printed lane is 46 units wide against the real road's 320 — a
+         SEVENTH of it, under three car widths — and it is a pale grey against
+         the road's near-black, so the two can never be confused: one is a
+         narrow lighter stripe with a printed dash down it, the other is twenty
+         car widths of the darkest value on screen with a lit kerb down each
+         side. */
+      const road = function (fn, width, col) {
+        wrap(function () {
+          g.lineJoin = 'round'; g.lineCap = 'round';
+          g.strokeStyle = 'rgba(46,40,32,0.20)';
+          g.lineWidth = width + 7;
+          fn(); g.stroke();
+          g.strokeStyle = col;
+          g.lineWidth = width;
+          fn(); g.stroke();
+        });
+      };
+      const loop = function () {
+        g.beginPath();
+        if (g.roundRect) { g.roundRect(200, 210, 560, 470, 150); g.closePath(); }
+        else g.rect(200, 210, 560, 470);
+      };
+      const spur = function () {
+        g.beginPath();
+        g.moveTo(480, 680); g.quadraticCurveTo(470, 790, 372, 828);
+      };
+      road(loop, 46, 'rgba(146,142,134,0.62)');
+      road(spur, 40, 'rgba(146,142,134,0.56)');
+
+      /* Worn white markings, down the middle of the loop. `setLineDash` is
+         banned for the KERBS because a ten-thousand-unit outline dashed at six
+         units asks the rasteriser for two thousand pieces every frame — none
+         of which applies here, where the path is 2,000 units long and stroked
+         exactly once, at build time. */
+      wrap(function () {
+        g.setLineDash([20, 26]);
+        g.strokeStyle = 'rgba(250,246,230,0.26)';
+        g.lineWidth = 3.5;
+        loop(); g.stroke();
+        g.setLineDash([]);
+      });
+
+      // A crossing, where the lane meets the top of the loop.
+      wrap(function () {
+        g.strokeStyle = 'rgba(250,246,230,0.30)';
+        g.lineWidth = 7;
+        for (let i = 0; i < 5; i++) {
+          const x = 372 + i * 15;
+          g.beginPath(); g.moveTo(x, 187); g.lineTo(x, 233); g.stroke();
+        }
+      });
+
+      /* The car park, which is on the list in 06 and is the one printed motif
+         that survives the 30% vertical squash from any angle: bays are a comb,
+         and a comb is legible edge-on. */
+      patch(300, 792, 168, 96, 6, 'rgba(120,116,110,0.40)');
+      wrap(function () {
+        g.strokeStyle = 'rgba(250,246,230,0.24)';
+        g.lineWidth = 3;
+        for (let i = 1; i < 6; i++) {
+          const x = 300 + i * 28;
+          g.beginPath(); g.moveTo(x, 796); g.lineTo(x, 884); g.stroke();
+        }
+        g.strokeStyle = 'rgba(46,40,32,0.20)';
+        g.lineWidth = 3;
+        g.beginPath();
+        if (g.roundRect) g.roundRect(300, 792, 168, 96, 6);
+        else g.rect(300, 792, 168, 96);
+        g.stroke();
+      });
+
       /* Printed line art, not a colour blotch. The dark outline is the same
          trick that made the cars read as moulded toys rather than coloured
          regions, and it does the same job here: without it a house at this
          alpha is a pale smudge, and with it the eye reads a drawn shape. */
       const house = function (x, y, w, h, roof) {
-        patch(x, y, w, h, 5, 'rgba(232,222,198,0.24)');
+        patch(x, y, w, h, 5, 'rgba(236,226,202,0.34)');
         patch(x, y, w, h * 0.52, 4, roof);
         wrap(function () {
-          g.strokeStyle = 'rgba(38,32,26,0.26)';
-          g.lineWidth = 3;
+          g.strokeStyle = 'rgba(38,32,26,0.34)';
+          g.lineWidth = 3.5;
           g.beginPath();
           if (g.roundRect) g.roundRect(x, y, w, h, 5); else g.rect(x, y, w, h);
           g.stroke();
           g.beginPath();
           g.moveTo(x, y + h * 0.52); g.lineTo(x + w, y + h * 0.52);
           g.stroke();
+          // A door and two windows on the wall face. Three marks, and they are
+          // what turns a rectangle with a roof into a house.
+          g.fillStyle = 'rgba(38,32,26,0.24)';
+          g.fillRect(x + w * 0.44, y + h * 0.66, w * 0.14, h * 0.34);
+          g.fillRect(x + w * 0.16, y + h * 0.66, w * 0.13, h * 0.18);
+          g.fillRect(x + w * 0.71, y + h * 0.66, w * 0.13, h * 0.18);
         });
       };
-      house(150, 210, 86, 64, 'rgba(178,92,72,0.26)');
-      house(262, 232, 68, 56, 'rgba(96,110,150,0.24)');
-      house(160, 314, 74, 58, 'rgba(178,140,72,0.24)');
-      house(596, 566, 80, 62, 'rgba(120,92,142,0.22)');
+      // Along the lane, facing it — which is the other half of why a printed
+      // town reads as a town: the houses have a road to be on.
+      house(232, 100, 104, 76, 'rgba(178,92,72,0.34)');
+      house(392, 92,  92, 70,  'rgba(96,110,150,0.32)');
+      house(560, 108, 98, 72,  'rgba(178,140,72,0.32)');
+      house(806, 350, 96, 74,  'rgba(120,92,142,0.30)');
+      house(64,  392, 96, 74,  'rgba(88,132,102,0.30)');
+      house(300, 704, 88, 66,  'rgba(178,92,72,0.28)');
 
-      /* The lane the houses sit on. It STOPS inside the tile — a path drawn
-         out to the edges met its own copy on the other side and ruled a
-         continuous diagonal lattice over the whole floor, which was the single
-         most obviously tiled thing in the first attempt. */
-      g.lineCap = 'round';
-      wrap(function () {
-        g.strokeStyle = 'rgba(214,198,158,0.14)';
-        g.lineWidth = 17;
-        g.beginPath();
-        g.moveTo(120, 400); g.quadraticCurveTo(300, 350, 372, 196);
-        g.stroke();
-      });
-
-      // Gardens: a scatter of printed flowerbeds, beside the plots only.
-      for (let i = 0; i < 11; i++) {
-        blob(130 + rnd() * 230, 190 + rnd() * 200, 5 + rnd() * 4, 3 + rnd() * 3,
-             rnd() > 0.5 ? 'rgba(216,110,96,0.20)' : 'rgba(232,196,96,0.20)');
+      // Gardens: printed flowerbeds, on the plots and nowhere else.
+      for (let i = 0; i < 14; i++) {
+        blob(120 + rnd() * 640, 190 + rnd() * 460, 5 + rnd() * 4, 3 + rnd() * 3,
+             rnd() > 0.5 ? 'rgba(216,110,96,0.24)' : 'rgba(232,196,96,0.24)');
       }
     }
 
@@ -1560,159 +1749,690 @@ BR.Renderer = {
     ]));
     return pat;
   },
-
-  /**
-   * The road surface.
-   *
-   * It was one flat fill — the last obviously geometric surface in the game.
-   * What it should be depends on what the track is made of, and the worlds
-   * disagree:
-   *
-   *   rug     the road is PRINTED ON THE FABRIC, so the weave shows through it.
-   *           This is the one that matters: a smooth road on a woven floor
-   *           reads as two separate materials, and the whole conceit is that
-   *           the track is part of the rug.
-   *   sand    packed grain, finer than the loose sand beside it.
-   *   plastic moulded, so it gets seam lines and a sheen rather than a grain.
-   */
   roadTile(arena) {
     const key = 'road:' + arena.id;
     this._tiles = this._tiles || {};
     if (this._tiles[key] !== undefined) return this._tiles[key];
 
-    const S = 128;
-    const cv = document.createElement('canvas');
-    cv.width = S; cv.height = S;
-    const g = cv.getContext('2d');
-
-    // Seeded, for the same reasons as the floor tile: reproducible renders,
-    // and never touching the random stream the AI draws from.
-    let seed = 7717;
-    const rnd = function () {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      return seed / 0x7fffffff;
-    };
-
+    let cv;
     if (arena.world === 'stunt') {
-      // Moulded plastic: long seams along the track and a soft sheen.
-      g.strokeStyle = 'rgba(255,255,255,0.05)';
-      g.lineWidth = 3;
-      for (let i = 0; i < 3; i++) {
-        const x = 18 + i * 44;
-        g.beginPath(); g.moveTo(x, 0); g.lineTo(x, S); g.stroke();
-      }
-      g.strokeStyle = 'rgba(0,0,0,0.07)';
-      g.lineWidth = 1.4;
-      for (let i = 0; i < 3; i++) {
-        const x = 21 + i * 44;
-        g.beginPath(); g.moveTo(x, 0); g.lineTo(x, S); g.stroke();
-      }
+      cv = this.plasticTile();
     } else if (arena.sandy) {
-      // Packed grain: dense flecks, finer than the ripples off the road.
-      for (let i = 0; i < 240; i++) {
-        g.fillStyle = rnd() > 0.5 ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.05)';
-        g.fillRect(rnd() * S, rnd() * S, 1.6, 1.6);
-      }
+      cv = this.packedSandTile(arena);
+    } else if (arena.world === 'kitchen') {
+      cv = this.laminateTile();
     } else {
-      /* Rug: the SAME tuft geometry as the floor, so the print sits on the
-         weave rather than beside it. Lighter, because a printed road hides
-         some of the pile without flattening it. */
-      g.strokeStyle = 'rgba(255,255,255,0.055)';
-      g.lineWidth = 2.4;
-      g.lineCap = 'round';
-      const pitch = 16;
-      for (let row = 0; row * pitch < S; row++) {
-        const y = row * pitch + 4;
-        const off = (row % 2) * (pitch / 2);
-        for (let col = -1; col * pitch < S + pitch; col++) {
-          const x = col * pitch + off + 2;
-          const j = (rnd() - 0.5) * 2.4;
-          g.beginPath();
-          g.moveTo(x, y + j);
-          g.lineTo(x + pitch * 0.44, y + j + (rnd() - 0.5) * 2);
-          g.stroke();
-        }
-      }
-      // A little print speckle, so it reads as ink on cloth rather than paint.
-      for (let i = 0; i < 90; i++) {
-        g.fillStyle = 'rgba(0,0,0,0.055)';
-        g.fillRect(rnd() * S, rnd() * S, 2, 2);
-      }
+      /* Rug: the SAME pile as the floor, so the print sits ON the weave rather
+         than beside it. Weaker, because ink hides some of the pile without
+         flattening it — and the surface a car spends the whole race looking at
+         is the one place a texture must not shout. */
+      cv = this.pileTile('rgba(0,0,0,1)', 0.55);
     }
 
     this._tiles[key] = cv;
     return cv;
   },
 
-  /* One tile per world, built once and cached. 128 world units square, which
-     at racing speed is small enough to read as texture rather than as a
-     repeating motif. */
-  groundTile(arena) {
-    const key = arena.id;
-    this._tiles = this._tiles || {};
-    if (this._tiles[key] !== undefined) return this._tiles[key];
-
+  /* Moulded plastic: long seams along the track and a soft sheen. Injection
+     moulding leaves mould lines and nothing else — no grain, no weave. */
+  plasticTile() {
     const S = 128;
     const cv = document.createElement('canvas');
     cv.width = S; cv.height = S;
     const g = cv.getContext('2d');
-    const weave = arena.weaveColour || 'rgba(0,0,0,0.055)';
+    g.strokeStyle = 'rgba(255,255,255,0.05)';
+    g.lineWidth = 3;
+    for (let i = 0; i < 3; i++) {
+      const x = 18 + i * 44;
+      g.beginPath(); g.moveTo(x, 0); g.lineTo(x, S); g.stroke();
+    }
+    g.strokeStyle = 'rgba(0,0,0,0.07)';
+    g.lineWidth = 1.4;
+    for (let i = 0; i < 3; i++) {
+      const x = 21 + i * 44;
+      g.beginPath(); g.moveTo(x, 0); g.lineTo(x, S); g.stroke();
+    }
+    return cv;
+  },
 
-    /* Deterministic pseudo-randomness. A tile built from Math.random would
-       differ between the two renders of a pixel-diff check and, worse, consume
-       the shared random stream the AI draws from. */
-    let seed = 1337;
-    const rnd = function () {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      return seed / 0x7fffffff;
-    };
+  /* Packed sand: the same grain as the loose stuff beside it, pressed flat.
+     Finer, denser, and with the pits filled in — which is exactly what
+     driving over it does, and is why it is the same tile with the relief
+     turned off rather than a different texture. */
+  packedSandTile(arena) {
+    const S = 192;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    const rnd = this.tileRnd(7717);
+    const weave = arena.weaveColour || 'rgba(96,72,44,0.13)';
+    for (let i = 0; i < 2200; i++) {
+      const t = rnd();
+      g.fillStyle = t > 0.5 ? 'rgba(255,248,228,0.06)' : this.ink(weave, 0.10);
+      g.fillRect(rnd() * S, rnd() * S, 1.2, 1.2);
+    }
+    // Tyre-swept streaks, along the road rather than across it.
+    g.strokeStyle = this.ink(weave, 0.06);
+    g.lineWidth = 2.4;
+    g.lineCap = 'round';
+    for (let i = 0; i < 10; i++) {
+      const y = rnd() * S, x0 = rnd() * S, len = 40 + rnd() * 80;
+      g.beginPath();
+      g.moveTo(x0, y);
+      g.quadraticCurveTo(x0 + len / 2, y + (rnd() - 0.5) * 4, x0 + len, y);
+      g.stroke();
+    }
+    return cv;
+  },
 
-    if (arena.sandy) {
-      /* Sand: broken ripples running one way, like wind over a sandpit. Long
-         and shallow, never closed, so it reads as drift rather than as rows. */
-      g.strokeStyle = weave;
-      g.lineWidth = 2.2;
-      g.lineCap = 'round';
-      for (let i = 0; i < 14; i++) {
-        const y = rnd() * S;
-        const x0 = rnd() * S, len = 22 + rnd() * 46;
-        g.beginPath();
-        g.moveTo(x0, y);
-        g.quadraticCurveTo(x0 + len / 2, y + (rnd() - 0.5) * 7, x0 + len, y);
-        g.stroke();
-      }
-    } else {
-      /* Rug: tufts in offset rows, the way a loop pile actually sits. Short
-         dashes rather than continuous lines is the whole difference between
-         woven cloth and graph paper. */
-      g.strokeStyle = weave;
-      g.lineWidth = 2.6;
-      g.lineCap = 'round';
-      const pitch = 16;
-      for (let row = 0; row * pitch < S; row++) {
-        const y = row * pitch + 4;
-        const off = (row % 2) * (pitch / 2);
-        for (let col = -1; col * pitch < S + pitch; col++) {
-          const x = col * pitch + off + 2;
-          const jitter = (rnd() - 0.5) * 2.4;
-          g.beginPath();
-          g.moveTo(x, y + jitter);
-          g.lineTo(x + pitch * 0.44, y + jitter + (rnd() - 0.5) * 2);
-          g.stroke();
-        }
-      }
-      // A second, fainter pass across the weft, so the weave has two threads
-      // rather than one set of stripes.
-      g.strokeStyle = 'rgba(255,255,255,0.035)';
+  /* ── LAMINATE ────────────────────────────────────────────────────────────
+     The table top, which was being drawn with CARPET PILE on it — the kitchen
+     fell through to the rug branch, so the one surface in the game whose whole
+     character is "wipe-clean" had a weave.
+
+     Laminate is a printed photograph of wood under a sheet of plastic, and the
+     giveaway is that the two are different materials: the grain is soft and
+     warm and wanders, and the sheen over it is hard, straight and cool. Both
+     are here, and the sheen is aligned to the room's light like everything
+     else on the floor. */
+  laminateTile() {
+    const S = 192;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    const rnd = this.tileRnd(3529);
+    const L = this.tileLight();
+
+    // The printed grain: long, warm, and never quite parallel.
+    for (let i = 0; i < 46; i++) {
+      const y = rnd() * S;
+      g.strokeStyle = 'rgba(150,112,64,' + (0.05 + rnd() * 0.08).toFixed(3) + ')';
+      g.lineWidth = 0.8 + rnd() * 2.2;
+      g.beginPath();
+      g.moveTo(-6, y);
+      g.bezierCurveTo(S * 0.3, y + (rnd() - 0.5) * 7,
+                      S * 0.7, y + (rnd() - 0.5) * 7, S + 6, y);
+      g.stroke();
+    }
+    // Board joints every 64 units, dark with a pale shoulder — a laminate
+    // board is printed, but the join between two of them is real.
+    for (let k = 0; k < 3; k++) {
+      const y = 32 + k * 64;
+      g.strokeStyle = 'rgba(126,92,52,0.20)';
       g.lineWidth = 1.6;
-      for (let col = 0; col * 22 < S; col++) {
-        const x = col * 22 + 9;
+      g.beginPath(); g.moveTo(0, y); g.lineTo(S, y); g.stroke();
+      g.strokeStyle = 'rgba(255,252,242,0.10)';
+      g.lineWidth = 1.4;
+      const lit = y + (L.hy < 0 ? -2 : 2);
+      g.beginPath(); g.moveTo(0, lit); g.lineTo(S, lit); g.stroke();
+    }
+    // The plastic over the top: a hard, flat sheen, and the fine scratches a
+    // hundred wipes with a cloth leave in it.
+    g.fillStyle = 'rgba(255,253,246,0.05)';
+    g.fillRect(0, 18, S, 26);
+    g.fillRect(0, 120, S, 16);
+    g.strokeStyle = 'rgba(255,255,255,0.05)';
+    g.lineWidth = 0.7;
+    for (let i = 0; i < 26; i++) {
+      const y = rnd() * S, x0 = rnd() * S, len = 20 + rnd() * 60;
+      g.beginPath();
+      g.moveTo(x0, y); g.lineTo(x0 + len, y + (rnd() - 0.5) * 2);
+      g.stroke();
+    }
+    return cv;
+  },
+
+  /* One tile per world, built once and cached.
+
+     WHAT THE FLOOR IS MADE OF, which is the whole job. Four worlds fell through
+     to one rug weave before this: the sandpit had it in brown, the bedroom
+     floor under the stunt track had it in near-black, and the KITCHEN FLOOR had
+     carpet pile printed on its tiles. A floor you cannot name is the failure
+     mode the brief calls out, so each world now builds its own material and the
+     shared code is the lighting, not the texture. */
+  groundTile(arena) {
+    const key = 'ground:' + arena.id;
+    this._tiles = this._tiles || {};
+    if (this._tiles[key] !== undefined) return this._tiles[key];
+
+    let cv;
+    if (arena.sandy)                    cv = this.sandTile(arena.weaveColour);
+    else if (arena.world === 'stunt')   cv = this.woodTile(0.36, 4801);
+    else if (arena.world === 'kitchen') cv = this.kitchenFloorTile(arena);
+    else                                cv = this.pileTile(arena.weaveColour, 1);
+
+    this._tiles[key] = cv;
+    return cv;
+  },
+
+  /* ── THE PILE ────────────────────────────────────────────────────────────
+     The rug's material, and the single thing that decides whether the floor is
+     a rug or a lawn. It was one set of faint dashes at 5% black, which at this
+     camera is a suggestion of texture rather than a texture — and a green field
+     with a suggestion of texture on it is a golf course.
+
+     A tuft is drawn THREE times: a dark root offset the way the light throws
+     shadows, the gap between (the base colour, showing through), and a pale
+     crest offset toward the light. That is what makes it read as loops
+     standing up off a backing rather than as hatching printed on a floor, and
+     it is why the mean brightness barely moves while the local contrast
+     triples — the crest gives back what the root takes.
+
+     16 units a tuft is deliberate and it is not the size of real carpet. A car
+     is 28 units long, so a tuft is over half a car: these are the OVERSIZED
+     RUG FIBRES on 12_Art_Guide.md's list of scale cues, and they are how a
+     frame says "these are toys" without a crayon in shot.
+
+     `strength` scales the whole thing: 1 on the rug, less under the printed
+     road, where ink hides some of the pile without flattening it. */
+  pileTile(weave, strength) {
+    const key = 'pile:' + weave + ':' + strength;
+    this._tiles = this._tiles || {};
+    if (this._tiles[key] !== undefined) return this._tiles[key];
+
+    const S = 128, P = 16;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    const rnd = this.tileRnd(1337);
+    const L = this.tileLight();
+    const k = strength === undefined ? 1 : strength;
+
+    /* The backing, and the reason the rug reads as woven rather than as felt:
+       a coarse rib every four rows, running across the pile. */
+    g.strokeStyle = this.ink(weave, 0.07 * k);
+    g.lineWidth = 5;
+    for (let y = P * 2; y < S; y += P * 4) {
+      g.beginPath(); g.moveTo(0, y); g.lineTo(S, y); g.stroke();
+    }
+
+    /* MEASURED, and then doubled. The first pass at this put the root at 0.17
+       and the crest at 0.115 and moved the rug's standard deviation from 6.8 to
+       10.1 — a real texture, and still not one you notice at racing zoom
+       without going looking for it. These values are what "you can tell it is
+       fabric" costs. The mean is the number that must not move, and it does
+       not: the crest gives back what the root takes. */
+    const root  = this.ink(weave, 0.30 * k);
+    const crest = 'rgba(255,250,230,' + (0.22 * k).toFixed(3) + ')';
+    g.lineCap = 'round';
+
+    for (let row = 0; row * P < S; row++) {
+      const y = row * P + 4;
+      const off = (row % 2) * (P / 2);
+      for (let col = -1; col * P < S + P; col++) {
+        const x = col * P + off + 2;
+        const j  = (rnd() - 0.5) * 2.6;
+        const dy = (rnd() - 0.5) * 1.8;
+        const len = P * 0.46;
+        // Root first, so the crest sits on top of its own shadow.
+        g.strokeStyle = root;  g.lineWidth = 4.8;
         g.beginPath();
-        g.moveTo(x, 0); g.lineTo(x + 3, S);
+        g.moveTo(x + L.sx * 1.9, y + j + L.sy * 1.9);
+        g.lineTo(x + len + L.sx * 1.9, y + j + dy + L.sy * 1.9);
+        g.stroke();
+        g.strokeStyle = crest; g.lineWidth = 3.2;
+        g.beginPath();
+        g.moveTo(x + L.hx * 1.5, y + j + L.hy * 1.5);
+        g.lineTo(x + len + L.hx * 1.5, y + j + dy + L.hy * 1.5);
         g.stroke();
       }
     }
 
+    // The weft: the thread the tufts are knotted through, running the other
+    // way. Faint and slightly off vertical, so the weave has two directions
+    // and never reads as ruled lines.
+    g.strokeStyle = 'rgba(255,252,240,' + (0.07 * k).toFixed(3) + ')';
+    g.lineWidth = 1.8;
+    for (let col = 0; col * 22 < S; col++) {
+      const x = col * 22 + 9;
+      g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 3, S); g.stroke();
+    }
+    this._tiles[key] = cv;
+    return cv;
+  },
+
+  /* ── SAND ────────────────────────────────────────────────────────────────
+     Grain, and it has to be actual grain: the sandpit was the rug's tuft
+     geometry in brown, which is a woven sandpit.
+
+     256 units rather than 128. Noise is the one texture whose PERIOD is
+     visible even when its content is not — a 128 tile of flecks repeats every
+     147px across the frame and the eye finds the lattice in it, the same
+     failure the print layers had at 448. At 256 the repeat is 294px and there
+     is nothing in it to lock onto.
+
+     Three scales, because that is what sand has: the grains themselves, the
+     pits and shoulders between them (a dark crescent on the shadow side and a
+     bright one toward the light, which is the only reason a flat fleck field
+     reads as depth), and long broken ripples under everything where the wind
+     or a hand has dragged it. Plus a few specks of mica — sand sparkles, and
+     twenty bright pixels in a tile is the cheapest way there is to say so. */
+  sandTile(weave) {
+    const key = 'sand:' + weave;
+    this._tiles = this._tiles || {};
+    if (this._tiles[key] !== undefined) return this._tiles[key];
+
+    const S = 256;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    const rnd = this.tileRnd(2711);
+    const L = this.tileLight();
+
+    // Drift: long, shallow, never closed, so it reads as wind rather than rows.
+    g.strokeStyle = this.ink(weave, 0.10);
+    g.lineWidth = 3.2;
+    g.lineCap = 'round';
+    for (let i = 0; i < 22; i++) {
+      const y = rnd() * S, x0 = rnd() * S, len = 40 + rnd() * 90;
+      g.beginPath();
+      g.moveTo(x0, y);
+      g.quadraticCurveTo(x0 + len / 2, y + (rnd() - 0.5) * 9, x0 + len, y);
+      g.stroke();
+    }
+
+    // Pits: a shaded shoulder and a lit one, half a unit apart. This is the
+    // whole difference between "sand" and "brown noise".
+    for (let i = 0; i < 150; i++) {
+      const x = rnd() * S, y = rnd() * S, r = 1.6 + rnd() * 2.6;
+      g.fillStyle = this.ink(weave, 0.22);
+      g.beginPath();
+      g.ellipse(x + L.sx * r * 0.6, y + L.sy * r * 0.6, r, r * 0.7, 0, 0, 6.283);
+      g.fill();
+      g.fillStyle = 'rgba(255,250,232,0.19)';
+      g.beginPath();
+      g.ellipse(x + L.hx * r * 0.6, y + L.hy * r * 0.6, r * 0.8, r * 0.55,
+                0, 0, 6.283);
+      g.fill();
+    }
+
+    // The grains. Single pixels at 1 unit each: a grain is meant to be at the
+    // limit of what the screen can hold, and anything bigger is gravel.
+    for (let i = 0; i < 2600; i++) {
+      const t = rnd();
+      g.fillStyle = t > 0.55 ? 'rgba(255,248,226,0.30)'
+                  : t > 0.18 ? this.ink(weave, 0.30)
+                             : 'rgba(150,116,66,0.24)';
+      g.fillRect(rnd() * S, rnd() * S, 1.5, 1.5);
+    }
+
+    // Mica. Sparse and bright — 20 in 65,000 square units.
+    for (let i = 0; i < 20; i++) {
+      g.fillStyle = 'rgba(255,255,246,0.62)';
+      g.fillRect(rnd() * S, rnd() * S, 1.4, 1.4);
+    }
+    this._tiles[key] = cv;
+    return cv;
+  },
+
+  /* Damp sand, at a period long enough to be geography rather than texture.
+
+     The sandpit is not uniformly dry: it is damp where it has been dug and
+     patted down, and those patches are darker and smoother. SandGrid.js draws
+     the damp that the RACE makes, cell by cell, and this is the damp that was
+     there before anybody drove — the two are deliberately the same colour
+     family so a fresh patch of packed sand looks like more of what is already
+     on the floor rather than like a decal.
+
+     All ellipses, nothing within 90 units of a tile edge, for the reason the
+     rug print layers give at length: a straight edge that repeats is a grid
+     line and a motif that crosses a seam is a lattice. */
+  dampTile(arena) {
+    const key = 'damp:' + arena.id;
+    this._tiles = this._tiles || {};
+    if (this._tiles[key] !== undefined) return this._tiles[key];
+
+    const S = 768;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    const rnd = this.tileRnd(6553);
+    const weave = arena.weaveColour || 'rgba(96,72,44,0.13)';
+
+    for (let i = 0; i < 5; i++) {
+      const x = 120 + rnd() * (S - 240), y = 120 + rnd() * (S - 240);
+      const rx = 70 + rnd() * 110, ry = 45 + rnd() * 70;
+      g.fillStyle = this.ink(weave, 0.16);
+      g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, 6.283); g.fill();
+      // A slightly wetter core, so a patch has a shape rather than an edge.
+      g.fillStyle = this.ink(weave, 0.12);
+      g.beginPath();
+      g.ellipse(x + rx * 0.1, y, rx * 0.6, ry * 0.58, 0, 0, 6.283);
+      g.fill();
+    }
+    // Dry, wind-blown high spots: the same shapes the other way up.
+    for (let i = 0; i < 3; i++) {
+      g.fillStyle = 'rgba(255,246,220,0.07)';
+      g.beginPath();
+      g.ellipse(140 + rnd() * (S - 280), 140 + rnd() * (S - 280),
+                90 + rnd() * 110, 55 + rnd() * 60, 0, 0, 6.283);
+      g.fill();
+    }
+
+    this._tiles[key] = cv;
+    return cv;
+  },
+
+  /* ── WOOD ────────────────────────────────────────────────────────────────
+     Boards, running along world x, with grain along them.
+
+     The stunt world's floor is the bedroom floor seen from a track bolted to
+     the dresser above it, and Bedside Boulevard's fast half is the same boards
+     under the bed. It was flat near-black in one and invisible in the other.
+
+     The tile carries HUE as well as texture, which is what lets one function
+     serve a floor in deep shadow and a lit patch of hallway: the planks are
+     laid down in warm brown at `tone` alpha over whatever base colour the
+     track authored, so the stunt floor stays as dark as its own note asks
+     ("in shadow under the track") and comes out warm and grained rather than
+     black and blank.
+
+     Six planks in 256 units — 43 units each, a car and a half wide — because
+     at 30% vertical compression a realistically narrow board is a hairline. */
+  woodTile(tone, seed) {
+    const key = 'wood:' + tone + ':' + seed;
+    this._tiles = this._tiles || {};
+    if (this._tiles[key] !== undefined) return this._tiles[key];
+
+    const S = 256, N = 6, PH = S / N;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    const rnd = this.tileRnd(seed);
+    const L = this.tileLight();
+
+    for (let i = 0; i < N; i++) {
+      const y = i * PH;
+      // Every board out of the same tree and none of them the same.
+      const warm = 0.82 + rnd() * 0.36;
+      g.fillStyle = 'rgba(' + Math.round(118 * warm) + ',' +
+                              Math.round(80 * warm) + ',' +
+                              Math.round(46 * warm) + ',' + tone.toFixed(2) + ')';
+      g.fillRect(0, y, S, PH);
+
+      // Grain: long, nearly parallel, wandering. Drawn wrapped in x so it runs
+      // off one side of the tile and back on at the other.
+      g.strokeStyle = 'rgba(58,36,18,' + (0.10 * tone / 0.3).toFixed(3) + ')';
+      for (let k = 0; k < 7; k++) {
+        const gy = y + 3 + rnd() * (PH - 6);
+        g.lineWidth = 0.8 + rnd() * 1.6;
+        g.beginPath();
+        g.moveTo(-8, gy);
+        g.bezierCurveTo(S * 0.3, gy + (rnd() - 0.5) * 5,
+                        S * 0.7, gy + (rnd() - 0.5) * 5, S + 8, gy);
+        g.stroke();
+      }
+
+      /* The joint between boards, and the varnish on it. A dark gap with a lit
+         chamfer on the side the light comes from is the entire read of "these
+         are separate planks with a shine on them" — one line without the other
+         is a ruled grid. */
+      const lit = L.hy < 0 ? -1.6 : 1.6;
+      g.strokeStyle = 'rgba(24,14,6,' + (0.55 * tone / 0.3).toFixed(3) + ')';
+      g.lineWidth = 2;
+      g.beginPath(); g.moveTo(0, y); g.lineTo(S, y); g.stroke();
+      g.strokeStyle = 'rgba(255,238,208,' + (0.10 * tone / 0.3).toFixed(3) + ')';
+      g.lineWidth = 1.6;
+      g.beginPath(); g.moveTo(0, y + lit); g.lineTo(S, y + lit); g.stroke();
+
+      // One end joint per board, staggered, so the floor is laid rather than
+      // extruded.
+      const ex = rnd() * S;
+      g.strokeStyle = 'rgba(24,14,6,' + (0.40 * tone / 0.3).toFixed(3) + ')';
+      g.lineWidth = 1.8;
+      g.beginPath(); g.moveTo(ex, y + 1); g.lineTo(ex, y + PH - 1); g.stroke();
+    }
+
+    this._tiles[key] = cv;
+    return cv;
+  },
+
+  /* ── KITCHEN FLOOR ───────────────────────────────────────────────────────
+     Four hundred units below the table, and the thing you look at all the way
+     down. It was pile, in grey.
+
+     Tiles of 150 units — a real 300mm floor tile at this game's scale, where a
+     car is 28 units to a 60mm die-cast — with grout between them, a speckled
+     glaze, and a bevel: dark on the shadow side of every tile, bright on the
+     lit side. The bevel is doing the work. Grout lines alone draw a grid;
+     grout plus a lit edge draws a floor made of separate slabs.
+
+     The grout runs at 75 and 225 in a 300 tile rather than at 0 and 150, so
+     nothing lands on a seam and the spacing across the seam is still exactly
+     150. */
+  kitchenFloorTile(arena) {
+    const S = 300, T = 150;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    const rnd = this.tileRnd(9091);
+    const L = this.tileLight();
+    const weave = arena.weaveColour || 'rgba(52,60,68,0.11)';
+
+    /* Four slabs, no two fired quite alike. The slab that straddles the tile
+       seam is drawn at all four wrap offsets, so its two halves get the SAME
+       tone — one slab cut in half by the repeat, rather than two slabs that
+       happen to touch. */
+    for (let i = 0; i < 2; i++) {
+      for (let j = 0; j < 2; j++) {
+        const a = (rnd() - 0.5) * 0.05;
+        g.fillStyle = a > 0 ? 'rgba(255,255,255,' + a.toFixed(3) + ')'
+                            : 'rgba(0,0,0,' + (-a).toFixed(3) + ')';
+        const x = i * T - 75, y = j * T - 75;
+        for (let ox = 0; ox <= 1; ox++) {
+          for (let oy = 0; oy <= 1; oy++) {
+            g.fillRect(x + ox * S, y + oy * S, T, T);
+          }
+        }
+      }
+    }
+
+    // Glaze speckle. Fine and two-tone, which is what stops a large flat tile
+    // from being a swatch.
+    for (let i = 0; i < 1400; i++) {
+      g.fillStyle = rnd() > 0.5 ? 'rgba(255,255,255,0.055)'
+                                : 'rgba(20,26,32,0.05)';
+      g.fillRect(rnd() * S, rnd() * S, 1.3, 1.3);
+    }
+
+    // Grout, and the bevel that makes it a joint rather than a line.
+    const grout = this.ink(weave, 0.42);
+    const lx = L.hx < 0 ? -2.4 : 2.4, ly = L.hy < 0 ? -2.4 : 2.4;
+    for (let k = 0; k < 2; k++) {
+      const p = 75 + k * T;
+      g.strokeStyle = grout; g.lineWidth = 5;
+      g.beginPath(); g.moveTo(p, 0); g.lineTo(p, S); g.stroke();
+      g.beginPath(); g.moveTo(0, p); g.lineTo(S, p); g.stroke();
+      g.strokeStyle = 'rgba(255,255,250,0.10)'; g.lineWidth = 2.2;
+      g.beginPath(); g.moveTo(p + lx, 0); g.lineTo(p + lx, S); g.stroke();
+      g.beginPath(); g.moveTo(0, p + ly); g.lineTo(S, p + ly); g.stroke();
+    }
+    return cv;
+  },
+
+  /* ── ZONES: the patches of something else on the floor ────────────────────
+     Every zone in the game was INVISIBLE.
+
+     Bedside Boulevard's whole north side is hardwood — 12% more top speed on
+     22% less grip — and nothing on screen said so. The kitchen's place mats,
+     spilled sugar, crumbs and scattered post were the same: six surfaces, six
+     changes to how the car behaves, and one uniform colour under all of them.
+     `12_Art_Guide.md` is explicit that surface is a GAMEPLAY SIGNAL and not
+     decoration, and a signal nobody can see is not one.
+
+     Three rules hold the readability line:
+
+       - Nothing here is opaque. A zone tints the floor it lies on; the road
+         keeps its own value through every one of them, so the darkest thing on
+         a rug is still the road and the brightest line is still the kerb.
+       - Zones are drawn between the road fill and the KERBS, exactly where the
+         packed sand goes, so no patch can ever cover the edge a driver reads.
+       - THE RECTANGLE IS KEPT EXACTLY, however un-spill-like a rectangular
+         spill of sugar is. `surfaceAt` tests `x <= p <= x + w`, so the
+         rectangle is not a bounding box, it IS the surface change — and a
+         prettier shape that disagreed with what it triggers is the same class
+         of lie as a barrier drawn shorter than it collides. Boost pads keep
+         their authored plate for the same reason. Decoration, which has no
+         collision at all, is free to be the ellipse it looks like.
+
+     They sit at the deck's own height, cached per zone the way a boost pad
+     caches its direction: the kitchen's place mats are on a table 420 units
+     up, and drawn at zero they were on the floor below it. */
+  drawZones(ctx, arena) {
+    const zones = arena.zones;
+    if (!zones || !zones.length) return;
+    const Pj = BR.Projection;
+
+    for (let i = 0; i < zones.length; i++) {
+      const z = zones[i];
+      if (z.w === undefined || z.h === undefined) continue;
+      const zz = this.zoneZ(arena, z);
+      const p = [
+        Pj.project(z.x, z.y, zz), Pj.project(z.x + z.w, z.y, zz),
+        Pj.project(z.x + z.w, z.y + z.h, zz), Pj.project(z.x, z.y + z.h, zz),
+      ];
+      const path = function () {
+        ctx.beginPath();
+        ctx.moveTo(p[0].sx, p[0].sy);
+        for (let k = 1; k < 4; k++) ctx.lineTo(p[k].sx, p[k].sy);
+        ctx.closePath();
+      };
+
+      if (z.type === 'hardwood') {
+        /* Bare boards where the rug stops. Warm, lit, and laid in the same
+           direction as every other board in the game — it is one room. */
+        path();
+        ctx.fillStyle = 'rgba(146,104,60,0.62)';
+        ctx.fill();
+        const pat = this.groundPattern(ctx, this.woodTile(0.52, 3313));
+        if (pat) { ctx.fillStyle = pat; ctx.fill(); }
+        ctx.strokeStyle = 'rgba(38,26,14,0.35)';
+        ctx.lineWidth = 3 / this.zoom;
+        path(); ctx.stroke();
+
+      } else if (z.type === 'blanket') {
+        /* Cloth: a sock under the bed, a place mat on the table. Woven, so it
+           gets the pile tile — the same material logic as the rug, at a
+           different colour, which is the point of having one. */
+        path();
+        ctx.fillStyle = 'rgba(196,116,104,0.55)';
+        ctx.fill();
+        const pat = this.groundPattern(ctx, this.pileTile('rgba(60,20,16,1)', 1.1));
+        if (pat) { ctx.fillStyle = pat; ctx.fill(); }
+        ctx.strokeStyle = 'rgba(255,236,224,0.30)';
+        ctx.lineWidth = 2 / this.zoom;
+        path(); ctx.stroke();
+
+      } else if (z.type === 'puddle') {
+        /* Water in the sandpit, spilled sugar on the table. Both are the same
+           shape of thing — a wet, glossy patch — and both keep the surface
+           under them visible, because you have to be able to see the road you
+           are about to lose grip on. */
+        const sugar = arena.world === 'kitchen';
+        path();
+        ctx.fillStyle = sugar ? 'rgba(255,252,242,0.50)'
+                              : 'rgba(64,116,146,0.46)';
+        ctx.fill();
+        if (sugar) {
+          const pat = this.groundPattern(ctx, this.sandTile('rgba(168,146,104,0.5)'));
+          if (pat) { ctx.fillStyle = pat; ctx.fill(); }
+        } else {
+          // A sky reflection, offset toward the light like every other
+          // highlight on the floor.
+          const L = this.tileLight();
+          const cx = (p[0].sx + p[2].sx) / 2, cy = (p[0].sy + p[2].sy) / 2;
+          ctx.beginPath();
+          ctx.ellipse(cx + L.hx * 14, cy + L.hy * 14 * Pj.groundTilt,
+                      Math.abs(p[1].sx - p[0].sx) * 0.22,
+                      Math.abs(p[2].sy - p[1].sy) * 0.22, 0, 0, 6.283);
+          ctx.fillStyle = 'rgba(226,244,255,0.22)';
+          ctx.fill();
+        }
+        ctx.strokeStyle = sugar ? 'rgba(214,200,168,0.35)'
+                                : 'rgba(180,220,238,0.30)';
+        ctx.lineWidth = 2 / this.zoom;
+        path(); ctx.stroke();
+
+      } else if (z.type === 'paper') {
+        // The morning's post, face up on the table.
+        path();
+        ctx.fillStyle = 'rgba(248,246,238,0.72)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(120,112,96,0.35)';
+        ctx.lineWidth = 2 / this.zoom;
+        path(); ctx.stroke();
+        // Printed lines, running along the sheet.
+        ctx.strokeStyle = 'rgba(120,112,96,0.22)';
+        ctx.lineWidth = 1.6 / this.zoom;
+        ctx.beginPath();
+        for (let k = 1; k <= 3; k++) {
+          const t = k / 4;
+          const ax = p[0].sx + (p[3].sx - p[0].sx) * t;
+          const ay = p[0].sy + (p[3].sy - p[0].sy) * t;
+          const bx = p[1].sx + (p[2].sx - p[1].sx) * t;
+          const by = p[1].sy + (p[2].sy - p[1].sy) * t;
+          ctx.moveTo(ax + (bx - ax) * 0.12, ay + (by - ay) * 0.12);
+          ctx.lineTo(ax + (bx - ax) * 0.88, ay + (by - ay) * 0.88);
+        }
+        ctx.stroke();
+
+      } else if (z.type === 'rugGrass') {
+        // Crumbs. Not a tint — a scatter, because that is what makes the
+        // player believe somebody had breakfast here.
+        path();
+        ctx.fillStyle = 'rgba(206,176,124,0.22)';
+        ctx.fill();
+        const pat = this.groundPattern(ctx, this.crumbTile());
+        if (pat) { ctx.fillStyle = pat; ctx.fill(); }
+      }
+    }
+  },
+
+  /* The deck a zone lies on. A zone is authored as a flat rectangle with no
+     height, which is right — the simulation is flat — so the renderer asks the
+     centreline where that part of the track is in the air, and caches the
+     answer on the zone. Cached for the reason `padDir` caches a boost pad's
+     heading: neither the zone nor the track moves. */
+  zoneZ(arena, z) {
+    if (z._z !== undefined) return z._z;
+    let out = 0;
+    if (arena.elevated) {
+      const line = arena.centreline, elev = arena.elevation;
+      const cx = z.x + z.w / 2, cy = z.y + z.h / 2;
+      let best = Infinity;
+      for (let i = 0; i < line.length; i++) {
+        const dx = line[i][0] - cx, dy = line[i][1] - cy;
+        const d = dx * dx + dy * dy;
+        if (d < best) { best = d; out = elev[i].z; }
+      }
+    }
+    z._z = out;
+    return out;
+  },
+
+  /* Crumbs: what is left on a table after breakfast, at a period long enough
+     that the same crumb is never obviously in two places at once. */
+  crumbTile() {
+    const key = 'crumbs';
+    this._tiles = this._tiles || {};
+    if (this._tiles[key] !== undefined) return this._tiles[key];
+    const S = 192;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    const rnd = this.tileRnd(1201);
+    const L = this.tileLight();
+    for (let i = 0; i < 120; i++) {
+      const x = rnd() * S, y = rnd() * S, r = 1.2 + rnd() * 2.4;
+      g.fillStyle = 'rgba(58,40,20,0.30)';
+      g.beginPath();
+      g.ellipse(x + L.sx * 1.6, y + L.sy * 1.6, r, r * 0.75, rnd() * 3, 0, 6.283);
+      g.fill();
+      g.fillStyle = 'rgba(224,186,128,0.55)';
+      g.beginPath();
+      g.ellipse(x, y, r * 0.85, r * 0.6, rnd() * 3, 0, 6.283);
+      g.fill();
+    }
     this._tiles[key] = cv;
     return cv;
   },
@@ -1749,7 +2469,17 @@ BR.Renderer = {
     }
     segs.sort(function (a, b) { return a.key - b.key; });
 
-    const quad = function (a, b, c, d) {
+    /* The elevated deck had NO surface texture at all. A flat road is filled
+       twice through one path — colour, then the material — and none of that
+       reached this branch, so the kitchen table, whose entire character is
+       wiped laminate, was a cream rectangle, and both stunt decks were flat
+       plastic colour.
+
+       `over` is that second fill, through the SAME path: `fill` does not clear
+       it, so a textured quad costs one more fill and no more geometry. It is
+       one op per surface quad and nothing at all on the skirts, which are seen
+       edge-on and would only alias. */
+    const quad = function (a, b, c, d, over) {
       ctx.beginPath();
       const pa = Pj.project(a[0], a[1], a[2]); ctx.moveTo(pa.sx, pa.sy);
       const pb = Pj.project(b[0], b[1], b[2]); ctx.lineTo(pb.sx, pb.sy);
@@ -1758,7 +2488,9 @@ BR.Renderer = {
       ctx.closePath();
       ctx.fill();
       ctx.stroke();                       // seal the seam
+      if (over) { ctx.fillStyle = over; ctx.fill(); }
     };
+    const surface = this.groundPattern(ctx, this.roadTile(arena));
 
     ctx.lineWidth = 1 / BR.Renderer.zoom;
     ctx.lineJoin = 'round';
@@ -1789,7 +2521,7 @@ BR.Renderer = {
       // The driving surface.
       ctx.fillStyle = arena.roadColour;
       ctx.strokeStyle = arena.roadColour;
-      quad(oi, oj, ij, ii);
+      quad(oi, oj, ij, ii, surface);
     }
   },
 
@@ -1957,6 +2689,13 @@ BR.Renderer = {
     // bounded by the line people actually take.
     if (arena.sandy && BR.SandGrid.active) this.drawCompaction(ctx);
 
+    /* The patches of something else: floorboards under the bed, place mats and
+       spilled sugar on the table. HERE, between the road fill and the kerbs,
+       for the same reason the packed sand goes here — a surface patch may
+       change what the floor is made of and may never cover the edge a driver
+       reads the track by. */
+    this.drawZones(ctx, arena);
+
     /* ── KERBS ─────────────────────────────────────────────────────────────
        Culled the same way as the fill — these are two more full traces of the
        track outline, so together with it the whole ring was being walked THREE
@@ -2098,39 +2837,119 @@ BR.Renderer = {
       const t = G.cells[list[k]];
       if (t < 0.05) continue;
       const r = G.cellRect(list[k]);
-      const p = [
-        Pj.project(r.x, r.y, r.z||0), Pj.project(r.x + r.w, r.y, r.z||0),
-        Pj.project(r.x + r.w, r.y + r.h, r.z||0), Pj.project(r.x, r.y + r.h, r.z||0),
-      ];
+      /* ROUND, not square. The cells are a grid and the grid was drawn: packed
+         sand came out as a chequerboard of hard-edged tiles following the car,
+         which reads as a debug overlay rather than as sand somebody has driven
+         flat. A round patch costs the same one path and one fill.
+
+         1.3 RATHER THAN 1.0, which is the part that had to be rendered to be
+         seen: the ellipse inscribed in a cell is the obvious choice and it
+         came out as POLKA DOTS. Inscribed ellipses meet only at the edge
+         midpoints, so every cell corner stays dry and a driven line reads as a
+         row of discs rather than as a track. Over-inflating them until they
+         overlap is what makes neighbours merge, and the alpha comes down to
+         pay for the extra area. */
+      const c0 = Pj.project(r.x + r.w / 2, r.y + r.h / 2, r.z || 0);
+      const c1 = Pj.project(r.x + r.w, r.y + r.h / 2, r.z || 0);
+      const c2 = Pj.project(r.x + r.w / 2, r.y + r.h, r.z || 0);
       ctx.beginPath();
-      ctx.moveTo(p[0].sx, p[0].sy);
-      for (let i = 1; i < 4; i++) ctx.lineTo(p[i].sx, p[i].sy);
-      ctx.closePath();
+      ctx.ellipse(c0.sx, c0.sy,
+                  (Math.abs(c1.sx - c0.sx) + Math.abs(c2.sx - c0.sx)) * 1.3,
+                  (Math.abs(c1.sy - c0.sy) + Math.abs(c2.sy - c0.sy)) * 1.3,
+                  0, 0, Math.PI * 2);
       // Damp, packed sand: darker and a little cooler than the loose stuff.
-      ctx.fillStyle = 'rgba(120,92,58,' + (0.55 * t).toFixed(3) + ')';
+      ctx.fillStyle = 'rgba(120,92,58,' + (0.40 * t).toFixed(3) + ')';
       ctx.fill();
     }
   },
 
   /* Printed buildings and a pond inside the loop, so the circuit reads as a
-     town rather than a ring of tarmac. No collision — it is rug print. */
+     town rather than a ring of tarmac. No collision — it is rug print.
+
+     And PRINT is the word that was not being honoured. Each of these was one
+     flat quad at 85% over the floor, which is paint on lino: an authored pond
+     came out as a hard blue parallelogram, and next to a rug that now has a
+     visible pile it was the most obviously computer-drawn thing left on the
+     floor. Ink on cloth does not hide the cloth, so where the shape really is
+     print the floor's own material is filled straight back over it through the
+     same path, and every shape gets the dark printed outline that turns a
+     coloured region into a drawn thing — the same trick as the cars, the
+     houses in the print layer, and for the same reason. */
   drawDecoration(ctx, arena) {
+    if (!arena.decoration.length) return;
     const Pj = BR.Projection;
+    const print = arena.world === 'town-rug' || arena.sandy;
+    const mat = print ? this.groundPattern(ctx, this.groundTile(arena)) : null;
+    const L = this.tileLight();
     for (let i = 0; i < arena.decoration.length; i++) {
       const d = arena.decoration[i];
       const pts = [
         [d.x, d.y], [d.x + d.w, d.y], [d.x + d.w, d.y + d.h], [d.x, d.y + d.h],
       ];
+      const p = [];
+      for (let k = 0; k < 4; k++) p.push(Pj.project(pts[k][0], pts[k][1], 0));
+
+      /* A POND IS NOT A RECTANGLE, and the authored data does not claim it is:
+         it gives a bounding box, and the renderer was drawing the box. Water
+         gets the ellipse inside it instead, walked as fourteen points on the
+         GROUND PLANE rather than as a screen-space ellipse — the camera turns,
+         and a shape drawn round on screen would be the only thing on the floor
+         that did not turn with it. Everything else keeps its footprint: a
+         building plot really is rectangular. */
+      const round = d.type === 'pond' && arena.world !== 'kitchen';
       ctx.beginPath();
-      for (let k = 0; k < 4; k++) {
-        const p = Pj.project(pts[k][0], pts[k][1], 0);
-        if (k === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+      if (round) {
+        const ex = d.x + d.w / 2, ey = d.y + d.h / 2;
+        for (let k = 0; k < 14; k++) {
+          const a = k / 14 * Math.PI * 2;
+          const q = Pj.project(ex + Math.cos(a) * d.w / 2,
+                               ey + Math.sin(a) * d.h / 2, 0);
+          if (k === 0) ctx.moveTo(q.sx, q.sy); else ctx.lineTo(q.sx, q.sy);
+        }
+      } else {
+        for (let k = 0; k < 4; k++) {
+          if (k === 0) ctx.moveTo(p[k].sx, p[k].sy);
+          else ctx.lineTo(p[k].sx, p[k].sy);
+        }
       }
       ctx.closePath();
       ctx.fillStyle = d.colour;
       ctx.globalAlpha = 0.85;
       ctx.fill();
       ctx.globalAlpha = 1;
+      /* The floor's material back over the top — but only where the thing
+         really is print. On the rug and in the sandpit these are a painted
+         plot and a heap of sand, and the pile or the grain belongs through
+         them. On the kitchen and stunt tracks `decoration` is the FURNITURE on
+         the floor below the deck, and grout lines through a cupboard would be
+         a worse lie than the flat fill was. */
+      if (mat && d.type !== 'pond') { ctx.fillStyle = mat; ctx.fill(); }
+      ctx.strokeStyle = 'rgba(32,26,20,0.34)';
+      ctx.lineWidth = 3 / this.zoom;
+      ctx.stroke();
+
+      /* A pond gets what the printed pond in the rug tile gets: a rim, flat
+         ripple arcs, and a bright edge on the side the light comes from. It is
+         four strokes and it is the difference between water and a blue
+         rectangle. */
+      if (round) {
+        const cx = (p[0].sx + p[2].sx) / 2, cy = (p[0].sy + p[2].sy) / 2;
+        const rx = Math.abs(p[1].sx - p[0].sx) / 2 + Math.abs(p[3].sx - p[0].sx) / 2;
+        const ry = Math.abs(p[1].sy - p[0].sy) / 2 + Math.abs(p[3].sy - p[0].sy) / 2;
+        ctx.strokeStyle = 'rgba(232,248,255,0.26)';
+        ctx.lineWidth = 2 / this.zoom;
+        for (let k = 1; k <= 3; k++) {
+          ctx.beginPath();
+          ctx.ellipse(cx, cy + (k - 2) * ry * 0.34, rx * (0.62 - k * 0.11),
+                      ry * 0.10, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.ellipse(cx + L.hx * rx * 0.26, cy + L.hy * ry * 0.26,
+                    rx * 0.3, ry * 0.18, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(236,250,255,0.20)';
+        ctx.fill();
+      }
     }
   },
 
