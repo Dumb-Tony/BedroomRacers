@@ -4525,16 +4525,40 @@ BR.Renderer = {
   /* Lighten or darken a #rrggbb by a fraction. Kept here rather than authored
      per vehicle so a car added later gets a matching roof and outline for
      free — and so the two can never drift apart in the data. */
-  shade(hex, amt) {
-    const h = (hex || '#888888').replace('#', '');
-    const n = parseInt(h.length === 3
-      ? h[0] + h[0] + h[1] + h[1] + h[2] + h[2] : h, 16);
+  /**
+   * Lighten (amt > 0) or darken (amt < 0) a colour.
+   *
+   * TAKES BACK WHAT IT RETURNS. It used to accept only `#rrggbb` while
+   * returning `rgb(r,g,b)`, so shading an already-shaded colour — which reads as
+   * the most natural thing in the world — ran parseInt over "rgb(140,90,60)",
+   * got NaN, and produced "rgb(NaN,NaN,NaN)".
+   *
+   * Nothing throws on that. The canvas silently IGNORES an invalid fillStyle
+   * and keeps whatever was set last, so the failure is a shape drawn in some
+   * other object's colour rather than an error. It was already live in two
+   * places: the spade's grip is extruded from a pre-shaded side, and the
+   * interface work found the same trap turning its boost channel black and
+   * making the FOCUSED button the darkest thing on screen, because focus
+   * lightens.
+   */
+  shade(col, amt) {
+    let r, g, b;
+    const s = col || '#888888';
+    if (s.charCodeAt(0) === 35) {                 // '#'
+      const h = s.slice(1);
+      const n = parseInt(h.length === 3
+        ? h[0] + h[0] + h[1] + h[1] + h[2] + h[2] : h, 16);
+      r = (n >> 16) & 255; g = (n >> 8) & 255; b = n & 255;
+    } else {
+      const m = s.match(/-?\d+(\.\d+)?/g);
+      if (!m || m.length < 3) { r = g = b = 136; }
+      else { r = +m[0]; g = +m[1]; b = +m[2]; }
+    }
     const f = function (v) {
       const t = amt < 0 ? 0 : 255;
       return Math.round((t - v) * Math.abs(amt) + v);
     };
-    const r = f((n >> 16) & 255), g = f((n >> 8) & 255), b = f(n & 255);
-    return 'rgb(' + r + ',' + g + ',' + b + ')';
+    return 'rgb(' + f(r) + ',' + f(g) + ',' + f(b) + ')';
   },
 
   /**
