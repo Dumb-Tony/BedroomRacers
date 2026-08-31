@@ -139,13 +139,22 @@ BR.CornerHint = {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // The bend itself: a curve leaving straight ahead and turning the way the
-    // road does. Severity opens the angle, so a hairpin is visibly sharper.
+    /* The bend itself: a curve leaving straight ahead and turning the way the
+       road does. Severity opens the angle, so a hairpin is visibly sharper.
+
+       STROKED TWICE, dark and wide first. Everything else in this game that has
+       to read as an object against any surface carries a dark outline — the
+       cars, the props, the toy pieces — and this arrow is drawn over five
+       different floors ranging from near-black boards to bright sand. A single
+       coloured stroke reads on some of them. */
     const bend = 0.45 + corner.severity * 0.55;
     ctx.beginPath();
     ctx.moveTo(cx, cy + armY);
     ctx.quadraticCurveTo(cx, cy - armY * 0.2,
                          cx + corner.dir * armX * bend, cy - armY * 0.75);
+    ctx.strokeStyle = 'rgba(14,10,7,0.55)';
+    ctx.lineWidth = 11 * s;
+    ctx.stroke();
     ctx.strokeStyle = tier.colour;
     ctx.lineWidth = 7 * s;
     ctx.stroke();
@@ -159,26 +168,50 @@ BR.CornerHint = {
     ctx.lineTo(hx + Math.cos(ang + 2.5) * 12 * s, hy + Math.sin(ang + 2.5) * 12 * s);
     ctx.lineTo(hx + Math.cos(ang - 2.5) * 12 * s, hy + Math.sin(ang - 2.5) * 12 * s);
     ctx.closePath();
+    ctx.strokeStyle = 'rgba(14,10,7,0.55)';
+    ctx.lineWidth = 4 * s;
+    ctx.stroke();
     ctx.fillStyle = tier.colour;
     ctx.fill();
 
-    // Closing bar — fills as the corner arrives, so distance is a shape rather
-    // than a number. World units mean nothing to a player.
-    const barW = 76 * s, barH = 5 * s;
-    const bx = cx - barW / 2, by = cy + armY + 12 * s;
-    ctx.globalAlpha = alpha * 0.5;
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    ctx.fillRect(bx, by, barW, barH);
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = tier.colour;
-    ctx.fillRect(bx, by, barW * near, barH);
+    /* Closing bar — fills as the corner arrives, so distance is a shape rather
+       than a number. World units mean nothing to a player.
 
-    // Only name the worst tier. Labelling every bend is noise.
+       Built out of the same moulded channel and slug as the boost meter and the
+       garage stats, so a filling bar means one thing everywhere in the game
+       rather than three different things drawn three different ways. */
+    const T = BR.Toy;
+    const barW = 76 * s, barH = 7 * s;
+    const bx = cx - barW / 2, by = cy + armY + 12 * s;
+    ctx.globalAlpha = alpha * 0.75;
+    T.round(ctx, bx, by, barW, barH, barH / 2);
+    ctx.fillStyle = 'rgba(14,10,7,0.50)';
+    ctx.fill();
+    ctx.globalAlpha = alpha;
+    if (near > 0.02) {
+      T.round(ctx, bx, by, Math.max(barH, barW * near), barH, barH / 2);
+      ctx.fillStyle = tier.colour;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(bx + barH * 0.5, by + barH * 0.32);
+      ctx.lineTo(bx + Math.max(barH, barW * near) - barH * 0.5, by + barH * 0.32);
+      ctx.strokeStyle = T.shade(tier.colour, 0.45);
+      ctx.lineWidth = 1.6 * s;
+      ctx.stroke();
+    }
+
+    // Only name the worst tier. Labelling every bend is noise — and the word is
+    // set in the interface's printed face now, with the same dark backing the
+    // arrow gets, rather than in bare monospace over a moving road.
     if (corner.severity >= 0.68) {
       ctx.textAlign = 'center';
-      ctx.font = '700 ' + Math.round(10 * s) + 'px ui-monospace, Consolas, monospace';
+      ctx.font = T.label(Math.round(11 * s), 800);
+      ctx.strokeStyle = 'rgba(14,10,7,0.60)';
+      ctx.lineWidth = 3 * s;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(tier.label, cx, by + 11 * s);
       ctx.fillStyle = tier.colour;
-      ctx.fillText(tier.label, cx, by + 10 * s);
+      ctx.fillText(tier.label, cx, by + 11 * s);
       ctx.textAlign = 'left';
     }
 

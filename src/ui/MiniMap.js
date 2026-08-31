@@ -69,17 +69,37 @@ BR.MiniMap = {
 
     ctx.save();
 
-    // Backing plate
-    ctx.fillStyle = 'rgba(0,0,0,0.42)';
-    this.roundRect(ctx, boxX, boxY, boxW, boxH, 10);
+    /* ── the housing ──────────────────────────────────────────────────────
+       A moulded plastic frame with the map SUNK INTO IT, so the map belongs to
+       the same set of parts as the rest of the HUD (BR.Toy, src/ui/HUD.js).
+
+       The window stays DARK. That is a decision, not an oversight: everything
+       drawn inside it — opponents in their body colours, the player's yellow
+       arrowhead, the amber hazard dots — was chosen to read against a dark
+       ground, and a cream paper map would have put a yellow arrow on a cream
+       field. The one indicator a player needs to find instantly is the one
+       that would have suffered, so the frame changes and the window does not. */
+    const T = BR.Toy;
+    T.plate(ctx, boxX - 7, boxY - 7, boxW + 14, boxH + 14, 11, T.SHELL);
+
+    this.roundRect(ctx, boxX, boxY, boxW, boxH, 8);
+    ctx.fillStyle = 'rgba(14,12,10,0.62)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = T.shade(T.SHELL, -0.55);
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    // Recessed: the shadow lies inside the TOP edge, as it does on every other
+    // window in the interface.
+    ctx.beginPath();
+    ctx.moveTo(boxX + 8, boxY + 1.6);
+    ctx.lineTo(boxX + boxW - 8, boxY + 1.6);
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+    ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Clip so nothing spills out of the plate.
+    // Clip so nothing spills out of the window.
     ctx.save();
-    this.roundRect(ctx, boxX, boxY, boxW, boxH, 10);
+    this.roundRect(ctx, boxX, boxY, boxW, boxH, 8);
     ctx.clip();
 
     // ── the road, as one thick stroked loop ───────────────────────────────
