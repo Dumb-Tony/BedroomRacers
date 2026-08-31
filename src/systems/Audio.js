@@ -11,12 +11,18 @@
      2. SCALE — small plastic sounds in a large room
      3. MOOD
 
-   Three rules this module obeys:
+   Four rules this module obeys:
 
    - It NEVER runs inside the fixed simulation step. Audio observes state and
      detects edges once per rendered frame. Firing sounds from inside the step
      would trigger them several times per frame and couple audio to physics,
      which would break the determinism Time Trial ghosts depend on.
+
+   - SPEED IS A CURVE. Everything that tracks how fast the car is going does so
+     with a power above one — the wind cubed, the tyre roar squared — because
+     linear ramps read as gradual and the complaint this game gets is that it
+     does not feel fast enough. A crawl is one quiet voice; flat out is five
+     loud ones. See updateChannel.
 
    - EVERY HUMAN GETS A CHANNEL. In split screen both players are "the player",
      so each has their own engine, tyres, drift and collisions, panned to match
@@ -130,9 +136,13 @@ BR.Audio = {
        - Engine pitch still tracks speed; material shifts the whole curve by a
          constant, so "faster is higher" survives.
        - The rug/road tyre split is still 420 vs 1100 scaled together, so
-         leaving the road is exactly as audible in every car.
-       - Drift is untouched. That is tyres against the FLOOR — it belongs to
-         the surface, not to the shell.
+         leaving the road is exactly as audible in every car. There are now
+         twelve floors rather than two (see SURFACES), and material still
+         scales all of them by one factor, so the SIZE of every transition is
+         identical whatever you are driving.
+       - Drift is untouched BY MATERIAL. That is tyres against the FLOOR — it
+         belongs to the surface, not to the shell — so the surface does set its
+         register, and all four materials still slide identically.
        - The clean-landing chime is untouched. It is the cue that says the
          landing was clean, and a car you cannot hear it on would be a car
          punished for its material.
@@ -221,25 +231,296 @@ BR.Audio = {
     ch.ratchet.filt.Q.value = m.clickQ;
   },
 
-  /* One player's entire soundstage: their car, their tyres, their rivals. */
+  /* ── WHAT THE FLOOR IS MADE OF ────────────────────────────────────────────
+     The audio twin of `Renderer.roadTile` / `groundTile` / `drawZones`, and a
+     twin on purpose. The art pass gave every world its own floor material —
+     woven pile on the rug, grains in the sandpit, varnished boards under the
+     stunt deck, glazed tile and wiped laminate in the kitchen — while audio
+     still asked ONE question, `v.surface === 'rugGrass'`, and picked between
+     two tyre notes for all eleven entries in `BR.SURFACES` across four worlds.
+     Driving on floorboards sounded exactly like driving on carpet — which is
+     the complaint verbatim. It does not now.
+
+     Four columns, each doing one job:
+
+       roarHz / roar   a LOWPASS on noise: the BODY of the tyre note, and the
+                       single loudest thing at speed. Level goes with the
+                       SQUARE of speed, so this is most of what makes flat out
+                       sound different from a crawl.
+       band / bandGain a BANDPASS: the TEXTURE. Where the grain of the surface
+                       sits in the spectrum, and how much of it there is.
+       flutter         how LUMPY it is. A sine LFO on the roar's gain, rate
+                       rising with speed — woven pile thumps, moulded plastic
+                       does not, and sand is a continuous hiss with no
+                       periodicity in it at all.
+       slide           the register a DRIFT scrubs in. 13_Audio.md's argument
+                       for keeping drift out of the material table — "that is
+                       tyres against the FLOOR: it belongs to the surface, not
+                       to the shell" — is an argument that it belongs here.
+
+     THE ONE RULE THIS TABLE MUST NOT BREAK: leaving the road has to be
+     unmistakable in every world (13_Audio.md's gameplay-critical table). Not
+     in a fixed direction — newspaper on laminate is BRIGHTER than the laminate
+     and pretending otherwise would be a lie about paper — but big. Measured as
+     the summed |log2| distance across all four columns, the largest transition
+     is the rug's at 4.49 and the smallest is the kitchen's at 1.92. */
+  SURFACES: {
+    /* Printed road on the town rug. The renderer draws this with the SAME pile
+       tile as the rug beside it at 0.55 strength, because ink hides some of
+       the pile without flattening it — so the road is the rug, quieter and
+       less lumpy, and that is exactly what these numbers say. */
+    road:     { id: 'road',     roarHz: 640,  roar: 0.62, band: 1100,
+                bandGain: 0.45, flutter: 0.26, slide: 0.86 },
+    /* Bare pile. Dark, loud and lumpy: the loops are over half a car long
+       (12_Art_Guide.md's oversized rug fibres) and they are what a tyre is
+       actually hitting. The biggest surface change in the game. */
+    rug:      { id: 'rug',      roarHz: 380,  roar: 1.05, band: 420,
+                bandGain: 1.35, flutter: 0.58, slide: 0.72 },
+    /* Varnished pine. Hard, bright, and it has joints — `woodTile` draws a
+       dark gap with a lit shoulder every board, so the flutter is real
+       geometry rather than flavour. Under the bed, and under the stunt deck. */
+    boards:   { id: 'boards',   roarHz: 1500, roar: 1.05, band: 1800,
+                bandGain: 0.95, flutter: 0.30, slide: 1.25 },
+    /* Wiped laminate: a printed board under a hard clear film. Brighter than
+       the pine it imitates and smoother than anything, which is precisely
+       12% more top speed at 0.78 grip. */
+    laminate: { id: 'laminate', roarHz: 1700, roar: 0.78, band: 2200,
+                bandGain: 0.60, flutter: 0.10, slide: 1.30 },
+    /* Moulded plastic track. The smoothest floor in the game — injection
+       moulding leaves mould lines and nothing else — so it has the least
+       flutter and the highest band. It should sound FAST, because it is. */
+    moulded:  { id: 'moulded',  roarHz: 1950, roar: 0.70, band: 2400,
+                bandGain: 0.52, flutter: 0.08, slide: 1.35 },
+    /* A sock. Cloth is the only thing here that absorbs rather than reflects:
+       lowest roar corner, lowest band, and a drift on it barely makes a
+       sound. 0.70 top speed, and it sounds like it. */
+    cloth:    { id: 'cloth',    roarHz: 240,  roar: 0.90, band: 300,
+                bandGain: 1.10, flutter: 0.44, slide: 0.55 },
+    /* Newsprint. The one surface that goes UP when you leave the road: paper
+       has no body at all — the low end falls away — and a great deal of
+       crinkle. 0.60 grip is the lowest on the roster and it skitters. */
+    paper:    { id: 'paper',    roarHz: 1150, roar: 0.85, band: 3100,
+                bandGain: 1.00, flutter: 0.46, slide: 1.15 },
+    /* Cardboard: the tunnel shortcut, and the cover of a book. Card is paper
+       with a body, so it sits between the newsprint and the boards. */
+    card:     { id: 'card',     roarHz: 820,  roar: 0.80, band: 1450,
+                bandGain: 0.80, flutter: 0.24, slide: 0.95 },
+    /* Grains. Broad and hissy with almost no flutter, because a million loose
+       particles have no period to them. */
+    sand:     { id: 'sand',     roarHz: 780,  roar: 1.10, band: 2700,
+                bandGain: 1.15, flutter: 0.07, slide: 0.88 },
+    /* The same grain pressed flat — the renderer uses the same tile with the
+       pits filled in, and this is the same voice with the hiss taken out. */
+    packed:   { id: 'packed',   roarHz: 1020, roar: 0.80, band: 2400,
+                bandGain: 0.78, flutter: 0.09, slide: 0.92 },
+    /* Off the dug track. Loudest and draggiest thing in the game: the point of
+       loose sand is that it is a mistake, and it should sound like one. */
+    loose:    { id: 'loose',    roarHz: 560,  roar: 1.55, band: 1700,
+                bandGain: 1.45, flutter: 0.05, slide: 0.80 },
+    /* Standing water, and spilled sugar. Bright, hissy, and frictionless in
+       the worst way. */
+    water:    { id: 'water',    roarHz: 900,  roar: 1.30, band: 3400,
+                bandGain: 1.25, flutter: 0.22, slide: 1.10 },
+  },
+
+  /* Which floor a world's generic ON-ROAD and OFF-ROAD names mean. Mirrors the
+     branch in `Renderer.roadTile` and `Renderer.groundTile` one for one:
+     plasticTile over woodTile on the stunt track, packedSandTile over sandTile
+     in the pit, laminateTile over the morning's post in the kitchen, and the
+     rug's own pile printed and bare.
+
+     THIS TABLE EXISTS BECAUSE THE STUNT TRACKS DECLARE NO SURFACES AT ALL, so
+     they inherit `rugRoad` / `rugGrass` from the defaults — a moulded plastic
+     deck on a bedroom floor, driving under the names of a carpet. The physics
+     is right and the NAME is wrong, and audio must not repeat the name's
+     mistake just because it reads the same field. */
+  WORLD_FLOOR: {
+    'town-rug': { road: 'road',     off: 'rug' },
+    sandbox:    { road: 'packed',   off: 'loose' },
+    stunt:      { road: 'moulded',  off: 'boards' },
+    kitchen:    { road: 'laminate', off: 'paper' },
+  },
+
+  /* A NAMED surface means the same thing wherever it appears — a sock is a
+     sock on the rug or on the table. One exception, and the renderer has the
+     same one: `hardwood` is bare pine under the bed and wiped laminate on the
+     kitchen table, drawn with woodTile in one and laminateTile in the other.
+     `null` means the world decides; see WORLD_FLOOR. */
+  SURFACE_NAMES: {
+    rugRoad: null, rugGrass: null,
+    hardwood: 'boards',            // ...unless kitchen — see surfaceFor
+    blanket: 'cloth', paper: 'paper', bookCover: 'card',
+    plastic: 'moulded', puddle: 'water',
+    sand: 'sand', packedSand: 'packed', looseSand: 'loose',
+  },
+
+  /**
+   * The floor under one car, as a voice.
+   *
+   * SAND BLENDS, exactly as its handling does: `BR.SURFACES.sand` and
+   * `packedSand` are the two ends of one continuum and SandGrid says where a
+   * patch of ground sits between them. Reading the same grid here makes the
+   * racing line you have worn into the sandpit over three laps AUDIBLE — the
+   * feature the physics already had, in the ear.
+   *
+   * Blended into a per-channel scratch object rather than allocating one every
+   * frame per player.
+   */
+  surfaceFor(ch, arena, v) {
+    const world = (arena && arena.world) || 'town-rug';
+    const name = v.surface;
+    let id = this.SURFACE_NAMES[name];
+    if (id === undefined) id = null;
+    if (id === 'boards' && world === 'kitchen') id = 'laminate';
+    if (id === null) {
+      const F = this.WORLD_FLOOR[world] || this.WORLD_FLOOR['town-rug'];
+      id = (name === 'rugGrass') ? F.off : F.road;
+    }
+    const S = this.SURFACES[id] || this.SURFACES.road;
+
+    if (id !== 'sand' || !BR.SandGrid || !BR.SandGrid.active) return S;
+    const t = BR.SandGrid.at(v.x, v.y);
+    if (t <= 0) return S;
+    return this.blendSurface(ch.sv, S, this.SURFACES.packed, t);
+  },
+
+  blendSurface(dst, a, b, t) {
+    dst.id       = t > 0.5 ? b.id : a.id;
+    dst.roarHz   = a.roarHz   + (b.roarHz   - a.roarHz)   * t;
+    dst.roar     = a.roar     + (b.roar     - a.roar)     * t;
+    dst.band     = a.band     + (b.band     - a.band)     * t;
+    dst.bandGain = a.bandGain + (b.bandGain - a.bandGain) * t;
+    dst.flutter  = a.flutter  + (b.flutter  - a.flutter)  * t;
+    dst.slide    = a.slide    + (b.slide    - a.slide)    * t;
+    return dst;
+  },
+
+  /* ── UNDER THE BED ────────────────────────────────────────────────────────
+     13_Audio.md open question 4, and the answer is yes.
+
+     06_World_Town_Rug.md calls the under-bed run "the first use of a lighting
+     state as gameplay". A lighting state that the ear cannot hear is half a
+     state: the car goes somewhere genuinely different — enclosed, boards
+     below, a mattress a car's length overhead — and everything about it
+     already changes except the sound.
+
+     ONE FILTER, per human CHANNEL, which is where it has to be. Not the master
+     bus: in split screen one player can be under the bed while the other is
+     out on the rug, and the countdown, the music and the room the house makes
+     do not belong to either of them. Put it on a channel and it muffles that
+     driver's car, their tyres, their collisions and the rivals near THEM,
+     which is exactly the set of things that would actually be in the box.
+
+     It does not erase the surface cue, and that is checked rather than hoped:
+     the lowpass sits at 1600 Hz and takes roughly 3 dB off the boards' 1800 Hz
+     band while leaving the 420 Hz rug band alone, so the CONTRAST between them
+     — the part carrying the information — survives the effect that dulls both.
+
+     `MUFFLE_OPEN` is 16 kHz rather than the top of hearing on purpose: the
+     highest frequency this module ever synthesises is the music shaker's 6.5
+     kHz highpass corner, so at 16 kHz the filter is transparent to everything
+     the game can make, and it is far enough below Nyquist that the biquad is
+     not warping up there either. */
+  MUFFLE_OPEN: 16000,
+  MUFFLE_UNDER: 1600,
+
+  /* The boards, plus any cloth lying ON them. Cached on the arena the way the
+     renderer caches a vehicle's shape, because a track is built once and raced
+     many times.
+
+     Cloth INSIDE the boards is a sock under the bed and must muffle with them
+     — un-muffling for the eight car lengths of a sock and back would pump. Any
+     other cloth on a rug track is a place mat and is not under anything, which
+     is why this is a geometric test and not `type === 'blanket'`. */
+  muffleRects(arena) {
+    if (!arena) return null;
+    if (arena._muffle !== undefined) return arena._muffle;
+    let rects = null;
+    const zones = arena.zones || [];
+    if (arena.world === 'town-rug') {
+      const boards = [];
+      for (let i = 0; i < zones.length; i++) {
+        if (zones[i].type === 'hardwood') boards.push(zones[i]);
+      }
+      if (boards.length) {
+        rects = boards.slice();
+        for (let i = 0; i < zones.length; i++) {
+          const z = zones[i];
+          if (z.type !== 'blanket') continue;
+          for (let j = 0; j < boards.length; j++) {
+            if (this.rectsOverlap(z, boards[j])) { rects.push(z); break; }
+          }
+        }
+      }
+    }
+    arena._muffle = rects;
+    return rects;
+  },
+
+  rectsOverlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x &&
+           a.y < b.y + b.h && a.y + a.h > b.y;
+  },
+
+  underBed(arena, v) {
+    const rects = this.muffleRects(arena);
+    if (!rects) return false;
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects[i];
+      if (v.x >= r.x && v.x <= r.x + r.w &&
+          v.y >= r.y && v.y <= r.y + r.h) return true;
+    }
+    return false;
+  },
+
+  /* One player's entire soundstage: their car, their tyres, their rivals.
+
+     THE MUFFLE SITS IN THE OUTPUT PATH AND IS BUILT HERE, wide open, rather
+     than inserted when a car first drives under the bed. Same reason the
+     channels themselves are built up front: reconnecting a running graph
+     clicks, and the click would land on the exact frame the effect is supposed
+     to sell. */
   makeChannel() {
     const ctx = this.ctx;
     const out = ctx.createGain();
     out.gain.value = 1;
 
+    const muffle = ctx.createBiquadFilter();
+    muffle.type = 'lowpass';
+    muffle.frequency.value = this.MUFFLE_OPEN;
+    muffle.Q.value = 0.7;
+    out.connect(muffle);
+
     let panner = null;
     if (ctx.createStereoPanner) {
       panner = ctx.createStereoPanner();
-      out.connect(panner);
+      muffle.connect(panner);
       panner.connect(this.sfxBus);
     } else {
-      out.connect(this.sfxBus);   // older browsers just get it centred
+      muffle.connect(this.sfxBus);   // older browsers just get it centred
     }
 
     return {
-      out: out, panner: panner,
+      out: out, panner: panner, muffle: muffle,
       engine:   this.makeEngine(out),
+      /* THE FLOOR, IN TWO VOICES. `roar` is a lowpass carrying the body of the
+         tyre note and `rattle` a bandpass carrying its texture — one filter
+         cannot be both "dark and loud" (pile) and "bright and hard" (boards)
+         while also being a bed that swells with speed. */
+      roar:     this.makeRoar(out),
       rattle:   this.makeNoiseVoice(900, 1.2, out),
+      /* WIND. The largest single thing that was missing: a broad band of noise
+         whose level goes with the CUBE of speed, which is roughly what
+         aerodynamic noise really does and is the reason the top of the range
+         arrives as an event rather than as more of the same. Q 0.4 is nearly
+         two octaves wide — a rush of air, not a resonance. */
+      wind:     this.makeNoiseVoice(400, 0.4, out),
+      /* THE TOP OF THE RANGE. A narrow whistle that does not exist below 82%
+         of the car's maximum and swells in over the last 18%, so ARRIVING at
+         top speed is a sound of its own. Deliberately a resonant band of noise
+         rather than a tone: a pure high sine is a stinger, and 13_Audio.md is
+         explicit that the audience includes noise-sensitive players. */
+      whine:    this.makeNoiseVoice(2200, 8.0, out),
       drift:    this.makeNoiseVoice(1600, 4.0, out),
       boostAir: this.makeNoiseVoice(700, 0.9, out),
       ratchet:  this.makeRatchet(out),
@@ -248,6 +529,12 @@ BR.Audio = {
       // frame, so applyMaterial always runs once.
       material: null,
       prev: null,
+      /* The boost's punch and its release, as two scalars that spike on an
+         edge and decay on the RENDER clock. See updateChannel — a one-shot
+         cannot make a continuous voice settle. */
+      kick: 0, rel: 0,
+      // Scratch, so blending sand does not allocate an object a frame.
+      sv: {},
     };
   },
 
@@ -277,16 +564,44 @@ BR.Audio = {
     return { o1: o1, o2: o2, filt: filt, gain: g };
   },
 
-  makeNoiseVoice(freq, q, dest) {
+  makeNoiseVoice(freq, q, dest, type) {
     const ctx = this.ctx;
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuf; src.loop = true;
     const filt = ctx.createBiquadFilter();
-    filt.type = 'bandpass'; filt.frequency.value = freq; filt.Q.value = q;
+    filt.type = type || 'bandpass';
+    filt.frequency.value = freq; filt.Q.value = q;
     const g = ctx.createGain(); g.gain.value = 0;
     src.connect(filt); filt.connect(g); g.connect(dest);
     src.start();
     return { src: src, filt: filt, gain: g };
+  },
+
+  /* THE TYRE ROAR, AND THE WHEEL UNDER IT.
+
+     A lowpassed bed of noise carries the body of whatever is under the car.
+     On top of it, a SINE LFO on the same gain whose rate rises with speed —
+     because the strongest thing a tyre does that says "this is going fast" is
+     go round, and a rotation rate is a modulation rate.
+
+     Depth is the surface's `flutter`, so this doubles as a material axis: pile
+     thumps at 0.58, moulded plastic barely moves at 0.08, and sand has no
+     period in it at all. Held below the intrinsic gain, so it is a tremolo
+     rather than the ratchet's gate — a gate here would sound like a fault.
+
+     A GRAPH, for the same reason the ratchet is one: an LFO runs on the audio
+     thread, so it cannot drift with frame rate or fire twice in a frame where
+     the fixed step ran twice. */
+  makeRoar(dest) {
+    const ctx = this.ctx;
+    const voice = this.makeNoiseVoice(700, 1.0, dest, 'lowpass');
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine'; lfo.frequency.value = 4;
+    const amp = ctx.createGain(); amp.gain.value = 0;
+    lfo.connect(amp); amp.connect(voice.gain.gain);
+    lfo.start();
+    voice.lfo = lfo; voice.amp = amp;
+    return voice;
   },
 
   /* The wind-up ratchet: narrow-banded noise GATED by a square LFO, so the
@@ -396,9 +711,22 @@ BR.Audio = {
      without looking, and clearly different from "boost available". */
   boostFull(dest)  { this.blip(880, 0.12, 'triangle', 0.2, 1320, dest); },
   boostReady(dest) { this.blip(560, 0.07, 'sine', 0.11, null, dest); },
+
+  /* THE PUNCH. A boost has to arrive as a SHOVE, and the old one did not: a
+     single sawtooth sweep and a soft noise thud, both fading in over the same
+     8 ms as every other blip in the file. Three things now, in the order the
+     ear reads them — a hard bright tick so there IS a transient, a low
+     sawtooth sweeping up through the engine's own register, and a broad noise
+     shove behind both.
+
+     THE SETTLE IS NOT HERE, and cannot be: it is `ch.kick` in updateChannel,
+     lifting the engine, its filter, the wind and the boost air and letting all
+     four fall back. What has to settle is the continuous voice, and a one-shot
+     has no way to touch one. */
   boostFire(dest) {
-    this.blip(300, 0.32, 'sawtooth', 0.16, 900, dest);
-    this.thud(0.18, 1400, 0.3, 0.7, dest);
+    this.blip(1500, 0.05, 'square', 0.09, 900, dest);
+    this.blip(300, 0.34, 'sawtooth', 0.17, 1100, dest);
+    this.thud(0.20, 1600, 0.34, 0.6, dest);
   },
 
   /* A landing is the car hitting the floor, so it takes the material too —
@@ -468,9 +796,97 @@ BR.Audio = {
     this.blip(480, 0.08, 'triangle', 0.09, 660, dest);
   },
 
+  /* ── THE VRRROOOM ─────────────────────────────────────────────────────────
+     13_Audio.md open question 1: "is the vocal 'vrrrooom' a core identity
+     element or a novelty that wears thin?"
+
+     BOTH — and that is what decides where it goes, because the two halves are
+     claims about different DURATIONS.
+
+     It is identity. This document ranks scale reinforcement second of three
+     jobs — "small plastic sounds in a large room, audio carries the toy
+     fantasy as much as the art does" — and a child imitating an engine is the
+     strongest scale cue available to a synthesiser. It says "these are toys
+     and somebody is playing with them" in under a second and no arrangement of
+     filtered noise can say it at all.
+
+     And it wears thin, immediately, if it is the engine. A vocal layer under
+     ninety seconds of racing is the definition of a novelty outstaying its
+     welcome — and worse, it would break job ONE. A voice lives between about
+     200 Hz and 3 kHz, which is where the drift note (1200–2600), the tyre band
+     (300–3400) and both boost cues (560–1320) already are. A continuous vroom
+     would mask the sounds this document says must never be cut.
+
+     SO: KEEP IT, AND TAKE IT OFF THE ENGINE. It is punctuation, not texture.
+     A frame is established once, not continuously, and there is exactly one
+     moment in a race that belongs to the child rather than to the driver — the
+     shove at the start. It fires ONCE PER RACE, on GO, centred, over an empty
+     mix, on the one frame nobody is yet reading gameplay from sound.
+
+     Built as a mouth, not an engine, and that is the difference between this
+     and the engine voice six functions up:
+
+       - a sawtooth larynx that rises and settles rather than tracking speed
+       - a TRILL: an LFO gating the source at 34 Hz slowing to 19 as the breath
+         runs out. Fluttering lips are a periodic gate, and this one is a graph
+         for the usual reason — nothing on the render clock can machine-gun it
+       - two bandpass FORMANTS sweeping down together, 480→300 and 1600→820,
+         which is the vocal tract going from an open [r] to a closed [m]. The
+         word ends humming, because "vrrrooom" does
+       - a short noise puff at the front: the lips before the voice */
+  vroom(dest) {
+    if (!this.ready) return;
+    const ctx = this.ctx, t = ctx.currentTime, dur = 0.86;
+    const out = dest || this.sfxBus;
+
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(132, t);
+    o.frequency.exponentialRampToValueAtTime(232, t + 0.16);
+    o.frequency.exponentialRampToValueAtTime(178, t + dur);
+
+    /* The lip trill. Intrinsic 0.6 plus a ±0.4 triangle swings the gain
+       between 0.2 and 1.0 — flutter, not a hard gate, because a hard gate at
+       30 Hz is a buzzer and a mouth is not one. */
+    const flut = ctx.createGain(); flut.gain.value = 0.6;
+    const lfo = ctx.createOscillator(); lfo.type = 'triangle';
+    lfo.frequency.setValueAtTime(34, t);
+    lfo.frequency.exponentialRampToValueAtTime(19, t + dur);
+    const lamp = ctx.createGain(); lamp.gain.value = 0.4;
+    lfo.connect(lamp); lamp.connect(flut.gain);
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(1, t + 0.05);
+    env.gain.exponentialRampToValueAtTime(0.42, t + 0.5);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    o.connect(flut); flut.connect(env);
+
+    const F = [[480, 300, 5, 0.10], [1600, 820, 6, 0.055]];
+    for (let i = 0; i < F.length; i++) {
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.setValueAtTime(F[i][0], t);
+      f.frequency.exponentialRampToValueAtTime(F[i][1], t + dur);
+      f.Q.value = F[i][2];
+      const g = ctx.createGain(); g.gain.value = F[i][3];
+      env.connect(f); f.connect(g); g.connect(out);
+    }
+
+    o.start(t); o.stop(t + dur + 0.05);
+    lfo.start(t); lfo.stop(t + dur + 0.05);
+    this.thud(0.035, 700, 0.07, 0.9, out);   // the lips, before the voice
+  },
+
   // Race-wide, so centred rather than on anyone's channel.
   countdownTick() { this.blip(520, 0.13, 'square', 0.13); },
-  go()            { this.blip(880, 0.3, 'square', 0.17, 1320); },
+  /* GO is the child's hand shoving the car, so the child is audible on it.
+     Once a race, and never again — see vroom(). */
+  go() {
+    this.blip(880, 0.3, 'square', 0.17, 1320);
+    this.vroom();
+  },
   finish(won) {
     const s = this;
     const notes = won ? [660, 880, 1100, 1320] : [660, 560, 500];
@@ -516,7 +932,7 @@ BR.Audio = {
 
     for (let i = 0; i < this.channels.length; i++) {
       const ch = this.channels[i];
-      if (i < humans.length) this.updateChannel(ch, humans[i], game, racing, engOn);
+      if (i < humans.length) this.updateChannel(ch, humans[i], game, racing, engOn, dt);
       else this.silence(ch);
     }
 
@@ -529,31 +945,86 @@ BR.Audio = {
     const now = this.ctx.currentTime;
     ch.engine.gain.gain.setTargetAtTime(0, now, 0.08);
     ch.rattle.gain.gain.setTargetAtTime(0, now, 0.08);
+    ch.wind.gain.gain.setTargetAtTime(0, now, 0.08);
+    ch.whine.gain.gain.setTargetAtTime(0, now, 0.08);
     ch.drift.gain.gain.setTargetAtTime(0, now, 0.08);
     ch.boostAir.gain.gain.setTargetAtTime(0, now, 0.08);
     ch.pack.gain.gain.setTargetAtTime(0, now, 0.08);
-    // The ratchet is gated by two gains summed into one param, so BOTH have to
-    // go to zero — leaving the LFO amplitude up would keep it ticking at half
-    // level on a silenced channel.
+    /* The ratchet and the roar are both gated by two gains summed into ONE
+       param, so BOTH halves have to go to zero. Leaving an LFO amplitude up on
+       a silenced channel keeps it modulating around nothing, which is audible
+       as the modulation itself — the ratchet shipped that bug once. */
     ch.ratchet.gain.gain.setTargetAtTime(0, now, 0.08);
     ch.ratchet.amp.gain.setTargetAtTime(0, now, 0.08);
+    ch.roar.gain.gain.setTargetAtTime(0, now, 0.08);
+    ch.roar.amp.gain.setTargetAtTime(0, now, 0.08);
+    // A channel handed to a different player later must not still be under
+    // somebody else's bed.
+    ch.muffle.frequency.setTargetAtTime(this.MUFFLE_OPEN, now, 0.08);
+    ch.out.gain.setTargetAtTime(1, now, 0.08);
+    ch.kick = 0; ch.rel = 0;
     ch.prev = null;
   },
 
-  updateChannel(ch, racer, game, racing, engOn) {
+  /* ── THE SOUND OF SPEED ───────────────────────────────────────────────────
+     The complaint this exists to answer is "it doesn't feel fast enough", and
+     the number is not allowed to change, so the feeling has to come from
+     somewhere else. Audio's share of it is here, and it is four ideas:
+
+     1. SPEED IS A CURVE, NOT A NUMBER. Everything below used to be linear in
+        `ratio`, and linear is exactly what does not read as fast: the top
+        third of the range sounded like the middle third with a little more of
+        it. Now the wind goes with the CUBE of speed, the tyre roar with the
+        SQUARE, and the engine's gain and cutoff with powers above one. Below
+        half speed the mix is almost all engine; the top quarter is where four
+        voices arrive at once. Measured, a crawl to flat out is a 23.5 dB
+        swing across five voices where it used to be 11.7 dB across two.
+
+     2. THE TOP OF THE RANGE IS A PLACE. `whine` does not exist below 82% of
+        the car's maximum and swells in over the last 18%, so reaching top
+        speed is a NEW SOUND rather than the end of a ramp. It also means the
+        surfaces that cap your speed — loose sand at 0.68, a sock at 0.70 —
+        can never produce it, which is the honest version of the cue.
+
+     3. A BOOST PUNCHES AND THEN SETTLES. `kick` spikes to 1 on the boost edge
+        and decays over about a third of a second, lifting the engine pitch,
+        its cutoff, its level, the wind and the boost air together and letting
+        all five fall back to a sustained value that is still clearly boosted.
+        `rel` does the mirror image when it ends, so the boost has a shape at
+        both ends instead of a step at one. Neither can live in a one-shot:
+        the thing that has to settle is the CONTINUOUS voice.
+
+     4. THE ENGINE BENDS UNDER DRIFT. Slipping wheels outrun the road, so the
+        note goes up while the car is going sideways and falls as it hooks up.
+        Scaled by speed, so a stationary spin cannot wail. This does not break
+        13_Audio.md's rule that engine pitch tracks speed: at any fixed slip
+        the curve is still monotone in speed, and the bend is itself
+        proportional to speed, so it can never outrun the thing it decorates.
+
+     Nothing here is a stat. No lap time can tell the difference, and the whole
+     module still runs once per RENDERED frame. */
+  updateChannel(ch, racer, game, racing, engOn, dt) {
     const v = racer.vehicle;
     const P = BR.PHYSICS;
     const now = this.ctx.currentTime;
     const dest = ch.out;
+    // The render delta, clamped. `kick` and `rel` decay against real time and
+    // a backgrounded tab must not skip them in one frame or restore them.
+    const d = Math.min(0.1, Math.max(0.001, dt || 0.016));
 
     const speed = Math.hypot(v.vel.x, v.vel.y);
     const ratio = Math.min(1, speed / v.spec.maxSpeed);
+    const r2 = ratio * ratio, r3 = r2 * ratio;
 
     /* What this car is made of. Cheap to look up every frame, and only
        re-applied when it actually changes — which is at most once a race,
        when a channel starts voicing a different car. */
     const m = this.materialFor(v.spec);
     if (ch.material !== m.id) this.applyMaterial(ch, m);
+
+    // ...and what it is driving ON, which until now was one boolean.
+    const arena = game && game.arena;
+    const S = this.surfaceFor(ch, arena, v);
 
     if (!ch.prev) {
       ch.prev = { boost: v.boostMeter, boosting: v.boosting, grounded: v.grounded,
@@ -565,15 +1036,49 @@ BR.Audio = {
     }
     const p = ch.prev;
 
+    /* THE BOOST EDGES ARE READ HERE, before anything continuous is written,
+       so the punch lands on the frame the boost started rather than the one
+       after it. The one-shots that go with them still fire further down, with
+       the rest of the edge-detected sounds. */
+    const boostStart = v.boosting && !p.boosting;
+    const boostEnd = !v.boosting && p.boosting;
+    if (boostStart) ch.kick = 1;
+    if (boostEnd) ch.rel = 1;
+    ch.kick = Math.max(0, ch.kick - d * 3.6);   // ~0.28s of punch
+    ch.rel  = Math.max(0, ch.rel  - d * 4.6);   // ~0.22s of sigh
+
+    // How hard this car is sliding, 0..1. Used twice: the drift voice, and the
+    // engine note bending under it.
+    const slip = Math.min(1, v.slip / 0.9);
+
     // ── engine ────────────────────────────────────────────────────────────
-    // The speed curve is unchanged; the material shifts the whole of it, so a
-    // heavier car sits lower everywhere without "faster is higher" breaking.
-    const base = (62 + ratio * 210 + (v.boosting ? 40 : 0)) * m.pitch;
-    ch.engine.o1.frequency.setTargetAtTime(base, now, 0.05);
-    ch.engine.o2.frequency.setTargetAtTime(base * m.detune, now, 0.05);
-    ch.engine.filt.frequency.setTargetAtTime(m.cutBase + ratio * m.cutSpan, now, 0.08);
+    /* Idle and flat-out pitch are unchanged at 62 and 272; the material still
+       shifts the whole curve by a constant, so "faster is higher" and every
+       number in the material table survive. What is new sits on top: the drift
+       bend and the boost's punch, both of which return to zero.
+
+       The response is faster than it was (0.035 against 0.05). An engine that
+       takes a fifth of a second to acknowledge the throttle reads as a
+       recording of a car rather than as the car. */
+    const bend = slip * 34 * ratio;               // wheels outrunning the road
+    const punch = ch.kick * 96 - ch.rel * 30;
+    const base = Math.max(20,
+      (62 + ratio * 210 + bend + (v.boosting ? 46 : 0) + punch) * m.pitch);
+    ch.engine.o1.frequency.setTargetAtTime(base, now, 0.035);
+    ch.engine.o2.frequency.setTargetAtTime(base * m.detune, now, 0.035);
+    /* Cutoff opens LATE and fast — the exponent is the whole change, and it
+       leaves both ends of every material's range exactly where the table says
+       they are. A dull crawl is what makes an open throttle bright. */
+    ch.engine.filt.frequency.setTargetAtTime(
+      Math.max(80, m.cutBase + m.cutSpan * Math.pow(ratio, 1.3)
+                   + ch.kick * 900 - ch.rel * 240), now, 0.05);
+    /* 0.016 → 0.102 rather than 0.035 → 0.085: a 16 dB engine swing where it
+       used to be under 8. Most of the "not fast enough" is here — going slowly
+       was never QUIET, so going quickly could not be loud. A toy car sitting
+       on the grid should be very nearly silent. */
     ch.engine.gain.gain.setTargetAtTime(
-      engOn ? (0.035 + ratio * 0.05) * m.engGain : 0, now, 0.1);
+      engOn ? (0.016 + 0.086 * Math.pow(ratio, 1.35)) * m.engGain
+              * (1 + 0.35 * ch.kick) : 0, now, 0.09);
 
     /* The ratchet. Silent on everything that is not a wind-up, so this costs
        three parameter writes and no voices on the rest of the roster. Rate
@@ -585,28 +1090,79 @@ BR.Audio = {
     ch.ratchet.gain.gain.setTargetAtTime(rLevel * 0.5, now, 0.07);
     ch.ratchet.amp.gain.setTargetAtTime(rLevel * 0.5, now, 0.07);
 
-    // ── surface ───────────────────────────────────────────────────────────
-    // The tyre note must change the instant the surface does, so the player
-    // learns the map by feel (13_Audio.md). Material scales BOTH ends of the
-    // rug/road split by the same factor, so the size of the change — the part
-    // carrying the information — is identical in every car.
-    const rough = v.surface === 'rugGrass' ? 1 : 0.32;
-    ch.rattle.filt.frequency.setTargetAtTime(
-      (v.surface === 'rugGrass' ? 420 : 1100) * m.rattleHz, now, 0.05);
+    // ── the floor ─────────────────────────────────────────────────────────
+    /* The tyre note must change the instant the surface does, so the player
+       learns the map by feel (13_Audio.md) — hence the 0.04 time constants,
+       which is a snap rather than a fade. Material still scales BOTH ends of
+       every split by the same factor, so the SIZE of a surface change — the
+       part carrying the information — is identical in every car.
+
+       Two voices now, and the second one is most of the sense of speed: the
+       roar rises with the square of speed while the band rises with a power of
+       1.6, so at a crawl there is almost no floor at all and flat out it is
+       the loudest thing after the engine. */
+    const onGround = v.grounded && engOn;
+    const roarLevel = onGround ? 0.070 * r2 * S.roar : 0;
+    ch.roar.filt.frequency.setTargetAtTime(S.roarHz, now, 0.04);
+    ch.roar.gain.gain.setTargetAtTime(roarLevel, now, 0.05);
+    // The wheel going round: 3.5 Hz crawling, ~30 Hz flat out. At the top that
+    // is fast enough to read as grain in the timbre rather than as pulsing,
+    // which is exactly what a surface at speed does.
+    ch.roar.lfo.frequency.setTargetAtTime(3.5 + ratio * 26, now, 0.08);
+    ch.roar.amp.gain.setTargetAtTime(roarLevel * S.flutter, now, 0.06);
+
+    ch.rattle.filt.frequency.setTargetAtTime(S.band * m.rattleHz, now, 0.04);
     ch.rattle.gain.gain.setTargetAtTime(
-      v.grounded && engOn ? ratio * 0.05 * rough * m.rattleGain : 0, now, 0.06);
+      onGround ? 0.046 * Math.pow(ratio, 1.6) * S.bandGain * m.rattleGain : 0,
+      now, 0.05);
+
+    // ── wind ──────────────────────────────────────────────────────────────
+    /* Cubic in speed, and MORE OF IT IN THE AIR — there is nothing between a
+       jumping car and the room, so a ramp should hiss and a landing should
+       shut it off. The band centre climbs with the square, so the wind gets
+       both louder and brighter rather than just louder. */
+    const air = engOn
+      ? (0.052 * r3 + (v.grounded ? 0 : 0.022 * ratio)) * (1 + 0.6 * ch.kick)
+      : 0;
+    ch.wind.gain.gain.setTargetAtTime(air, now, 0.07);
+    ch.wind.filt.frequency.setTargetAtTime(
+      400 + 2000 * r2 + ch.kick * 700, now, 0.08);
+
+    // ── the top of the range ──────────────────────────────────────────────
+    /* Nothing until 82%, then it swells in as the square of what is left. The
+       one voice in the game that says "this is as fast as this car goes", and
+       the only reason the last tenth of the speedometer sounds like anything.
+
+       Untouched by material, for the same reason the clean-landing chime is:
+       every car's top end must feel like a top end, and a car whose ceiling
+       was duller than everyone else's would be a car penalised for what it is
+       made of. */
+    const top = Math.max(0, (ratio - 0.82) / 0.18);
+    ch.whine.filt.frequency.setTargetAtTime(2200 + 1200 * top, now, 0.08);
+    ch.whine.gain.gain.setTargetAtTime(engOn ? 0.030 * top * top : 0, now, 0.09);
 
     // ── drift: pitch tracks slip, so how hard you slide is audible ────────
-    const slip = Math.min(1, v.slip / 0.9);
-    ch.drift.filt.frequency.setTargetAtTime(1200 + slip * 1400, now, 0.04);
+    /* The SLIP sets the pitch and the FLOOR sets the register. 13_Audio.md
+       keeps drift out of the material table because "that is tyres against the
+       floor: it belongs to the surface, not to the shell" — which is an
+       argument that it belongs to the surface, so a slide on varnished boards
+       squeals at 1.25x and the same slide into a sock is a dull 0.55x scrub.
+       Still identical in all four materials. */
+    ch.drift.filt.frequency.setTargetAtTime(
+      (1200 + slip * 1400) * S.slide, now, 0.04);
     ch.drift.gain.gain.setTargetAtTime(
       v.grounded && racing ? slip * ratio * 0.11 : 0, now, 0.05);
 
     // ── boost ─────────────────────────────────────────────────────────────
-    ch.boostAir.gain.gain.setTargetAtTime(v.boosting ? 0.07 : 0, now, 0.06);
-    ch.boostAir.filt.frequency.setTargetAtTime(v.boosting ? 1500 : 700, now, 0.15);
+    // The air layer takes the kick too, so the first third of a second of a
+    // boost is nearly twice the level it settles to. That contrast IS the
+    // shove; a boost that arrives at its sustained level has no attack.
+    ch.boostAir.gain.gain.setTargetAtTime(
+      (v.boosting ? 0.062 : 0) + ch.kick * 0.055, now, 0.05);
+    ch.boostAir.filt.frequency.setTargetAtTime(
+      (v.boosting ? 1500 : 700) + ch.kick * 900, now, 0.09);
 
-    if (v.boosting && !p.boosting) this.boostFire(dest);
+    if (boostStart) this.boostFire(dest);
     if (v.boostMeter >= 1 && p.boost < 1) this.boostFull(dest);
     else if (v.boostMeter >= P.boostMinToFire && p.boost < P.boostMinToFire) {
       this.boostReady(dest);
@@ -656,6 +1212,21 @@ BR.Audio = {
     ch.pack.o1.frequency.setTargetAtTime(58 + nr * 180, now, 0.08);
     ch.pack.o2.frequency.setTargetAtTime(58 * 1.02 + nr * 180, now, 0.08);
     ch.pack.gain.gain.setTargetAtTime(engOn ? near * near * 0.03 : 0, now, 0.12);
+
+    /* ── under the bed ────────────────────────────────────────────────────
+       One lowpass across this driver's whole channel — their car, their
+       tyres, their collisions and the rivals near THEM. See MUFFLE_OPEN.
+
+       The small gain lift is not compensation for the lost top end, it is the
+       effect: inside a box everything is CLOSER as well as duller, and a
+       muffle that only takes away reads as the volume going down.
+
+       0.09 is about a quarter of a second, which at 350 units/second is three
+       car lengths. Fast enough to be an event, slow enough not to click. */
+    const boxed = this.underBed(arena, v);
+    ch.muffle.frequency.setTargetAtTime(
+      boxed ? this.MUFFLE_UNDER : this.MUFFLE_OPEN, now, 0.09);
+    ch.out.gain.setTargetAtTime(boxed ? 1.14 : 1, now, 0.09);
 
     p.boost = v.boostMeter; p.boosting = v.boosting;
     p.grounded = v.grounded; p.impacts = impacts;
@@ -746,6 +1317,24 @@ BR.Audio = {
       leadVol: 0.055, bassVol: 0.11, shaker: 0.045, shakerHz: 6500,
       step: 5,
     },
+    kitchen: {
+      /* THE KITCHEN HAD NO BED. Both kitchen tracks raced to the bedroom
+         floor's tune, under a bedroom clock, which is the audio version of the
+         bug the art pass fixed when it found carpet pile printed on the
+         kitchen tiles. A world is a place or it is not.
+
+         Glazed tile and morning light. Lydian is major with the fourth raised
+         — one interval, and it is the brightest mode in common use, which is
+         what a kitchen at breakfast is. Highest register in the game because
+         the room is hard and everything in it rings; a triangle lead over a
+         square pulse is the only timbre pair not already taken. */
+      name: 'breakfast on the table',
+      beat: 0.206, root: 659, bass: 165,
+      scale: [0, 2, 4, 6, 7, 9, 11],
+      lead: 'triangle', pulse: 'square',
+      leadVol: 0.065, bassVol: 0.12, shaker: 0.05, shakerHz: 4200,
+      step: 4,
+    },
   },
 
   bedFor(world) { return this.MUSIC[world] || this.MUSIC['town-rug']; },
@@ -812,6 +1401,30 @@ BR.Audio = {
         // Something plastic tapping the dresser.
         { w: 3, play: function (A, d) {
             A.blip(1500, 0.02, 'square', 0.024, 1200, A.sfxBus, d);
+          } },
+      ],
+    },
+    /* The kitchen had no room of its own either, so it borrowed the bedroom's
+       — a clock ticking in the dark over a race across a breakfast table. The
+       room is part of the world; there are four worlds. */
+    kitchen: {
+      every: [3.0, 6.0],
+      voices: [
+        // The fridge, cycling in the corner. Low, flat, and the only thing in
+        // here that is always about to stop.
+        { w: 4, play: function (A, d) { A.gust(d, 2.6, 0.028, 180); } },
+        // A tap not quite off, into a steel sink.
+        { w: 3, play: function (A, d) {
+            A.blip(2600, 0.014, 'sine', 0.026, 1500, A.sfxBus, d);
+          } },
+        // China settling on the drainer: two hard bright taps, close together.
+        { w: 3, play: function (A, d) {
+            A.blip(1900, 0.03, 'triangle', 0.026, 2300, A.sfxBus, d);
+            A.blip(2300, 0.02, 'triangle', 0.018, 2700, A.sfxBus, d + 0.06);
+          } },
+        // A chair foot dragged on tile. The one soft thing in a hard room.
+        { w: 2, play: function (A, d) {
+            A.thud(0.040, 210, 0.30, 1.6, A.sfxBus, d);
           } },
       ],
     },
