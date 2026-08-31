@@ -261,7 +261,7 @@ BR.EVENTS.push(
     opponents: 0,
     difficulty: 'normal',
     times: { gold: 87, silver: 95, bronze: 106 },   // clean reference 91.0
-    platinumTime: 81,
+    platinumTime: 79,
     unlockStars: 23,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
@@ -440,6 +440,115 @@ BR.EVENTS.push(
     times: { gold: 91, silver: 99, bronze: 111 },
     platinumTime: 85,
     unlockStars: 47,
+    objectives: [
+      { id: 'finish',  label: 'Set a time' },
+      { id: 'ttGold',  label: 'Beat the gold time' },
+      { id: 'ttPlat',  label: 'Beat the platinum time' },
+    ],
+  }
+);
+
+/* ── The Sofa ──────────────────────────────────────────────────────────────
+   The sixth world, and the one that turns the surface model upside down. The
+   road is the knitted throw dragged over the cushions — `blanket`, the
+   grippiest and slowest ground in the game — so for the first time the road is
+   NOT the quick way round. The quick way is the hard flat things somebody left
+   on the seat, and every one of them is worth less grip than the road it sits
+   on.
+
+   Gated above the kitchen table, which is the right way round: the table
+   teaches you to be smooth on ground with no grip, and this world asks you to
+   go looking for that ground on purpose.
+
+   20_World_Sofa.md carries the measurements. */
+BR.EVENTS.push(
+  {
+    id: 'sf-01',
+    name: 'Three Seater',
+    blurb: 'Onto the sofa. The road is the slow bit — the fast bits are lying on it.',
+    trackId: 'sofa-three-seater',
+    mode: 'standard-race',
+    laps: 3,
+    opponents: 6,
+    difficulty: 'normal',
+    /* 0.93 x 84.80. Technician on `normal` from a mid-grid start, five seeds,
+       median, straight out of tools/calibrate.sh — the same stand-in the
+       committed baseline is written by, rather than a stand-in nobody wrote
+       down. Laps 30.8 / 27.2 / 26.7 over 7,360 units.
+
+       The second-quickest race on the board, on the slowest surface in the
+       game. Both facts are real and neither is a mistake: a lap here runs at about 250
+       units/sec against the kitchen table's 322, and the sofa's tracks are a
+       third shorter than the table's because a sofa is smaller than a table.
+       An 11,000-unit sofa would be a forty-five-second lap. */
+    platinumTime: 79,
+    unlockStars: 50,
+    objectives: [
+      { id: 'finish',  label: 'Finish the race' },
+      { id: 'win',     label: 'Win the race' },
+      { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+    ],
+  },
+  {
+    id: 'tt-three-seater',
+    name: 'Three Seater Time Trial',
+    blurb: 'Nobody in the way. Every hard patch on the seat is worth a tenth.',
+    trackId: 'sofa-three-seater',
+    mode: 'time-trial',
+    laps: 3,
+    opponents: 0,
+    difficulty: 'normal',
+    /* Five seeds, median 83.43, from calibrate.sh — 1.4s quicker than the race
+       on the same track, which is what a time trial should be: no traffic, and
+       the technician free to take the two-lane front straight the way it wants
+       to be taken. */
+    times: { gold: 79, silver: 87, bronze: 97 },
+    platinumTime: 74,
+    unlockStars: 53,
+    objectives: [
+      { id: 'finish',  label: 'Set a time' },
+      { id: 'ttGold',  label: 'Beat the gold time' },
+      { id: 'ttPlat',  label: 'Beat the platinum time' },
+    ],
+  },
+  {
+    id: 'sf-02',
+    name: 'Down the Back',
+    blurb: 'Narrower, and four hard things end to end pointed at the tightest corner.',
+    trackId: 'sofa-down-the-back',
+    mode: 'standard-race',
+    laps: 3,
+    opponents: 7,
+    difficulty: 'hard',
+    /* 0.93 x 83.48, five seeds, median. Laps 30.4 / 26.9 / 26.1 over 7,200
+       units — 1.3 seconds quicker than Three Seater on a track 160 units
+       shorter, a hairpin harder and 50 units narrower. The chain is what pays
+       for that: eight hundred units of hard flat ground end to end is the one
+       place on the sofa where a car gets to run. */
+    platinumTime: 78,
+    unlockStars: 56,
+    objectives: [
+      { id: 'win',      label: 'Win the race' },
+      { id: 'spotless', label: 'Win without a single collision' },
+      { id: 'clean',    label: 'Finish with fewer than 4 collisions' },
+    ],
+  },
+  {
+    id: 'tt-down-the-back',
+    name: 'Down the Back Time Trial',
+    blurb: 'Three laps to find out how much of the chain you can actually hold.',
+    trackId: 'sofa-down-the-back',
+    mode: 'time-trial',
+    laps: 3,
+    opponents: 0,
+    difficulty: 'normal',
+    /* Five seeds, median 84.45 — 1.0s SLOWER than the race on the same track,
+       and the only pairing in the world that goes that way round. The chain is
+       why: alone, the technician commits to all four links and drops one
+       somewhere; in traffic it takes the tidy line and never tries. */
+    times: { gold: 83, silver: 91, bronze: 102 },   // clean reference 87.4
+    platinumTime: 77,
+    unlockStars: 59,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
       { id: 'ttGold',  label: 'Beat the gold time' },

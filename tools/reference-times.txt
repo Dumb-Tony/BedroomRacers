@@ -9,7 +9,7 @@ tt-sandbox 93.93 spread 0.67 plat 84
 sb-02 79.38 spread 2.52 plat 76
 sb-03 85.87 spread 1.13 plat 83
 sb-04 88.25 spread 0.98 plat 84
-tt-tide-pool 91.88 spread 1.20 plat 81
+tt-tide-pool 91.88 spread 1.20 plat 79
 st-01 98.05 spread 0.78 plat 93
 tt-dresser 97.82 spread 0.28 plat 88
 st-02 99.45 spread 0.38 plat 95
@@ -18,5 +18,9 @@ kt-01 103.08 spread 0.37 plat 96
 tt-breakfast 104.42 spread 0.17 plat 92
 kt-02 95.60 spread 4.33 plat 89
 tt-tables-edge 95.53 spread 0.53 plat 85
+sf-01 84.75 spread 0.85 plat 79
+tt-three-seater 83.42 spread 0.78 plat 74
+sf-02 83.62 spread 0.63 plat 78
+tt-down-the-back 87.42 spread 7.52 plat 77
 ir-01 92.73 spread 4.75 plat 89
 ir-02 89.58 spread 0.87 plat 87

@@ -44,6 +44,8 @@ FILES=(
   "src/data/tracks/stunt-shelf-run.js"
   "src/data/tracks/kitchen-breakfast-run.js"
   "src/data/tracks/kitchen-tables-edge.js"
+  "src/data/tracks/sofa-three-seater.js"
+  "src/data/tracks/sofa-down-the-back.js"
   "src/entities/Vehicle.js"
   "src/systems/VehicleController.js"
   "src/systems/Collision.js"
