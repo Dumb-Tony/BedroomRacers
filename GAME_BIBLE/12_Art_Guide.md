@@ -748,3 +748,146 @@ old two-path `drawGround` back in on a live frame, the rug's ground quad costs
 **+24** and **sand and the stunt floor are 6 operations *cheaper* than before**:
 the quad's path is now built once and filled per layer rather than rebuilt per
 texture, which was already paying for two paths to draw one.
+
+### Cars are moulded, not coloured (Phase 12)
+
+The same note as Phase 9, one level down: *"real materials, visible — you should
+be able to tell what each thing is made of."* The floor, the road, the kerbs,
+the walls and the props had all been given a material by then. **The cars had
+not.** A car was a chamfered footprint, a cabin, a windscreen and an outline —
+nine of them differing only in hue and dimensions, every face a flat fill, and
+every one lit identically no matter which way it was pointing.
+
+There is a light in the room now (`Projection.light`). This is what it is for.
+
+#### First: what this camera actually shows you of a car
+
+The guide says in one place that the top face is what you see, and in another
+that a prop's sides are 1.62x the area of its top. For a car both are half
+right, and the exact answer decides everything else. Red Racer, 28 x 16 x 11:
+
+| face | screen area | seen? |
+| --- | --- | --- |
+| top of the shell | 28 x 16 x 0.30 = **134** | **always, all of it** |
+| one flank | 28 x 5.1 x 0.85 = 120 | only the near one |
+| the nose | 16 x 5.1 x 0.85 = 69 | **never** |
+
+**A side face is an extrusion downward from its own footprint edge**, so on the
+far side of the car it hangs into the middle of the top polygon — which is
+drawn immediately afterwards and covers it. Traced on Red Racer: the nose quad
+occupies screen rows -10.8 to -6.5, and the bonnet drawn over it covers -10.8
+to -2.4. Only the near edges hang out past the silhouette.
+
+That has two consequences, and the first is a bug that had been shipping for
+three phases.
+
+#### The bumper was painted on the bonnet
+
+**It was drawn on the nose elevation, and drawn last.** So it was not a bumper
+at all: it was a pale slab two thirds of the width of the car, lying across the
+middle of the paint like a badly-placed racing stripe. It is plainly there in
+the before shot, and it is the brightest thing on every car in the frame.
+
+Nothing had ever looked. It is exactly the rule the windscreen learned in Phase
+9 — a vertical pane at this camera is worth about two pixels — and the lesson
+had been applied to the glass and to nothing else.
+
+The bumper is now a bar across the front of the TOP face. So are the lamps, and
+they had to be folded **into** it: bumper and lamps were separate features 0.10
+and 0.12 of a car-length apart, which the depth squash turns into 0.4 of a
+pixel at racing zoom, so three pale marks landed on top of one another and the
+nose read as a smear. There is room for exactly one feature across the front of
+a car at this size. It is a bar with two lights in it.
+
+#### What makes a shell read as moulded
+
+Five things, in the order they earn their place:
+
+1. **Every flank lit separately.** Each footprint edge carries the outward
+   normal it has in the car's own frame, cached on the shape, so the world
+   angle is that plus the heading and `faceLight()` does the rest. This is the
+   difference between a coloured region with an outline and a solid object.
+2. **Shoulders.** A moulded shell is crowned — it curves over — so the flank
+   facing the light is bright and the other is not, and the change happens at
+   the shoulder rather than at the outline. Two inset bands along the long
+   edges of the top face, which is where most of the car is.
+3. **A catch on the moulded edge.** The parting line of the mould runs round
+   the widest point of the shell, and that line is the silhouette. It is
+   stroked twice: dark all the way round for separation, then white over only
+   the edges facing the light. One extra path, and it is the cheapest thing
+   here that says "shiny".
+4. **A sheen that moves.** The gloss was one pale streak nailed to the car's
+   left at a fixed 0.18 — a decal, which stayed put through every corner while
+   the shadow under the car swung right round. It now sits on whichever flank
+   faces the light and walks across as the car turns.
+5. **The mould line**, down the centre of the shell and the roof, as two
+   hairlines a hair apart: a single dark line is a scratch, a dark line with a
+   pale one beside it is a raised ridge. Which side gets which is the light's
+   decision, so the ridge catches on one side going up the straight and on the
+   other coming back.
+
+Plus **wear** — three rubbed patches on the corners of the bonnet and boot,
+seeded off the vehicle id so a given car always wears the same way and no two
+wear alike. *"A brand-new toy car is boring; a loved one has history."*
+
+#### Two things that had to be got wrong first
+
+- **A lengthwise streak is not a streak.** The first sheen lit the roof and the
+  bonnet as separate panels and came out as a pale *blob* on the paint: the
+  length axis is squashed to 30%, so a 7-unit panel is 2 units tall on screen
+  and a highlight inside it is square. Anything meant to read as a line along
+  the car has to run the **whole length** of it — nose to tail, with the cabin
+  interrupting it — or the squash eats it. This is the mirror of the rule for
+  ground markings, and it catches you the opposite way round.
+- **The sheen and the mould line had to be split by panel.** Drawn in one pass
+  at the end, the shell's own centre line was ruled straight across the cabin
+  standing three units above it, and the whole visible field behind the cabin
+  was left bare — one line in the wrong place and a conspicuous gap where it
+  belonged. They are now drawn with the panel they belong to, so the cabin can
+  occlude them.
+
+#### Material is now visible, not just audible
+
+`09_Vehicles.md` has carried an open item since Phase 10: the `material` field
+existed, `13_Audio.md` read it, and the renderer ignored it.
+`Renderer.MATERIAL_LOOK` is its visual twin — flank swing, sheen, edge catch,
+mould line, and what colour shows under the chipped paint. Die-cast swings
+widest and keeps the hardest edge; wood does not shine **at all** and has no
+mould line, so the Heirloom gets grain instead; lithographed tin is the
+shiniest thing on the grid. The table and the reasoning are in that document.
+
+Rendered nine cars at six headings each, twice — once with the camera following
+the car, which is the player's own view and the case where the silhouette never
+rotates and **only the light moves**, and once with the camera fixed, which is
+a rival ahead. The wooden car reads flat and matte against eight that all walk
+their highlight round as they turn.
+
+#### Cost, and the culling that paid for it
+
+Measured on one frame of Rug Route, ten seconds in, four cars on screen:
+
+| | per car | whole frame |
+| --- | --- | --- |
+| before | 181.0 | 4,296 |
+| all of the above | 246.3 | 4,557 |
+| **shipped, with back-face culling** | **200.3** | **4,373** |
+
+Lighting the faces individually made it worth knowing what they cost, and the
+trace answered it: **a car emitted eight side quads a frame and at least four
+of them were painted and then covered.** The projection is a rotation and a
+positive squash, so it preserves orientation — a footprint wound
+counter-clockwise stays counter-clockwise on screen, nearer is further down the
+screen, and a face is visible exactly when its edge runs leftward in screen x.
+One subtraction per edge, and the same test culls the cabin.
+
+**Only when the car is upright.** On a loop or a corkscrew `up` swings the body
+through the vertical, the extrusion is no longer downward, and a far face is
+genuinely visible; those frames draw all eight exactly as before.
+
+Net **+19.3 operations per car**, +77 on a four-car frame — against the +65 the
+material work costs on its own. Tints are quantised to 1/24 and cached per base
+colour per vehicle, so `shade()` is not parsing a hex string a hundred times a
+frame for fifteen distinct values.
+
+All 22 events measured **0.00** against the committed baseline. This is a
+render-only pass and nothing in it can be seen by a lap time.
