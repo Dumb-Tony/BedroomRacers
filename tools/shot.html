@@ -4,31 +4,34 @@
      =============================================================================
      Appended to a built dist/play.html by tools/shot.sh.
 
-     ── it drives the game's REAL loop, on a fake clock ───────────────────────
-     The obvious harness starts an event, steps the simulation by hand and calls
-     Renderer.render(). It produces an EMPTY FRAME, and three separate theories
-     about why were all wrong before the actual cause turned up:
+     ── everything here is synchronous, on purpose ───────────────────────────
+     No requestAnimationFrame, no waiting, no virtual-time budget to lose a race
+     against. The page steps the simulation and renders, in a plain loop, and
+     hands the canvas out as a data URL. Same input, same pixels, every time.
 
-       - render(game, alpha, dt) takes THREE arguments. render(game, 0) reads
-         perfectly naturally as "no time step" and actually passes dt =
-         undefined, which turns the camera feel maths to NaN.
-       - and even called correctly it still draws nothing, because the view
-         CAMERAS are updated inside the frame path. A render on its own draws
-         a world through a camera that was never pointed anywhere.
+     An earlier version drove the game's own rAF loop and was FLAKY: asking for
+     one second of game time failed, two seconds worked, four seconds failed
+     again, on an idle machine. Chrome's virtual clock is spent by a busy page
+     in ways that are not reproducible, so anything paced by it is a lottery —
+     and a harness that fails at random is worse than no harness at all
+     (17_Claude_Rules.md).
 
-     Both were chased while an innocent art change sat under suspicion. What
-     settled it was rendering the same scene from the build BEFORE that change
-     and getting an identical empty frame.
+     ── dt must be REAL ──────────────────────────────────────────────────────
+     render(game, alpha, dt) takes THREE arguments, and both of the obvious
+     mistakes produce a frame with the HUD and the speed streaks floating over
+     an empty floor — which looks exactly like the renderer having broken, and
+     cost an hour of suspecting an innocent art change before the argument list
+     was simply read:
 
-     So the harness does not bypass the loop. It wraps Game.frame, feeds it a
-     SYNTHETIC timestamp advancing exactly 1/60s per call, counts frames, and
-     stops re-arming when it has enough. Everything the real game does per
-     frame — camera follow, cull bounds, interpolation — happens exactly as it
-     does in play.
+       - render(game, 0) reads naturally as "no time step" and actually passes
+         dt = undefined. The camera feel maths goes NaN and the whole world
+         projects to nowhere.
+       - render(game, 1, 0) passes a real zero, which is worse because it looks
+         careful. The camera EASES toward the car every frame; with dt = 0 it
+         never moves, so the world is drawn through a camera still sitting where
+         it was initialised.
 
-     The fake clock is not fussiness. performance.now() does not advance under
-     headless virtual time, and pacing by wall clock gave the countdown on one
-     run and three minutes of racing on the next, from the same budget.
+     So the loop below renders with the same 1/60 it steps with.
      ========================================================================= -->
 <script>
 (function () {
@@ -46,11 +49,16 @@
     try {
       var G = BR.Game;
 
+      /* Stop the game's own loop. It re-arms itself unconditionally and would
+         keep stepping and redrawing underneath this one, with a dt taken from
+         performance.now() — which is frozen under headless virtual time. */
+      G.frame = function () {};
+
       /* SEEDED, or the same command gives a different race every time. The AI
-         wanders and errs on purpose (04_AI.md), so two runs of this drifted far
-         enough apart to produce visibly different frames — which makes a
-         before/after pair worthless, since you cannot tell your change from the
-         race having gone differently. Same generator as tools/pays.sh. */
+         wanders and errs on purpose (04_AI.md), and two runs drifted far enough
+         apart to produce visibly different frames — which makes a before/after
+         pair worthless, since you cannot tell your change from the race having
+         gone differently. Same generator as tools/pays.sh. */
       var seed = window.__SHOT_SEED || 1;
       Math.random = function () {
         seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
@@ -73,52 +81,31 @@
       }
       var v = me.vehicle;
 
-      var target = Math.round(secs * 60);
-      var orig = G.frame, n = 0, fake = 0, done = false;
+      var DT = 1 / 60;
+      var n = 0, target = Math.round(secs * 60);
+      for (; n < target; n++) { G.step(DT); BR.Renderer.render(G, 1, DT); }
 
-      G.frame = function (t) {
-        /* FROZEN BY STOPPING THE CLOCK, not by stopping the loop.
-
-           Ceasing to re-arm gives a BLANK capture: with no further frames the
-           compositor hands Chrome a surface from before the canvas was ever
-           painted, and the shot comes out empty even though six hundred frames
-           rendered perfectly first. Every shot that ever worked had the loop
-           still running when the capture landed.
-
-           So the loop keeps going and the CLOCK stops. `fake` stops advancing,
-           every subsequent frame gets dt = 0, the simulation and the camera sit
-           exactly where they were, and the page carries on producing identical
-           frames until Chrome takes one. */
-        if (!done) fake += 1000 / 60;     // exactly one tick, whatever the clock says
-        orig.call(this, fake);            // once frozen, dt is 0 and nothing moves
-        if (done) return;
-        n++;
-
-        /* Hold for a jump. Height, shadows and landings cannot be judged from a
-           car sitting on the floor, and the airborne moments are about two
-           seconds of a ninety-second lap — far too easy to miss by guessing a
-           timestamp. v.z is ALREADY height above the deck the car is on; v.roadZ
-           is the deck. Subtracting one from the other asks for height above
-           height, which never goes positive on an elevated track, and the hold
-           silently ran the whole race and captured the results card. */
-        if (n >= target && (!wantAir || (v.z > 18 && !v.grounded) || me.finished)) {
-          done = true;
-          /* TAKE THE PIXELS FROM THE CANVAS, not from Chrome's compositor.
-             --screenshot fires when the virtual time budget runs out, which is
-             a race the harness kept losing: the same command produced a good
-             frame and an empty one on alternate runs, and freezing the loop
-             made it lose every time because a page that has stopped drawing
-             hands over a surface from before it ever painted. toDataURL reads
-             the canvas backing store directly, at the exact frame chosen, and
-             cannot be early. */
-          var cv = document.getElementById('game');
-          var pre = document.createElement('pre');
-          pre.id = 'shotdata';
-          pre.textContent = cv.toDataURL('image/png');
-          document.body.appendChild(pre);
-          document.title = 'SHOT ' + eventId + ' frame=' + n + ' z=' + v.z.toFixed(1);
+      /* Hold for a jump. Height, shadows and landings cannot be judged from a
+         car sitting on the floor, and the airborne moments are about two
+         seconds of a ninety-second lap — far too easy to hit by guessing a
+         timestamp. v.z is ALREADY height above the deck the car is on; v.roadZ
+         is the deck. Subtracting one from the other asks for height above
+         height, which never goes positive on an elevated track, and an earlier
+         version of this hold silently ran the whole race and captured the
+         results card. */
+      if (wantAir) {
+        var guard = 60 * 150;
+        while (guard-- > 0 && !me.finished && !(v.z > 18 && !v.grounded)) {
+          G.step(DT); BR.Renderer.render(G, 1, DT); n++;
         }
-      };
+      }
+
+      var cv = document.getElementById('game');
+      var pre = document.createElement('pre');
+      pre.id = 'shotdata';
+      pre.textContent = cv.toDataURL('image/png');
+      document.body.appendChild(pre);
+      document.title = 'SHOT ' + eventId + ' frame=' + n + ' z=' + v.z.toFixed(1);
     } catch (e) {
       document.title = 'SHOT ERROR: ' + (e && e.message ? e.message : e);
     }
