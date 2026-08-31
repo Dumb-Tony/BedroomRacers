@@ -24,9 +24,38 @@ BR.Particles = {
   markIdx: 0,
   dustIdx: 0,
 
+  /* ── ITS OWN RANDOM STREAM ───────────────────────────────────────────────
+     The docstring on emitForVehicle used to say it was "called from the render
+     layer because emission rate is a visual concern, not a simulation one — the
+     sim stays deterministic." That was the intent and the wiring did not match
+     it: the call sits inside Game.step(), the FIXED SIMULATION TICK, and every
+     emission drew six numbers from the shared Math.random.
+
+     That is the stream the AI takes its wander and its deliberate mistakes
+     from. So how hard the player happened to be sliding shifted the sequence
+     underneath the opponents — not randomly, but really: a scrappier lap gave
+     the field different mistakes than a clean one. Nothing about that is
+     wanted, and nobody would ever look for it.
+
+     A private generator means emission cannot reach the simulation at all, from
+     wherever it is called. Fixing it MOVES LAP TIMES, because the shared stream
+     stops being consumed and every draw after it shifts — the targets were
+     re-measured with tools/calibrate.sh and rescaled by the ratio measured. */
+  _seed: 0x9E3779B9,
+
+  rnd() {
+    let s = this._seed | 0;
+    s = (s + 0x6D2B79F5) | 0;
+    this._seed = s;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  },
+
   init() {
     this.marks = [];
     this.dust = [];
+    this._seed = 0x9E3779B9;      // reset, so a restart looks the same
     for (let i = 0; i < this.MARK_POOL; i++) {
       this.marks.push({ x: 0, y: 0, a: 0, life: 0, max: 1, rot: 0, w: 0 });
     }
@@ -52,13 +81,13 @@ BR.Particles = {
   addDust(x, y, vx, vy, strength) {
     const d = this.dust[this.dustIdx];
     this.dustIdx = (this.dustIdx + 1) % this.DUST_POOL;
-    d.x = x; d.y = y; d.z = 1 + Math.random() * 3;
-    d.vx = vx + (Math.random() - 0.5) * 40;
-    d.vy = vy + (Math.random() - 0.5) * 40;
-    d.vz = 18 + Math.random() * 30;
-    d.max = 0.5 + Math.random() * 0.35;
+    d.x = x; d.y = y; d.z = 1 + this.rnd() * 3;
+    d.vx = vx + (this.rnd() - 0.5) * 40;
+    d.vy = vy + (this.rnd() - 0.5) * 40;
+    d.vz = 18 + this.rnd() * 30;
+    d.max = 0.5 + this.rnd() * 0.35;
     d.life = d.max;
-    d.r = 3 + 6 * strength + Math.random() * 3;
+    d.r = 3 + 6 * strength + this.rnd() * 3;
   },
 
   update(dt) {
@@ -80,8 +109,16 @@ BR.Particles = {
   },
 
   /**
-   * Emit for a vehicle. Called from the render layer because emission rate is
-   * a visual concern, not a simulation one — the sim stays deterministic.
+   * Emit for a vehicle.
+   *
+   * CALLED FROM INSIDE Game.step(), the fixed simulation tick — not from the
+   * render layer, whatever the old comment here claimed. That is deliberate and
+   * worth keeping: emitting per FRAME would make the amount of dust depend on
+   * the frame rate, so a fast machine would lay a denser trail than a slow one.
+   * Per tick it is the same everywhere.
+   *
+   * The price of living in the sim is that it must not touch the simulation's
+   * randomness, which is what `rnd()` above is for.
    */
   emitForVehicle(v, dt) {
     if (!v.grounded) return;
@@ -101,7 +138,7 @@ BR.Particles = {
       this.addMark(v.x + ox, v.y + oy, v.heading, strength);
     }
 
-    if (Math.random() < strength * 0.9) {
+    if (this.rnd() < strength * 0.9) {
       this.addDust(v.x, v.y, -v.vel.x * 0.15, -v.vel.y * 0.15, strength);
     }
   },

@@ -127,7 +127,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 5,
     difficulty: 'normal',
-    platinumTime: 103,
+    platinumTime: 102,          // x 0.9934, measured when particles stopped drawing from the AI stream
     unlockStars: 6,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -209,7 +209,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 5,
     difficulty: 'normal',
-    platinumTime: 75,           // 0.93 x 81.0, re-measured from a mid-grid start
+    platinumTime: 76,           // x 1.0155, measured when particles stopped drawing from the AI stream
     unlockStars: 14,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
