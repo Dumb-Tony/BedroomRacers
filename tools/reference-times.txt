@@ -10,10 +10,10 @@ sb-02 79.38 spread 2.52 plat 76
 sb-03 85.87 spread 1.13 plat 83
 sb-04 88.25 spread 0.98 plat 84
 tt-tide-pool 91.88 spread 1.20 plat 81
-st-01 98.68 spread 0.42 plat 94
-tt-dresser 98.60 spread 0.58 plat 89
-st-02 101.50 spread 0.15 plat 97
-tt-shelf 100.48 spread 0.15 plat 92
+st-01 98.05 spread 0.78 plat 93
+tt-dresser 97.82 spread 0.28 plat 88
+st-02 99.45 spread 0.38 plat 95
+tt-shelf 99.62 spread 0.18 plat 91
 kt-01 103.08 spread 0.37 plat 96
 tt-breakfast 104.42 spread 0.17 plat 92
 kt-02 95.60 spread 4.33 plat 89

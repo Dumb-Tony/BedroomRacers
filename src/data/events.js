@@ -291,7 +291,7 @@ BR.EVENTS.push(
        the magnetic boosters: the same stand-in ran 100.72 before them and 99.00
        after, so every target here is scaled by that measured 0.983 and nothing
        else on the board moved by so much as a tick. */
-    platinumTime: 94,           // 0.93 x 101.8, scaled by the measured booster delta
+    platinumTime: 93,           // x 0.9936, measured when the deck became plastic
     unlockStars: 26,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -308,8 +308,8 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 0,
     difficulty: 'normal',
-    times: { gold: 96, silver: 105, bronze: 117 },   // clean reference 100.5
-    platinumTime: 89,
+    times: { gold: 95, silver: 104, bronze: 116 },   // x 0.9921, the plastic deck
+    platinumTime: 88,
     unlockStars: 29,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
@@ -329,7 +329,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 7,
     difficulty: 'hard',
-    platinumTime: 97,           // 0.93 x 104.7, re-measured from a mid-grid start
+    platinumTime: 95,           // x 0.9798, measured when the deck became plastic
     unlockStars: 32,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -346,8 +346,8 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 0,
     difficulty: 'normal',
-    times: { gold: 98, silver: 108, bronze: 121 },   // clean reference 103.6
-    platinumTime: 92,
+    times: { gold: 97, silver: 107, bronze: 120 },   // x 0.9914, the plastic deck
+    platinumTime: 91,
     unlockStars: 35,
     objectives: [
       { id: 'finish',  label: 'Set a time' },

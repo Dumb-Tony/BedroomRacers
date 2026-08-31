@@ -28,6 +28,10 @@ BR.TRACKS['stunt-shelf-run'] = {
   id: 'stunt-shelf-run',
   name: 'Shelf Run',
   world: 'stunt',
+  /* The deck is a moulded plastic track piece, not carpet. Declaring nothing
+     silently defaulted it to rugRoad/rugGrass — see the commit that added this. */
+  baseSurface: 'plastic',
+  offSurface:  'hardwood',
   laps: 3,
 
   /* A figure-eight again, because a crossover needs the path to double back

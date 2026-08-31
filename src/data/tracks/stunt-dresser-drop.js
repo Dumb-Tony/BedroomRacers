@@ -33,6 +33,10 @@ BR.TRACKS['stunt-dresser-drop'] = {
   id: 'stunt-dresser-drop',
   name: 'Dresser Drop',
   world: 'stunt',
+  /* The deck is a moulded plastic track piece, not carpet. Declaring nothing
+     silently defaulted it to rugRoad/rugGrass — see the commit that added this. */
+  baseSurface: 'plastic',
+  offSurface:  'hardwood',
   laps: 3,
 
   /* A FIGURE-EIGHT, not a ring.
