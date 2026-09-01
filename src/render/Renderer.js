@@ -2573,9 +2573,32 @@ BR.Renderer = {
     const o = arena.outer, ip = arena.inner, n = o.length;
     const SKIRT = 26;
 
+    /* ── CULLED, WHICH IT NEVER WAS ─────────────────────────────────────────
+       The flat road has been culled since view culling was added — `roadRuns`
+       walks the outline and returns only the visible spans. This branch never
+       got the same treatment, so an elevated track drew EVERY segment of the
+       whole circuit on every frame, including all the road behind the car, and
+       paid three quads and a sort for each one.
+
+       That is why the elevated tracks cost roughly double the flat ones:
+       measured before this, Shelf Run 12,112 operations a frame against Rug
+       Loop's 5,717, with 4,184 of it here. Each segment is two skirt quads and
+       a deck quad at about nine operations apiece, so a segment nobody can see
+       costs twenty-seven to draw and five projections to reject.
+
+       Both edges at both ends, plus the floor beneath, because a deck can be
+       off screen while the pillar holding it up is not. */
+    const B = this.cullBounds;
+    const doCull = !!(B && B.on);
     const segs = [];
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
+      if (doCull &&
+          !this.onScreen(o[i][0],  o[i][1],  o[i][2]) &&
+          !this.onScreen(ip[i][0], ip[i][1], ip[i][2]) &&
+          !this.onScreen(o[j][0],  o[j][1],  o[j][2]) &&
+          !this.onScreen(ip[j][0], ip[j][1], ip[j][2]) &&
+          !this.onScreen(o[i][0],  o[i][1],  0)) continue;
       segs.push({ i: i, j: j,
                   key: Math.max(Pj.depthAt(o[i][0], o[i][1]),
                                 Pj.depthAt(ip[j][0], ip[j][1])) });
