@@ -2640,6 +2640,22 @@ BR.Renderer = {
       pad:   this.CULL_PAD,
       on:    this.CULL,
     };
+
+    /* ── DETAIL FOR THE SIZE OF THE WINDOW ──────────────────────────────────
+       Everything below is drawn once PER VIEWPORT, so a four-player split pays
+       the whole frame four times. Measured on Shelf Run, the heaviest track:
+       12,210 operations a frame alone, and 38,800 in a four-way split — past
+       the point where a 2D canvas starts missing frames, while one player is
+       comfortably inside budget.
+
+       A quarter-size viewport cannot show quarter-size detail. The kerb
+       stitching is generated at a stride over the edge points, so doubling the
+       stride halves that geometry, and at 320x225 nobody can see the
+       difference — the blocks are already under two pixels each.
+
+       Deliberately a step rather than a curve: it must not change while you
+       drive, only when the layout does. */
+    this.lod = view.h < this.h * 0.7 ? 2 : 1;
   },
 
   // No depth test — see the note on `anyVisible`. In an axonometric projection
@@ -2852,7 +2868,9 @@ BR.Renderer = {
        count under this code's control: about sixty per edge rather than
        sixteen hundred, at a spacing chosen to look right rather than one that
        falls out of a dash length. */
-    const marks = function (pts, stride, frac, phase) {
+    const LOD = this.lod || 1;
+    const marks = function (pts, stride0, frac, phase) {
+      const stride = stride0 * LOD;      // coarser in a split-screen viewport
       const n = pts.length;
       const step = function (r) {
         const from = r ? r[0] : 0;
@@ -3780,9 +3798,21 @@ BR.Renderer = {
 
   // ── particles ────────────────────────────────────────────────────────────
 
+  /* CULLED ON THE POINT ALREADY PROJECTED.
+     Measured: this pass was 1,680 operations a frame on Shelf Run, 14% of the
+     whole frame, because every live mark in a 420-slot pool was drawn wherever
+     it was — and it is paid again per viewport, so a four-player split screen
+     paid it four times over.
+
+     A trail stretches out behind the car and round the track, so most of the
+     pool is off screen at any moment. The projection maths is cheap and the
+     canvas calls are not, so the test goes AFTER projecting and before the four
+     drawing calls, and costs nothing that was not already being spent. */
   drawMarks(ctx) {
     const Pj = BR.Projection;
     const marks = BR.Particles.marks;
+    const B = this.cullBounds;
+    const cull = B && B.on;
     ctx.lineCap = 'round';
     for (let i = 0; i < marks.length; i++) {
       const m = marks[i];
@@ -3792,6 +3822,13 @@ BR.Renderer = {
       const c = Math.cos(m.rot) * half, s = Math.sin(m.rot) * half;
       const p0 = Pj.project(m.x - c, m.y - s, 0);
       const p1 = Pj.project(m.x + c, m.y + s, 0);
+      if (cull) {
+        const pad = B.pad + 8;
+        if ((p0.sx < -B.halfW - pad && p1.sx < -B.halfW - pad) ||
+            (p0.sx > B.halfW + pad && p1.sx > B.halfW + pad) ||
+            (p0.sy < B.top - pad && p1.sy < B.top - pad) ||
+            (p0.sy > B.bot + pad && p1.sy > B.bot + pad)) continue;
+      }
       ctx.strokeStyle = 'rgba(30,24,20,' + (m.a * t).toFixed(3) + ')';
       ctx.lineWidth = m.w / 2;
       ctx.beginPath();
@@ -3804,11 +3841,18 @@ BR.Renderer = {
   drawDust(ctx) {
     const Pj = BR.Projection;
     const dust = BR.Particles.dust;
+    const B = this.cullBounds;
+    const cull = B && B.on;
     for (let i = 0; i < dust.length; i++) {
       const d = dust[i];
       if (d.life <= 0) continue;
       const t = d.life / d.max;
       const p = Pj.project(d.x, d.y, d.z);
+      if (cull) {
+        const pad = B.pad + d.r + 6;
+        if (p.sx < -B.halfW - pad || p.sx > B.halfW + pad ||
+            p.sy < B.top - pad || p.sy > B.bot + pad) continue;
+      }
       // The colour comes from the FLOOR now, not from a literal. Sand, carpet
       // lint, a red throw and water spray are not the same beige.
       ctx.fillStyle = 'rgba(' + (d.col || '214,198,170') + ',' + (0.34 * t).toFixed(3) + ')';
