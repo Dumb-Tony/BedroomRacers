@@ -933,13 +933,30 @@ BR.HUD = {
     const P = BR.ProgressionManager;
     const unlocked = res && res.unlocked && res.unlocked.length ? res.unlocked : null;
 
+    /* ── THE END OF THE CAREER ──────────────────────────────────────────────
+       careerComplete(), careerPerfect() and careerState() were written, are
+       correct, and NOTHING DREW THEM. Racing all twenty-six events produced an
+       ordinary results card and the game never mentioned it again — a ladder
+       with an ending computed and no ending shown, which from the player's seat
+       is the same as not having one at all.
+
+       `res.careerComplete` is true on exactly the card that ends it, because
+       ProgressionManager compares against whether the career was already
+       complete BEFORE this race, so it fires once. `careerPerfect` is the harder
+       thing underneath — every event, every toy piece, every star — and may
+       arrive on that same card or a long time after it. */
+    const done = res && res.careerComplete;
+    const perfect = res && res.careerPerfect;
+    const endLines = done ? (perfect ? 2 : 1) : 0;
+
     const cardW = Math.min(470, w - 40);
     const rowH = 28;
     // Deep enough for a 28px headline AND the total/best line under it. At 96
     // the printed rule above the standings was drawn through the middle of
     // "TOTAL 1:11.40" — visible in a render, invisible in the code.
     const headH = 108 + (BR.Screens && BR.Screens.activeEvent ? 14 : 0);
-    const cardH = headH + list.length * rowH + (unlocked ? 24 : 0) + 62;
+    const cardH = headH + list.length * rowH + (unlocked ? 24 : 0) +
+                  endLines * 26 + 62;
     const x = (w - cardW) / 2, y = (h - cardH) / 2;
 
     ctx.fillStyle = 'rgba(10,8,7,0.76)';
@@ -1046,6 +1063,30 @@ BR.HUD = {
         x + cardW / 2, cy);
       ctx.restore();
       cy += 20;
+    }
+
+    /* ── the last thing that happens ────────────────────────────────────────
+       Drawn in the kit's own paper voice rather than as a special effect: this
+       game is a box of toys, and the end of it should read like the sticker on
+       the lid, not like a trophy cutscene. `perfect` gets its own second line
+       because finishing the ladder and emptying the box are different
+       achievements, and a player who has done both should be told so. */
+    if (done) {
+      cy += 6;
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.font = T.label(13, 800);
+      ctx.fillStyle = '#b8862c';
+      ctx.fillText('THAT IS EVERY EVENT IN THE BOX', x + cardW / 2, cy);
+      cy += 22;
+      if (perfect) {
+        ctx.font = T.label(11, 700);
+        ctx.fillStyle = '#1c6d52';
+        ctx.fillText('EVERY STAR, EVERY PIECE, NOTHING LEFT', x + cardW / 2, cy);
+        cy += 20;
+      }
+      ctx.restore();
     }
 
     // The personal best, stamped across the corner rather than squeezed into

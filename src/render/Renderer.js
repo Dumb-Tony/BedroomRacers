@@ -579,6 +579,14 @@ BR.Renderer = {
 
     for (let i = 0; i < drawables.length; i++) {
       const d = drawables[i];
+      /* `collisionOnly` walls are a prop's octagon — drawProp draws the thing
+         itself, and drawing its collision shape too put a coloured fence round
+         every prop in the game. Skipped with `continue` and NOT by an extra
+         condition on the first branch: this is an if/else chain ending in "it
+         must be a vehicle", so a wall that fails the first test falls all the
+         way through and is drawn as a car with no `car` on it. */
+      if (d.wall && d.wall.collisionOnly) continue;
+
       if (d.wall)        this.drawWall(ctx, d.wall, arena.wallHeight, arena);
       else if (d.rail)   this.drawRailSegment(ctx, d.rail, d.seg);
       else if (d.prop)   this.drawProp(ctx, d.prop);

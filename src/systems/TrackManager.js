@@ -257,6 +257,14 @@ BR.TrackManager = {
           h: p.h, clearAt: p.clearAt === undefined ? Infinity : p.clearAt,
           level: elevated ? pe.level : undefined,
           z: pe.z,
+          /* COLLISION ONLY. The prop itself is drawn by drawProp — as a crayon,
+             a bucket, a block — and this octagon exists so a car can hit it.
+             Without the flag the renderer treated all eight segments as track
+             barrier and drew them in the kerb palette, so every prop in the game
+             stood inside its own little coloured fence. On a crayon, which is
+             drawn lying down, the ring is taller and wider than the crayon and
+             encloses it, so it read as sitting in a grey tub. */
+          collisionOnly: true,
         });
       }
     }
