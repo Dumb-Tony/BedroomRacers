@@ -34,7 +34,44 @@
    Skipping this is not a small error. Bedside and Sandbox shipped their first
    pass with hand-guessed times and gold sat 18-37 SECONDS off the pace — every
    medal free on the first attempt, and the whole reward curve dead on arrival.
-   Neither was visible without simulating the race. */
+   Neither was visible without simulating the race.
+
+   ── THE LADDER IS A DESIGN CHOICE, THE TIMES ARE MEASURED FACTS ───────────
+   When the two disagree, move the ladder. `unlockStars` costs nothing to
+   change; a target time is a measurement of a track and changing one silently
+   invalidates every medal earned against it.
+
+   THE LADDER WAS ONCE UNPLAYABLE AND NOTHING CAUGHT IT. It grew from 14 events
+   to 26 while every gate kept a rigid +3 step, so the last gate walked out to
+   59 of the 78 stars that exist — 76% of everything, with no check anywhere
+   asking whether 59 could be earned. Simulated from a wiped save, the
+   reference stand-in stalled on the SECOND EVENT with 2 stars and never opened
+   another gate; 24 of the 26 events were unreachable. A weaker stand-in did
+   exactly the same. The whole game past the rug was dead content.
+
+   The cause was not the gates on their own. It was that every objective in the
+   ladder except `finish` and one `podium` asked for play ABOVE the reference:
+   the reference could reach 32 of 78 stars, so no gate above 32 could ever
+   open, however the steps were spaced.
+
+   TWO RULES NOW HOLD, and both are checkable:
+
+     1. EVERY EVENT PAYS SOMETHING FOR SHOWING UP. Five events used to award
+        the reference nothing at all — you raced, you finished, and the game
+        gave you no credit. Every event now carries one star ordinary play
+        earns, one that asks you to race well, and one that is genuinely hard.
+
+     2. NO GATE MAY EXCEED WHAT THE REFERENCE CAN HAVE EARNED BY THAT POINT,
+        less a two-star buffer. That is where these numbers come from — they
+        are not a step, they are a running total minus slack. The last gate is
+        44 of 78, so a third of the stars in the game sit BEYOND the ladder,
+        which is what mastery content is for.
+
+   Platinum times are no longer objectives anywhere. Beating one already awards
+   the platinum MEDAL — making it a star as well paid twice for one act and,
+   worse, made mastery load-bearing for progression. Nine of the 78 stars were
+   behind a time 11.5% quicker than the reference; those are `clean` now, and
+   the clock keeps the medal it always had. */
 
 window.BR = window.BR || {};
 
@@ -66,11 +103,11 @@ BR.EVENTS = [
     opponents: 4,
     difficulty: 'normal',
     platinumTime: 87,
-    unlockStars: 2,
+    unlockStars: 1,
     objectives: [
-      { id: 'win',      label: 'Win the race' },
+      { id: 'finish',   label: 'Finish the race' },
+      { id: 'podium',   label: 'Finish on the podium' },
       { id: 'drifter',  label: 'Spend 6 seconds drifting' },
-      { id: 'lap',      label: 'Set a lap under 29 seconds' },
     ],
   },
   {
@@ -85,9 +122,9 @@ BR.EVENTS = [
     platinumTime: 143,
     unlockStars: 5,
     objectives: [
+      { id: 'podium',   label: 'Finish on the podium' },
       { id: 'win',      label: 'Win the race' },
-      { id: 'spotless', label: 'Win without a single collision' },
-      { id: 'lap',      label: 'Set a lap under 27 seconds' },
+      { id: 'drifter',  label: 'Spend 6 seconds drifting' },
     ],
   },
 ];
@@ -111,11 +148,12 @@ BR.EVENTS.push(
     difficulty: 'normal',
     times: { gold: 86, silver: 94, bronze: 105 },
     platinumTime: 80,
-    unlockStars: 3,
+    unlockStars: 2,
+    lapUnder: 29,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
-      { id: 'ttGold',  label: 'Beat the gold time' },
       { id: 'lap',     label: 'Set a lap under 29 seconds' },
+      { id: 'ttGold',  label: 'Beat the gold time' },
     ],
   },
   {
@@ -128,11 +166,11 @@ BR.EVENTS.push(
     opponents: 5,
     difficulty: 'normal',
     platinumTime: 102,          // x 0.9934, measured when particles stopped drawing from the AI stream
-    unlockStars: 6,
+    unlockStars: 7,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
-      { id: 'win',     label: 'Win the race' },
       { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+      { id: 'win',     label: 'Win the race' },
     ],
   },
   {
@@ -146,11 +184,11 @@ BR.EVENTS.push(
     difficulty: 'normal',
     times: { gold: 103, silver: 112, bronze: 126 },
     platinumTime: 96,
-    unlockStars: 9,
+    unlockStars: 11,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   }
 );
@@ -170,11 +208,11 @@ BR.EVENTS.push(
     opponents: 4,
     difficulty: 'normal',
     platinumTime: 85,
-    unlockStars: 8,
+    unlockStars: 9,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
-      { id: 'win',     label: 'Win the race' },
       { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+      { id: 'win',     label: 'Win the race' },
     ],
   },
   {
@@ -188,11 +226,11 @@ BR.EVENTS.push(
     difficulty: 'normal',
     times: { gold: 90, silver: 99, bronze: 110 },
     platinumTime: 84,
-    unlockStars: 12,
+    unlockStars: 13,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   },
 
@@ -210,11 +248,11 @@ BR.EVENTS.push(
     opponents: 5,
     difficulty: 'normal',
     platinumTime: 76,           // x 1.0155, measured when particles stopped drawing from the AI stream
-    unlockStars: 14,
+    unlockStars: 15,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
+      { id: 'podium',  label: 'Finish on the podium' },
       { id: 'win',     label: 'Win the race' },
-      { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
     ],
   },
   {
@@ -230,8 +268,8 @@ BR.EVENTS.push(
     unlockStars: 17,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
-      { id: 'win',     label: 'Win the race' },
       { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+      { id: 'win',     label: 'Win the race' },
     ],
   },
   {
@@ -244,11 +282,11 @@ BR.EVENTS.push(
     opponents: 7,
     difficulty: 'hard',
     platinumTime: 84,           // 0.93 x 90.8, scaled when the grid stopped double-booking a slot
-    unlockStars: 20,
+    unlockStars: 21,
     objectives: [
+      { id: 'podium',   label: 'Finish on the podium' },
       { id: 'win',      label: 'Win the race' },
       { id: 'spotless', label: 'Win without a single collision' },
-      { id: 'clean',    label: 'Finish with fewer than 4 collisions' },
     ],
   },
   {
@@ -262,11 +300,11 @@ BR.EVENTS.push(
     difficulty: 'normal',
     times: { gold: 87, silver: 95, bronze: 106 },   // clean reference 91.0
     platinumTime: 79,
-    unlockStars: 23,
+    unlockStars: 22,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   }
 );
@@ -292,11 +330,11 @@ BR.EVENTS.push(
        after, so every target here is scaled by that measured 0.983 and nothing
        else on the board moved by so much as a tick. */
     platinumTime: 93,           // x 0.9936, measured when the deck became plastic
-    unlockStars: 26,
+    unlockStars: 24,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
-      { id: 'win',     label: 'Win the race' },
       { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+      { id: 'win',     label: 'Win the race' },
     ],
   },
   {
@@ -310,11 +348,11 @@ BR.EVENTS.push(
     difficulty: 'normal',
     times: { gold: 95, silver: 104, bronze: 116 },   // x 0.9921, the plastic deck
     platinumTime: 88,
-    unlockStars: 29,
+    unlockStars: 26,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   }
 );
@@ -330,11 +368,11 @@ BR.EVENTS.push(
     opponents: 7,
     difficulty: 'hard',
     platinumTime: 95,           // x 0.9798, measured when the deck became plastic
-    unlockStars: 32,
+    unlockStars: 28,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
-      { id: 'win',     label: 'Win the race' },
       { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+      { id: 'win',     label: 'Win the race' },
     ],
   },
   {
@@ -348,11 +386,11 @@ BR.EVENTS.push(
     difficulty: 'normal',
     times: { gold: 97, silver: 107, bronze: 120 },   // x 0.9914, the plastic deck
     platinumTime: 91,
-    unlockStars: 35,
+    unlockStars: 30,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   }
 );
@@ -378,13 +416,19 @@ BR.EVENTS.push(
        103.0 / 103.1 / 103.2 / 103.3, quickest taken. Laps 35.7 / 33.8 / 33.5 —
        the longest circuit in the game, and the slowest race in it. */
     platinumTime: 96,
-    unlockStars: 38,
+    unlockStars: 32,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
+      { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
       { id: 'win',     label: 'Win the race' },
-      // Laminate at 0.78 grip drifts almost by itself. Six seconds is a low
-      // bar here on purpose — it is an invitation to find that out.
-      { id: 'drifter', label: 'Spend 6 seconds drifting' },
+      /* WAS `drifter`, on the claim that "laminate at 0.78 grip drifts almost
+         by itself". Measured, it does not: the reference stand-in banks 0.0,
+         0.0 and 0.1 seconds of drift across three runs here — the lowest
+         figure of any event in the game, on the track that supposedly gives
+         drift away. Low grip is not the same thing as high slip angle; the car
+         washes wide instead of rotating, so the drift test never fires.
+         The drift objectives live on the rug, where the reference actually
+         banks 4-9 seconds without trying. */
     ],
   },
   {
@@ -399,11 +443,11 @@ BR.EVENTS.push(
     // Four solo runs: 103.9 / 104.0 / 104.1 / 104.3. Clean reference 103.9.
     times: { gold: 99, silver: 108, bronze: 121 },
     platinumTime: 92,
-    unlockStars: 41,
+    unlockStars: 34,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   },
   {
@@ -420,11 +464,11 @@ BR.EVENTS.push(
        850 units shorter, and on laminate it is grip rather than distance that
        costs the time. */
     platinumTime: 89,
-    unlockStars: 44,
+    unlockStars: 36,
     objectives: [
+      { id: 'podium',   label: 'Finish on the podium' },
       { id: 'win',      label: 'Win the race' },
       { id: 'spotless', label: 'Win without a single collision' },
-      { id: 'clean',    label: 'Finish with fewer than 4 collisions' },
     ],
   },
   {
@@ -439,11 +483,11 @@ BR.EVENTS.push(
     // Four solo runs: 95.6 / 95.6 / 95.8 / 95.9. Clean reference 95.6.
     times: { gold: 91, silver: 99, bronze: 111 },
     platinumTime: 85,
-    unlockStars: 47,
+    unlockStars: 37,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   }
 );
@@ -482,11 +526,11 @@ BR.EVENTS.push(
        third shorter than the table's because a sofa is smaller than a table.
        An 11,000-unit sofa would be a forty-five-second lap. */
     platinumTime: 79,
-    unlockStars: 50,
+    unlockStars: 39,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
-      { id: 'win',     label: 'Win the race' },
       { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+      { id: 'win',     label: 'Win the race' },
     ],
   },
   {
@@ -504,11 +548,11 @@ BR.EVENTS.push(
        to be taken. */
     times: { gold: 79, silver: 87, bronze: 97 },
     platinumTime: 74,
-    unlockStars: 53,
+    unlockStars: 41,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   },
   {
@@ -526,17 +570,17 @@ BR.EVENTS.push(
        for that: eight hundred units of hard flat ground end to end is the one
        place on the sofa where a car gets to run. */
     platinumTime: 78,
-    unlockStars: 56,
+    unlockStars: 43,
     objectives: [
+      { id: 'podium',   label: 'Finish on the podium' },
       { id: 'win',      label: 'Win the race' },
       { id: 'spotless', label: 'Win without a single collision' },
-      { id: 'clean',    label: 'Finish with fewer than 4 collisions' },
     ],
   },
   {
     id: 'tt-down-the-back',
     name: 'Down the Back Time Trial',
-    blurb: 'Three laps to find out how much of the chain you can actually hold.',
+    blurb: 'The last event in the box. Three laps of the chain, and nobody watching.',
     trackId: 'sofa-down-the-back',
     mode: 'time-trial',
     laps: 3,
@@ -548,11 +592,19 @@ BR.EVENTS.push(
        somewhere; in traffic it takes the tidy line and never tries. */
     times: { gold: 83, silver: 91, bronze: 102 },   // clean reference 87.4
     platinumTime: 77,
-    unlockStars: 59,
+    unlockStars: 44,
+    /* THE LAST EVENT IN THE BOOK, and the only one whose third star is a
+       perfect run rather than a fast one. `spotless` in a time trial reduces to
+       "position 1 and nothing touched" — position 1 is free when you are the
+       only car, so what it actually asks for is three laps of the hardest
+       circuit in the game without a single impact. The reference stand-in does
+       manage it, which is the point: the last star is a matter of care, not of
+       pace, and it is the one thing in the ladder you cannot buy with a fast
+       lap. */
     objectives: [
-      { id: 'finish',  label: 'Set a time' },
-      { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
+      { id: 'finish',   label: 'Set a time' },
+      { id: 'ttGold',   label: 'Beat the gold time' },
+      { id: 'spotless', label: 'Three laps, nothing touched' },
     ],
   }
 );
@@ -578,11 +630,16 @@ BR.EVENTS.push(
     opponents: 7,
     difficulty: 'normal',
     platinumTime: 89,           // 0.93 x 95.9, re-measured from a mid-grid start
-    unlockStars: 4,
+    unlockStars: 3,
+    /* NO `clean` OBJECTIVE IN AN ITEM RACE. The mode exists to throw things at
+       you, and the reference stand-in takes 4-7 impacts a race here against 1-2
+       on the same track without items. Asking a player not to be hit in the one
+       mode built around being hit sets the objective against the mode. Placing
+       is the honest measure of an item race. */
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
+      { id: 'podium',  label: 'Finish on the podium' },
       { id: 'win',     label: 'Win the race' },
-      { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
     ],
   },
   {
@@ -596,11 +653,11 @@ BR.EVENTS.push(
     opponents: 7,
     difficulty: 'hard',
     platinumTime: 87,           // 0.93 x 92.8, scaled when the grid stopped double-booking a slot
-    unlockStars: 18,
+    unlockStars: 19,
     objectives: [
       { id: 'finish',   label: 'Finish the race' },
+      { id: 'podium',   label: 'Finish on the podium' },
       { id: 'win',      label: 'Win the race' },
-      { id: 'spotless', label: 'Win without a single collision' },
     ],
   }
 );

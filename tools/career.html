@@ -1,0 +1,237 @@
+<!-- =============================================================================
+     CAN YOU ACTUALLY PLAY THE LADDER FROM A WIPED SAVE?
+     =============================================================================
+     Appended to a built dist/play.html, the same way tools/calibrate.html is.
+
+     calibrate.sh answers "has a lap time moved?". It never asks whether the
+     STARS those times gate are reachable, so a ladder can be perfectly
+     calibrated and still be unplayable. This asks the other question.
+
+     THE METHOD. Wipe the save. Then, repeatedly: look at every event the star
+     total has actually unlocked, play the ones not yet exhausted, bank the
+     result through the real ProgressionManager, and look again. Nothing is
+     assumed reachable -- an event only gets driven once its gate has genuinely
+     opened, in the order the gating allows.
+
+     OBJECTIVES ARE A UNION OVER ATTEMPTS, not a single run. rec.objectives is a
+     set that never loses entries, so a player who retries an event collects
+     everything they are CAPABLE of there eventually. Simulating one run per
+     event would under-report by exactly the amount a player grinds. Three
+     attempts per event is the generous reading: if the ladder stalls even under
+     it, it stalls for real.
+
+     THE PLAYER IS DRIVEN BY AN AI, but the seat stays kind 'player' -- the
+     input is swapped, not the actor. That matters. driftSeconds, toy-piece
+     pickup and impacts are all accumulated inside `if (act.kind === 'player')`
+     branches in main.js, so the calibrate trick of flipping the seat to 'ai'
+     would report zero drift, zero pieces and zero collisions and quietly fail
+     three of the nine objective types.
+
+     THREE STAND-INS. The technician on `normal` is the yardstick every target
+     time in the game means (04_AI.md), so it answers "can a competent player
+     progress". The bully and the rookie answer the question that actually
+     decides whether a ladder is cruel: can somebody WORSE than the reference
+     get through it.
+     ========================================================================= -->
+<pre id="career">running…</pre>
+<script>
+(function () {
+  var L = [], G = BR.Game, P = BR.ProgressionManager, S = BR.SaveManager;
+
+  BR.Particles.init();
+
+  /* Seeded, for the same reason calibrate.html is seeded: the AI errs on
+     purpose, and unseeded the noise floor of a race is most of a second. */
+  var seed = 1;
+  Math.random = function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
+  /* The input swap. The seat stays a player seat; only where its input comes
+     from changes. */
+  var playerAI = null;
+  var realSample = BR.Input.sample;
+  BR.Input.sample = function (profile, seat) {
+    if (playerAI && G.vehicle && G.arena) {
+      return BR.AIDriver.drive(playerAI, G.vehicle, G.arena, 1 / 60);
+    }
+    return realSample.call(BR.Input, profile, seat);
+  };
+
+  function race(eventId, s, personality, difficulty) {
+    seed = s;
+    var ev = BR.eventById(eventId);
+    if (!ev) return null;
+    S.get().settings.difficulty = difficulty;
+    playerAI = BR.AIDriver.create(personality, difficulty);
+    G.players = 1;
+    G.startEvent(ev);
+    var me = G.racers[0];
+    var t = 0;
+    while (t < 60 * 400 && !me.finished) { G.step(1 / 60); t++; }
+    G.bankResult();
+    return {
+      finished: me.finished, time: me.finishTime, bestLap: me.bestLap,
+      position: me.position, total: G.racers.length,
+      collisions: G.vehicle.impacts, drift: G.stats.driftSeconds,
+      pieces: G.stats.piecesThisRace,
+      res: BR.Screens.lastResult,
+    };
+  }
+
+  function fmt(x, n) { return x == null ? '-' : x.toFixed(n == null ? 2 : n); }
+
+  /* ── one whole career ────────────────────────────────────────────────── */
+  function career(personality, difficulty, attempts, seeds) {
+    S.reset();
+    S.get().settings.difficulty = difficulty;
+    BR.Ghost.clearAll ? BR.Ghost.clearAll() : 0;
+
+    var rows = [], played = {}, order = [], stalls = null;
+    var totalRaces = 0, totalSeconds = 0, piecesGot = 0;
+    var guard = 0;
+
+    while (guard++ < 200) {
+      // Everything the current star total has actually opened.
+      var open = [];
+      for (var i = 0; i < BR.EVENTS.length; i++) {
+        var ev = BR.EVENTS[i];
+        if (!P.isEventUnlocked(ev)) continue;
+        if ((played[ev.id] || 0) >= attempts) continue;
+        open.push(ev);
+      }
+      if (!open.length) break;
+
+      // A player works down the list they can see. Cheapest gate first.
+      open.sort(function (a, b) { return (a.unlockStars || 0) - (b.unlockStars || 0); });
+      var ev = open[0];
+      var n = (played[ev.id] || 0);
+      var r = race(ev.id, seeds[n % seeds.length], personality, difficulty);
+      played[ev.id] = n + 1;
+      totalRaces++;
+      if (r && r.time) totalSeconds += r.time;
+      if (r) piecesGot += r.pieces;
+
+      if (n === 0) order.push(ev.id);
+
+      var rec = P.eventRecord(ev.id);
+      rows.push([ev.id, ev.unlockStars || 0, n + 1, P.stars(),
+                 r ? r.position + '/' + r.total : '-',
+                 r ? fmt(r.time) : '-', r ? fmt(r.bestLap) : '-',
+                 r ? r.collisions : '-', r ? fmt(r.drift, 1) : '-',
+                 rec.medal, rec.objectives.slice().sort().join('+') || '-']);
+    }
+
+    // Where did it stop, and what was still shut?
+    var shut = [];
+    for (var i = 0; i < BR.EVENTS.length; i++) {
+      if (!P.isEventUnlocked(BR.EVENTS[i])) shut.push(BR.EVENTS[i]);
+    }
+
+    return { rows: rows, order: order, shut: shut, stars: P.stars(),
+             races: totalRaces, seconds: totalSeconds, pieces: piecesGot,
+             owned: P.ownedVehicles().slice(),
+             setComplete: P.setComplete(),
+             perEvent: (function () {
+               var o = {};
+               for (var i = 0; i < BR.EVENTS.length; i++) {
+                 var e = BR.EVENTS[i];
+                 var rec = P.eventRecord(e.id);
+                 o[e.id] = { medal: rec.medal, objs: rec.objectives.slice(),
+                             played: rec.played, best: rec.bestTime };
+               }
+               return o;
+             })() };
+  }
+
+  try {
+    /* ── the star economy, from the data alone ─────────────────────────── */
+    L.push('== STAR ECONOMY ==');
+    var totalStars = 0, byObj = {};
+    var gates = [];
+    for (var i = 0; i < BR.EVENTS.length; i++) {
+      var e = BR.EVENTS[i];
+      totalStars += e.objectives.length;
+      for (var j = 0; j < e.objectives.length; j++) {
+        byObj[e.objectives[j].id] = (byObj[e.objectives[j].id] || 0) + 1;
+      }
+      gates.push({ id: e.id, gate: e.unlockStars || 0, n: e.objectives.length });
+    }
+    L.push('events ' + BR.EVENTS.length + '   stars ' + totalStars +
+           '   maxStars() ' + P.maxStars() + '   pieces ' + P.piecesTotal());
+    var kinds = [];
+    for (var k in byObj) kinds.push(k + ' x' + byObj[k]);
+    L.push('objective kinds: ' + kinds.join(', '));
+
+    // Supply vs demand at every gate: how many stars EXIST below this gate?
+    gates.sort(function (a, b) { return a.gate - b.gate; });
+    L.push('');
+    L.push('  ' + ['event', 'gate', 'supply', 'slack'].join('\t'));
+    for (var i = 0; i < gates.length; i++) {
+      var supply = 0;
+      for (var j = 0; j < gates.length; j++) {
+        if (gates[j].gate < gates[i].gate) supply += gates[j].n;
+      }
+      L.push('  ' + [gates[i].id, gates[i].gate, supply,
+                     supply - gates[i].gate].join('\t'));
+    }
+
+    /* ── the reference driver's clean times vs every time target ───────── */
+    L.push('');
+    L.push('== TIME TARGETS vs THE REFERENCE DRIVER (from tools/reference-times.txt) ==');
+
+    /* ── three careers ─────────────────────────────────────────────────── */
+    var RUNS = [['technician', 'normal', 3, [1, 2, 3]],
+                ['bully', 'normal', 3, [1, 2, 3]],
+                ['rookie', 'normal', 3, [1, 2, 3]]];
+
+    for (var ri = 0; ri < RUNS.length; ri++) {
+      var cfg = RUNS[ri];
+      var c = career(cfg[0], cfg[1], cfg[2], cfg[3]);
+      L.push('');
+      L.push('== CAREER: ' + cfg[0] + ' on ' + cfg[1] + ', ' + cfg[2] +
+             ' attempts per event ==');
+      L.push('  ' + ['event', 'gate', 'try', 'stars', 'pos', 'time', 'lap',
+                     'coll', 'drift', 'medal', 'objectives'].join('\t'));
+      for (var r = 0; r < c.rows.length; r++) L.push('  ' + c.rows[r].join('\t'));
+      L.push('  ---');
+      L.push('  FINAL stars ' + c.stars + '/' + totalStars +
+             '   races ' + c.races +
+             '   race-seconds ' + c.seconds.toFixed(0) +
+             '   pieces ' + c.pieces + '/' + P.piecesTotal() +
+             '   cars ' + c.owned.join(','));
+      if (c.shut.length) {
+        var sh = [];
+        for (var i = 0; i < c.shut.length; i++) {
+          sh.push(c.shut[i].id + '(' + c.shut[i].unlockStars + ')');
+        }
+        L.push('  STALLED — never unlocked: ' + sh.join(' '));
+      } else {
+        L.push('  NO STALL — every event unlocked.');
+      }
+      L.push('  events reached in order: ' + c.order.join(' '));
+      // Which objectives were never gettable anywhere?
+      var missed = [];
+      for (var i = 0; i < BR.EVENTS.length; i++) {
+        var e = BR.EVENTS[i], pe = c.perEvent[e.id];
+        var lost = [];
+        for (var j = 0; j < e.objectives.length; j++) {
+          if (pe.objs.indexOf(e.objectives[j].id) === -1) lost.push(e.objectives[j].id);
+        }
+        if (lost.length) missed.push(e.id + ':' + lost.join('+'));
+      }
+      L.push('  never earned: ' + (missed.join(' ') || 'nothing — full marks'));
+    }
+
+    L.push('CAREER DONE');
+  } catch (e) {
+    L.push('THREW: ' + (e && e.message ? e.message : e) +
+           (e && e.stack ? '\n' + e.stack : ''));
+    L.push('CAREER DONE');
+  }
+  document.getElementById('career').textContent = L.join('\n');
+})();
+</script>
