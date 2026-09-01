@@ -251,6 +251,21 @@ The first draft of Dresser Drop was a ring and tested none of this.
    which is why this one cost a track file and a few dozen lines. Attempted
    first, with no evidence the architecture held, it would have been the rewrite
    the draft feared.
+6. **STILL OPEN — no moving hazard on either track, and no recorded decision.**
+   `05_Tracks.md`'s authoring checklist makes one mandatory, `18_Roadmap.md` and
+   `PROMPTS.md` both repeat it, and both stunt tracks ship `hazards: []`. Ten of
+   the twelve tracks in the game carry a `toyTrain`; these two carry none.
+
+   It may well be right. The rails, the crossover, the corkscrew and the open
+   edge are already four things asking to be read at once, and a train through
+   all of that could be noise rather than danger. But nothing in this document
+   or either track file says so, which means it reads as an omission rather than
+   a choice — and the difference matters to whoever authors the third one.
+
+   **Deciding it costs a lap time.** Anything moving on the racing line changes
+   what a lap takes, so it means re-measuring `st-01`, `tt-dresser`, `st-02` and
+   `tt-shelf` and rescaling their targets by the ratio measured. Left open on
+   purpose rather than answered cheaply.
 
 ## Switching gates — built (Phase 9)
 

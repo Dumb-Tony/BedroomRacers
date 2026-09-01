@@ -32,7 +32,7 @@ paths rather than `git add .`.
 ./tools/build-artifact.sh
 ```
 
-Run it after **any** source change. It bundles ~36 files into `dist/play.html`,
+Run it after **any** source change. It bundles 40 files into `dist/play.html`,
 which is the thing that gets published; `index.html` is the dev page. `dist/` is
 gitignored — it is generated, and the published copy lives in the publish repo.
 
@@ -111,7 +111,7 @@ Three traps that have each shipped broken:
 
 Run it after anything that could change how long a lap takes: the driving model,
 rails, ramps, pads, AI, track data, grid layout. It drives the `technician` AI on
-`normal` in seat one, five seeds, median, across all eighteen events, and diffs
+`normal` in seat one, five seeds, median, across all twenty-six events, and diffs
 against the committed baseline in `tools/reference-times.txt`.
 
 **When something moves, scale that event's targets by the ratio you measured.
@@ -224,12 +224,12 @@ car actually is found it in one run.
 
 ## The tools
 
-- `tools/smoke.sh` — does anything throw, anywhere? 49 checks across every track,
+- `tools/smoke.sh` — does anything throw, anywhere? 55 checks across every track,
   screen, event and split-screen layout. Run before every commit.
 - `tools/pays.sh` — does each track feature earn its place? Strips ramps, pads and
   rails in turn and compares. Slow; run when driving or track features change.
 - `tools/calibrate.sh` — did any lap time move? Run when anything could have
-  changed one. A **render-only change must show 0.00 on all 22 events**; if one
+  changed one. A **render-only change must show 0.00 on all 26 events**; if one
   moves, the change leaked into the simulation.
 - `tools/shot.sh <eventId> [seconds] [outfile]` — render one frame and save it,
   so a claim about how something LOOKS can be checked by looking. Deterministic

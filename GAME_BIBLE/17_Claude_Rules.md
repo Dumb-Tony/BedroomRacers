@@ -161,9 +161,11 @@ in one session without noticing that `drawEvents` could not draw. So:
 
 Builds, loads the bundle in headless Chrome, and answers exactly one question —
 **does anything throw?** — across every track, every screen at three viewport
-sizes, every event, split screen at 2/3/4 players, and menu navigation. 43
-checks. It makes no claims about behaviour: not lap times, not feel, not
-appearance. Exits non-zero, so it can gate anything.
+sizes, every event, split screen at 2/3/4 players, and menu navigation. **55
+checks**, and the count grows with the game — it was 43 when this was written,
+so read the number the tool prints, not the one in a document. It makes no
+claims about behaviour: not lap times, not feel, not appearance. Exits
+non-zero, so it can gate anything.
 
 It is deliberately blunt. The sharp harnesses stay; this is the thing that
 notices when something is on fire.

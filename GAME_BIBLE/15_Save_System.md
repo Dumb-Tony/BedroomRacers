@@ -30,7 +30,7 @@
 | **Settings** | Volumes, control scheme, keybindings, accessibility toggles, difficulty |
 | **Progression** | Medals, stars, unlocked tracks, unlocked modes, completed objectives |
 | **Ownership** | Owned vehicles, owned cosmetics, per-vehicle cosmetic selections |
-| **Records** | Best lap and best total per track, per vehicle |
+| **Records** | Best lap and best total per track. Per VEHICLE bests are the ghosts — see q1 |
 | **State** | Selected vehicle, last track played |
 | **Collection** | Toy pieces found, sets completed |
 
@@ -77,11 +77,11 @@
     }
   },
 
+  // AS BUILT: two bare numbers, no vehicle attached. This block used to show
+  // { time, vehicle } pairs, which nothing has ever written — see q1 for why
+  // the vehicle belongs on the ghost rather than here.
   records: {
-    "town-rug-loop": {
-      bestLap:   { time: 31450, vehicle: "red-racer" },
-      bestTotal: { time: 98120, vehicle: "red-racer" }
-    }
+    "town-rug-loop": { bestLap: 31.45, bestTotal: 98.12 }
   },
 
   collection: {
@@ -98,7 +98,12 @@
 
 Stored under a single key: `bedroomracers.save.v1`.
 
-Times are **integer milliseconds**. Never store formatted time strings.
+Times are stored as **seconds, as floats** — not the integer milliseconds this
+document originally specified. The race clock is accumulated in seconds from the
+fixed timestep and every target time in `events.js` is written in seconds, so
+milliseconds would mean converting at both ends of every comparison to gain
+precision nothing displays. What the rule was really guarding against still
+holds: **never store a formatted time string.**
 
 ## Versioning and migration
 
@@ -153,17 +158,27 @@ that is acceptable and must not be a hard failure.
 Time Trial ghosts (`01_Game_Loop.md`) are the one item that could realistically
 threaten the quota.
 
-Options: store only the best ghost per track, cap recorded frames, or store inputs
-rather than positions. **Input recording is far smaller** and works given the fixed
-timestep in `14_Technical_Architecture.md` — but it requires strict determinism.
+~~Options: store only the best ghost per track, cap recorded frames, or store
+inputs rather than positions. **Input recording is far smaller** and works given
+the fixed timestep in `14_Technical_Architecture.md` — but it requires strict
+determinism.~~
 
-Deferred to Phase 5. Ghosts live under a separate storage key so they can be dropped
-independently.
+**Settled in Phase 5, and the sentence above is wrong on both counts** — inputs
+are neither smaller nor safe. See q3. What shipped: positions at 10Hz, five
+bytes a sample, one ghost per track PER VEHICLE, capped at six minutes of
+recording, under its own storage key so it is the first thing dropped when quota
+bites.
 
 ## Open questions
 
-1. Are records per-vehicle or per-track only? Per-vehicle is more interesting and
-   multiplies storage and UI complexity.
+1. ~~Are records per-vehicle or per-track only? Per-vehicle is more interesting
+   and multiplies storage and UI complexity.~~ **Resolved in Phase 11: BOTH,
+   and the game already had both.** The number in `save.records` stays
+   per-track. The per-vehicle record already exists and is a GHOST, not a
+   number — `Ghost` is keyed `track.vehicle` and keeps only the faster run.
+   Measured below: vehicle choice is worth 24.72 seconds on a 92-second run, so
+   a per-track number can only ever mean one car; and a per-vehicle table would
+   take the hand-typed save code from 517 characters to 2,739.
 2. ~~Should there be an explicit export/import (a save code) so players can move
    progress between browsers?~~ **Resolved in Phase 9: yes — one code, on the
    main menu, carrying progress and deliberately not settings.** It was cheap,
@@ -486,3 +501,67 @@ same thing as *being* a v2 build, which is what the control does now.
 
 The menu and both panel states were also rendered and looked at, because a
 stopwatch cannot verify a picture and this milestone moved a row of controls.
+
+## Question 1, answered (Phase 11)
+
+**Records are per-track. The per-vehicle record is the ghost, and it already
+exists.** Nothing needs building; what was missing was anyone saying so.
+
+### The vehicle is worth more than the driver
+
+The question assumed per-vehicle records would be "more interesting". Measured,
+they are more than interesting — without them the per-track number is close to
+meaningless. Same track, same seeded stand-in (technician on `normal`, the
+`calibrate.sh` reference), three seeds, median. `tt-rug-route`, three laps, so
+these are full-run times:
+
+| vehicle | median run | spread across seeds |
+| --- | --- | --- |
+| yellow-rocket | **77.42** | 0.18 |
+| red-racer | 92.35 | 0.45 |
+| heirloom | 96.30 | 1.78 |
+| purple-micro | 96.47 | 2.25 |
+| orange-tipper | 96.80 | 0.08 |
+| teal-scout | 97.60 | 3.40 |
+| cream-camper | 97.80 | 0.17 |
+| blue-buggy | 101.82 | 0.07 |
+| green-pickup | **102.13** | 2.05 |
+
+**24.72 seconds between the fastest and slowest car, against 0.07–3.40 seconds
+of noise between seeds.** The vehicle is roughly an order of magnitude louder
+than everything else in the measurement. A single per-track `bestTotal` is
+therefore a record for the yellow rocket; set it once and a player in the pickup
+watches a number that can never move again.
+
+### The ghost is already the per-vehicle record
+
+`Ghost` stores under `bedroomracers.ghost.<trackId>.<vehicleId>` and `store()`
+keeps a run only if it beats the one already there. That is a personal best per
+track per vehicle, with the recorded `time` beside it — and it is expressed the
+right way round for a racing game: as a car to chase rather than as a row in a
+table.
+
+It also lives outside the save blob, in its own key, so it is dropped first when
+quota bites. A per-vehicle number inside `save.records` would be the same fact
+stored twice, in the place least able to afford it.
+
+### What a per-vehicle table would cost the save code
+
+Measured by building both saves and exporting: twelve track rows produce a **517**
+character code; twelve tracks × nine vehicles — 108 rows — produce **2,739**.
+Both are the full table, which is the case that matters: an empty row is already
+dropped from the code, so the cost only arrives for a player who has raced
+everything, which is exactly the player who would want the feature.
+
+The decoder's cap is 20,000 characters, so it FITS — the storage objection this
+question raised is not the real one. The real one is the design constraint q2
+shipped with: the code is Crockford base32 precisely because it gets pasted by
+hand and *sometimes read aloud or retyped*. 517 characters is already a hundred
+groups of five. Multiplying that by 5.3 for a number the ghost already keeps is
+a bad trade on the only axis that matters.
+
+### The rule
+
+**A number that only means something with a vehicle attached does not go in
+`save.records`.** `records` is the track's headline — the best anyone has done
+here, in anything. Anything per-vehicle belongs beside the ghost.

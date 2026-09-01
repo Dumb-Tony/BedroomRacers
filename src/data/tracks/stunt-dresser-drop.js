@@ -234,11 +234,25 @@ BR.TRACKS['stunt-dresser-drop'] = {
 
   /* All three sit beside FLOOR sections. A prop takes the height of the nearest
      centreline point, so one placed next to the raised deck hangs in mid-air
-     off the side of it. */
+     off the side of it.
+
+     BESIDE, and that is the half of the rule this file broke. The third block
+     was authored at (2250,2500) with the rest of the track, a phase before the
+     magnetic booster existed — and the booster was then laid straight over the
+     top of it. Measured after the fact: 37 units from the centreline of a
+     300-wide road, and 31 units off the axis of a ribbon 190 wide. A solid
+     eight-sided wall, 36 high, standing in the middle of the thing that grabs
+     the car and throws it. The AI had been swerving round it every lap since
+     (AIDriver.avoidProps), which is why the booster's own note records the
+     field running at -98 through a mouth centred on the line.
+
+     247 units out now, on the far side of the straight, on the floor and clear
+     of every ride. TrackManager.findMisplacedProps() checks both halves of the
+     rule on every build, so the next one cannot arrive quietly. */
   props: [
-    { type: 'block',  x: 1900, y: 3150, r: 32, h: 38, rot: 0.4 },
-    { type: 'crayon', x:  600, y: 2700, r: 30, h: 26, rot: 1.6 },
-    { type: 'block',  x: 2250, y: 2500, r: 30, h: 36, rot: 2.2 },
+    { type: 'block',  x: 1900, y: 3150, r: 32, h: 38, rot: 0.4 },   // z 0, 225 out
+    { type: 'crayon', x:  600, y: 2700, r: 30, h: 26, rot: 1.6 },   // z 0, 196 out
+    { type: 'block',  x: 1980, y: 2380, r: 30, h: 36, rot: 2.2 },   // z 0, 247 out
   ],
 
   /* The furniture the track is built over. Drawn on the floor, so the raised

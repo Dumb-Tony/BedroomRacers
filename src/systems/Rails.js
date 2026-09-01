@@ -212,18 +212,6 @@ BR.Rails = {
   },
 
   /**
-   * Arc length of the ribbon — how far the SURFACE runs, including the circle.
-   *
-   * No longer what paces the ride; see `step`. Kept because it is the honest
-   * description of the geometry and the renderer's stripe count reads it.
-   */
-  arcLength(R) {
-    // A booster has no circle in it, so its surface is exactly its length.
-    if (R.kind === 'booster') return R.length;
-    return Math.hypot(2 * Math.PI * R.radius * (R.turns || 1), R.length);
-  },
-
-  /**
    * How far a mouth reaches ALONG the direction of travel, from its centre.
    *
    * The entry box is axis-aligned and the road usually is not, so a mouth that
@@ -350,9 +338,10 @@ BR.Rails = {
     }
 
     /* PACED BY GROUND DISTANCE, NOT BY THE CIRCUMFERENCE OF THE CIRCLE.
-       This was `/ arcLength(R)`, which is the physically honest reading — going
-       round a vertical ring really is further than driving past it — and it
-       made every loop in the game a TRAP.
+       This divided by the ribbon's ARC LENGTH — hypot(2*PI*radius*turns,
+       length), the circle included — which is the physically honest reading,
+       going round a vertical ring really is further than driving past it, and
+       it made every loop in the game a TRAP.
 
        Measured on Shelf Run, identical driver, full laps: 32.55s with no rail,
        34.12s with the loop. The ride parked the car for 1.8 seconds and handed

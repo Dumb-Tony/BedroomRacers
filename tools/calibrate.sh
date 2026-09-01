@@ -7,7 +7,7 @@
 #
 # Run it after anything that could change how long a lap takes: the driving
 # model, rails, ramps, boost pads, AI, track data, grid layout. It measures all
-# eighteen events and diffs against the committed baseline.
+# twenty-six events and diffs against the committed baseline.
 #
 # WHY A COMMITTED BASELINE AND NOT A FORMULA. The obvious version of this tool
 # checks each event against its own target (platinum ~ 0.93 x reference) and
