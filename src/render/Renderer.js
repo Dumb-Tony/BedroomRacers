@@ -3809,7 +3809,9 @@ BR.Renderer = {
       if (d.life <= 0) continue;
       const t = d.life / d.max;
       const p = Pj.project(d.x, d.y, d.z);
-      ctx.fillStyle = 'rgba(214,198,170,' + (0.34 * t).toFixed(3) + ')';
+      // The colour comes from the FLOOR now, not from a literal. Sand, carpet
+      // lint, a red throw and water spray are not the same beige.
+      ctx.fillStyle = 'rgba(' + (d.col || '214,198,170') + ',' + (0.34 * t).toFixed(3) + ')';
       ctx.beginPath();
       ctx.arc(p.sx, p.sy, d.r * (1.4 - t * 0.4), 0, Math.PI * 2);
       ctx.fill();
@@ -3881,6 +3883,45 @@ BR.Renderer = {
     ctx.fillStyle = 'rgba(0,0,0,' +
       (0.42 * (1 - lift * 0.18) * Pj.shadowAlphaAt(anchor.depth)).toFixed(3) + ')';
     ctx.fill();
+
+    /* ── boost flame ────────────────────────────────────────────────────────
+       Boost is the most dramatic thing a car can do and it had NO
+       representation on the car at all: the meter drained, the camera punched
+       in, and the car itself looked identical. A rival boosting past you was
+       indistinguishable from a rival driving past you.
+
+       So this is drawn for EVERY car, unlike the meter ring below, which is the
+       player's own instrument and would be noise under eight of them. Knowing
+       that the car ahead just spent its boost is information you can act on.
+
+       Two tongues rather than one, at the rear corners where an exhaust would
+       be, flickering on a hash of the boost timer so it never sits still — and
+       squashed onto the ground plane by groundTilt like everything else, or it
+       would stand up off the deck and read as a flag. */
+    if (v.boosting) {
+      const c2 = Math.cos(heading), s2 = Math.sin(heading);
+      const back = -spec.length * 0.52, halfW = spec.width * 0.30;
+      // Flicker from the drain, so it is tied to the thing running out.
+      const fl = 0.72 + 0.28 * Math.sin((v.boostTime || 0) * 47);
+      for (let side = -1; side <= 1; side += 2) {
+        const bx = v.x + back * c2 - (halfW * side) * s2;
+        const by = v.y + back * s2 + (halfW * side) * c2;
+        const len = spec.length * (0.55 + 0.45 * fl);
+        const tipx = bx - c2 * len, tipy = by - s2 * len;
+        const b = PT(bx, by, ground + 2), t2 = PT(tipx, tipy, ground + 2);
+        const g = ctx.createLinearGradient(b.sx, b.sy, t2.sx, t2.sy);
+        g.addColorStop(0, 'rgba(255,236,170,' + (0.85 * fl).toFixed(2) + ')');
+        g.addColorStop(0.45, 'rgba(255,168,64,' + (0.55 * fl).toFixed(2) + ')');
+        g.addColorStop(1, 'rgba(255,110,40,0)');
+        ctx.strokeStyle = g;
+        ctx.lineWidth = Math.max(1.5, spec.width * 0.34 * shrinkK);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(b.sx, b.sy);
+        ctx.lineTo(t2.sx, t2.sy);
+        ctx.stroke();
+      }
+    }
 
     // ── boost ring, on the ground around the car (vehicle-attached meter).
     //    Drawn as an ellipse squashed by groundTilt so it sits ON the plane.

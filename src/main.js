@@ -728,12 +728,40 @@ BR.Game = {
       }
     }
 
-    // Marks and dust for every human — an opponent's slide is not the
-    // player's business, but the other player's certainly is.
+    /* Marks and dust for EVERY car, not just the humans.
+       It used to be humans only, on the reasoning that "an opponent's slide is
+       not the player's business". That is wrong in a racing game: a rival
+       sliding wide ahead of you is the clearest possible warning that the
+       corner is tighter than it looks, and their trail through a sandpit shows
+       you the line somebody else already packed down. Opponents emit at a lower
+       rate so eight cars cannot flush the pool in a corner.
+
+       Landing and impact are edge-detected HERE, off state the vehicle already
+       keeps, for the same reason Audio does it: this runs once per fixed tick,
+       and reading a boolean per sub-step would fire several times for one
+       event. */
     for (let i = 0; i < this.racers.length; i++) {
-      if (this.racers[i].isPlayer) {
-        BR.Particles.emitForVehicle(this.racers[i].vehicle, dt);
+      const r = this.racers[i];
+      const v = r.vehicle;
+      BR.Particles.emitForVehicle(v, dt, !!r.isPlayer);
+
+      const air = !v.grounded && !v.rail && !v.falling;
+      if (v._fxAir && !air && v.grounded) {
+        // Came down. Force from how far it fell, not from speed — a long flat
+        // jump should not thump like a drop off the dresser.
+        const drop = BR.M.clamp((v._fxPeak || 0) / 120, 0, 1);
+        if (drop > 0.08) BR.Particles.landing(v, drop);
+        v._fxPeak = 0;
       }
+      if (air) v._fxPeak = Math.max(v._fxPeak || 0, v.z || 0);
+      v._fxAir = air;
+
+      const hits = v.impacts || 0;
+      if (v._fxHits === undefined) v._fxHits = hits;
+      if (hits > v._fxHits) {
+        BR.Particles.impact(v, BR.M.clamp(v.lastImpact || 0.5, 0, 1));
+      }
+      v._fxHits = hits;
     }
   },
 
