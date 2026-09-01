@@ -137,6 +137,35 @@ puzzle piece, carry a battery to a toy robot.
 
 ## Progression
 
+**`06_Progression_Career.md` owns the career arc** — the ladder, the gates, the
+star economy and how the whole thing ends. This section covers what the loop
+needs to know; that file carries the numbers and the rules they follow.
+
+### The arc
+
+Six worlds, twelve tracks, twenty-six events, seventy-eight stars and
+forty-eight toy pieces. The worlds run in teaching order — forgiving ground,
+then hard ground, then ground that changes, then off the floor, then no grip,
+then a world where the road itself is the slow way round — and that order is
+fixed. Gates move; the sequence does not.
+
+The ladder **finishes before the content does**. The last gate is 44 stars of
+78, so roughly a third of the game is played after progression has stopped
+handing anything out. That is deliberate: the end of the game should be played
+for its own sake rather than to open one more door.
+
+### The ending
+
+There are three, and they are three different kinds of thorough:
+
+- **Finished** — every event raced to a medal. The ladder is done.
+- **Collected** — all forty-eight toy pieces. This is the only route to the
+  Heirloom, and the one reward stars cannot buy.
+- **Perfect** — both, and every star.
+
+A career that cannot be finished is a list, not a career. Whatever else changes,
+the game must have a last thing that happens.
+
 ### Event map
 An illustrated bedroom map with event nodes. Completing events unlocks new tracks,
 vehicles, race modes, cosmetics, hidden challenges and additional environments.

@@ -75,6 +75,65 @@ BR.ProgressionManager = {
     return out;
   },
 
+  /* ── the end of the career ─────────────────────────────────────────────
+     A career that cannot be finished is not a career, it is a list. Before
+     this there was no expression anywhere in the game for "you have done it" —
+     the ladder simply ran out, and the only terminal event of any kind was a
+     3.2-second banner during a race when the last toy piece was touched.
+
+     Three distinct endings, deliberately, because they are three different
+     kinds of thorough and 06_Progression_Career.md wants them told apart:
+
+       finished   every event raced and medalled — you have seen all of it
+       collected  every toy piece found — the Heirloom, and the only thing
+                  stars cannot buy (09_Vehicles.md)
+       perfect    both, plus every star
+
+     These are QUERIES, not state: nothing is stored, so they cannot drift out
+     of step with the save and they are correct the moment a save is imported
+     by code. */
+
+  /* Reads the map directly rather than going through eventRecord(), which
+     CREATES a record for anything it is asked about. This is called twice per
+     race from record(); routing it through eventRecord would quietly write an
+     empty entry for all 26 events into every save on the first finish. */
+  eventsFinished() {
+    const evs = this.save().progression.events;
+    let n = 0;
+    for (let i = 0; i < BR.EVENTS.length; i++) {
+      const rec = evs[BR.EVENTS[i].id];
+      if (rec && rec.medal && rec.medal !== 'none') n++;
+    }
+    return n;
+  },
+
+  /** Every event raced to a medal. The ladder's own ending. */
+  careerComplete() {
+    return BR.EVENTS.length > 0 &&
+           this.eventsFinished() === BR.EVENTS.length;
+  },
+
+  /** Nothing left in the game. */
+  careerPerfect() {
+    return this.careerComplete() && this.setComplete() &&
+           this.stars() >= this.maxStars();
+  },
+
+  /** One call for anything that wants to show where the player is. */
+  careerState() {
+    return {
+      events:    this.eventsFinished(),
+      eventsOf:  BR.EVENTS.length,
+      stars:     this.stars(),
+      starsOf:   this.maxStars(),
+      pieces:    this.piecesFound().length,
+      piecesOf:  this.piecesTotal(),
+      complete:  this.careerComplete(),
+      collected: this.setComplete(),
+      perfect:   this.careerPerfect(),
+    };
+  },
+
   /* What a locked vehicle needs. Locked content stays visible so the player can
      see what is coming (11_UI.md). */
   unlockFor(vehicleId) {
@@ -182,10 +241,15 @@ BR.ProgressionManager = {
     const rec = this.eventRecord(event.id);
     rec.played++;
 
+    // Sampled BEFORE this race's medal lands, so "did this race finish the
+    // career?" can be answered by comparing the two.
+    const wasComplete = this.careerComplete();
+
     const out = {
       medal: 'none', medalImproved: false,
       newObjectives: [], starsGained: 0,
       unlocked: [], personalBest: false,
+      careerComplete: false, careerPerfect: false,
     };
 
     if (!r.finished) {
@@ -231,6 +295,35 @@ BR.ProgressionManager = {
     // ── unlocks ────────────────────────────────────────────────────────────
     out.unlocked = this.applyUnlocks();
 
+    /* THE HEIRLOOM IS SAID TWICE NOW, and it used to be said once.
+
+       findPiece() grants it the instant the last toy piece is touched, which
+       is right — a piece is banked on contact so that quitting the lap you
+       spent fetching it still keeps it. But the announcement went with the
+       grant: a banner during the race, at 3.2 seconds, over a car the player is
+       still driving. Miss it and the game has told you nothing. The rarest
+       thing in it — the only reward stars cannot buy, and the end of a
+       48-piece collection spread across twelve tracks — could be handed over
+       while you were busy looking at the next corner.
+
+       So the first results card AFTER the set completes says it again, through
+       the `unlocked` list the card already draws. No new UI: HUD.drawResults
+       prints "UNLOCKED  <name>" for whatever is in here.
+
+       The marker lives in setsCompleted because that array is already
+       persisted AND already carried by save codes (SaveManager.js), so the
+       announcement happens exactly once per save and survives an export. */
+    const sets = this.save().collection.setsCompleted;
+    if (this.setComplete() && sets.indexOf('toy-set-shown') === -1) {
+      sets.push('toy-set-shown');
+      if (out.unlocked.indexOf('heirloom') === -1) out.unlocked.push('heirloom');
+    }
+
+    /* Did this race end the career? Only true on the one result card that
+       finishes it, never on a replay afterwards. */
+    out.careerComplete = !wasComplete && this.careerComplete();
+    out.careerPerfect  = this.careerPerfect();
+
     BR.SaveManager.save();
     return out;
   },
@@ -247,8 +340,14 @@ BR.ProgressionManager = {
         case 'clean':    ok = r.collisions < 4; break;
         case 'spotless': ok = r.position === 1 && r.collisions === 0; break;
         case 'drifter':  ok = r.driftSeconds >= 6; break;
+        /* The threshold is the EVENT'S, not this file's. It used to read
+           `event.id === 'rug-route-03' ? 27 : 29` — a track's measured lap time
+           hardcoded into the progression system by id, so tuning one event's
+           objective meant editing a system file, and deleting that event would
+           have left a dead branch behind. Content belongs in content
+           (16_Content_Pipeline.md). */
         case 'lap':      ok = r.bestLap !== null &&
-                              r.bestLap < (event.id === 'rug-route-03' ? 27 : 29); break;
+                              r.bestLap < (event.lapUnder || 29); break;
         case 'ttGold':   ok = r.time !== null && event.times &&
                               r.time <= event.times.gold; break;
         case 'ttPlat':   ok = r.time !== null && event.platinumTime &&
