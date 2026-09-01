@@ -140,7 +140,12 @@ BR.Game = {
     this.event = BR.EVENTS[0];
     this.buildRace();
     BR.Screens.init(document.getElementById('game'));
-    BR.Screens.set(BR.Screens.MENU);
+    /* First run opens on the welcome card instead of the menu — see
+       src/ui/Coach.js for the flag and why it is a setting. Everything else
+       about booting is unchanged, and a seat that has been taught goes
+       straight to the menu exactly as before. */
+    BR.Screens.set(BR.Coach && !BR.Coach.taught()
+      ? BR.Screens.WELCOME : BR.Screens.MENU);
 
     // Development tooling only — absent from the shipped bundle.
     if (BR.Debug) BR.Debug.init(this);
@@ -571,6 +576,15 @@ BR.Game = {
        over the top of them rather than the other way round — a thumb pad
        floating above a paused game reads as still being live. */
     BR.Touch.draw(BR.Renderer.ctx, BR.Renderer.w, BR.Renderer.h);
+    /* The first-run lessons (src/ui/Coach.js). Render-only and solo-only: it
+       reads the vehicle and the race manager and writes nothing but its own
+       state, so no target time moves. It sits AFTER the touch pads, which it
+       has to clear on a phone, and BEFORE the screens layer, so the pause card
+       covers it. */
+    if (BR.Coach) {
+      BR.Coach.update(this, dt);
+      BR.Coach.draw(BR.Renderer.ctx, BR.Renderer.w, BR.Renderer.h, dt);
+    }
     BR.Screens.draw(BR.Renderer.ctx, BR.Renderer.w, BR.Renderer.h, dt);
 
     // Once per RENDERED frame, never from inside the fixed step — see Audio.js.

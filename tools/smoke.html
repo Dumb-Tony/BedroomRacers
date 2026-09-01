@@ -87,7 +87,9 @@
 
     // ── every screen draws, at several sizes ────────────────────────────────
     var SIZES = [[1280, 800], [375, 812], [900, 500]];
-    var SCREENS = ['MENU', 'EVENTS', 'GARAGE'];
+    // WELCOME, SETTINGS and CREDITS joined the list when they were built. A
+    // screen this cannot draw is a screen nothing checks.
+    var SCREENS = ['MENU', 'EVENTS', 'GARAGE', 'WELCOME', 'SETTINGS', 'CREDITS'];
     SIZES.forEach(function (wh) {
       var ow = Re.w, oh = Re.h, oW = Re.canvas.width, oH = Re.canvas.height;
       Re.w = wh[0]; Re.h = wh[1];
@@ -144,6 +146,58 @@
         }
       });
       BR.Input.sample = real;
+    });
+
+    /* ── the first-run lessons ──────────────────────────────────────────────
+       Coach.update and Coach.draw run once per rendered frame beside a live
+       race, and the pause card grows a row while they are going. None of that
+       is reached by any check above, because none of them turns the coach on. */
+    check('coach lessons', function () {
+      BR.Coach.begin();
+      var ai = BR.AIDriver.create('technician', 'normal');
+      BR.Input.sample = function () {
+        return BR.AIDriver.drive(ai, G.vehicle, G.arena, 1 / 60);
+      };
+      for (var i = 0; i < 60 * 45; i++) {
+        G.step(1 / 60);
+        BR.Coach.update(G, 1 / 60);
+        /* Drawn every frame in the real loop; a sample is enough here, and it
+           still lands on several different cards.
+
+           NOT every frame: 2700 full world renders spent the whole
+           virtual-time budget and the page never wrote its report, which this
+           script reports as "the page did not finish" — indistinguishable from
+           the game hanging. A check that is too expensive to finish is a check
+           that tells you nothing. */
+        if (i % 90 === 0) {
+          Re.render(G, 0.5, 1 / 60);
+          BR.Coach.draw(Re.ctx, Re.w, Re.h, 1 / 60);
+          S.draw(Re.ctx, Re.w, Re.h, 1 / 60);
+        }
+      }
+      BR.Input.sample = real;
+      // The pause card carries SKIP THE LESSONS only while they are running.
+      G.paused = true;
+      Re.render(G, 0.5, 1 / 60);
+      S.draw(Re.ctx, Re.w, Re.h, 1 / 60);
+      if (!S.regions.length) throw new Error('paused coach card has no regions');
+      G.paused = false;
+      BR.Coach.skip();
+      if (BR.Coach.active) throw new Error('skip did not stop the lessons');
+      if (!BR.SaveManager.get().settings.taught) {
+        throw new Error('skip did not mark the seat taught');
+      }
+    });
+    BR.Input.sample = real;
+
+    // The armed reset moved to SETTINGS with the save codes, and it draws over
+    // the top of that screen rather than instead of it.
+    check('settings armed reset', function () {
+      S.set(S.SETTINGS);
+      S.resetArmed = true;
+      Re.render(G, 0.5, 1 / 60);
+      S.draw(Re.ctx, Re.w, Re.h, 1 / 60);
+      S.resetArmed = false;
     });
 
     // ── split screen, up to four ────────────────────────────────────────────

@@ -810,6 +810,11 @@ BR.HUD = {
 
   drawSoloControls(ctx, RM, w, h) {
     if (!RM || !RM.STATE) return;
+    /* Not while the first-run lessons are running. They occupy exactly the
+       same two seconds of countdown, and the leaflet's first card names the
+       steering control on a key cap of its own — two sets of key names in one
+       glance is how a screen stops being read at all. */
+    if (BR.Coach && BR.Coach.active) return;
 
     let a;
     if (RM.state === RM.STATE.COUNTDOWN) {
