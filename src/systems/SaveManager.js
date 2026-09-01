@@ -46,6 +46,13 @@ BR.SaveManager = {
         autoAccelerate: true,
         mapSize: 0.82,
         cornerHint: 1,
+
+        /* Has this seat been shown how to play (src/ui/Coach.js). A SETTING,
+           not progress, and deliberately: reset() keeps settings and import
+           keeps this device's, so wiping your stars or pasting in a save code
+           does not hand you the first-run lessons again. See the note at the
+           top of Coach.js. */
+        taught: false,
       },
 
       progression: {

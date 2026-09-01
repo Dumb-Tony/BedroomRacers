@@ -19,6 +19,13 @@ BR.Screens = {
 
   MENU: 'menu', EVENTS: 'events', GARAGE: 'garage', RACE: 'race',
 
+  /* WELCOME is the first thing a brand new save sees, instead of the menu.
+     SETTINGS and CREDITS are the two screens 11_UI.md has listed under "Main
+     menu" since the first draft and which never got built — the settings that
+     existed were reachable only from the pause card, mid-race, or from a key
+     nobody was told about. */
+  WELCOME: 'welcome', SETTINGS: 'settings', CREDITS: 'credits',
+
   /* Say what changes, not how hard it is. "Medium" tells a player nothing. */
   DIFF_BLURB: {
     easy:   'Slower rivals, gentler crashes, more forgiving',
@@ -159,7 +166,16 @@ BR.Screens = {
      stranded on a screen with no way out. */
   back() {
     if (this.state === this.RACE && BR.Game.paused) { BR.Game.paused = false; return; }
-    if (this.state === this.EVENTS || this.state === this.GARAGE) {
+    /* Escaping off the welcome card is declining it, not dodging it. If it
+       came back on the next boot the flag would mean nothing, and the one
+       thing this screen must never be is a thing you cannot get rid of. */
+    if (this.state === this.WELCOME) {
+      if (BR.Coach) BR.Coach.markTaught();
+      this.set(this.MENU);
+      return;
+    }
+    if (this.state === this.EVENTS || this.state === this.GARAGE ||
+        this.state === this.SETTINGS || this.state === this.CREDITS) {
       this.set(this.MENU);
     }
   },
@@ -318,6 +334,16 @@ BR.Screens = {
          one-press button that eats a save is not acceptable. */
       case 'saveExport': this.openExport(); break;
       case 'saveImport': this.openImport(); break;
+
+      /* ── the first-run lessons (src/ui/Coach.js) ─────────────────────────
+         Three actions and no fourth: take them, decline them, stop them
+         halfway. Coach.begin() picks the event itself, so the welcome card
+         and SHOW THE LESSONS AGAIN cannot drift apart about which track
+         teaches. All three mark the seat as taught — declining is an answer,
+         and a screen that reappears after you have said no is a bug. */
+      case 'coachStart':   BR.Coach.begin(); break;
+      case 'coachDecline': BR.Coach.markTaught(); this.set(this.MENU); break;
+      case 'coachSkip':    BR.Coach.skip(); break;
 
       case 'goto':    this.set(r.value); break;
       case 'start':   G.startEvent(BR.eventById(r.value)); break;
@@ -689,9 +715,12 @@ BR.Screens = {
     ctx.fillStyle = 'rgba(14,12,10,0.74)';
     ctx.fillRect(0, 0, w, h);
 
-    if (this.state === this.MENU)   this.drawMenu(ctx, w, h);
-    if (this.state === this.EVENTS) this.drawEvents(ctx, w, h);
-    if (this.state === this.GARAGE) this.drawGarage(ctx, w, h);
+    if (this.state === this.MENU)    this.drawMenu(ctx, w, h);
+    if (this.state === this.EVENTS)  this.drawEvents(ctx, w, h);
+    if (this.state === this.GARAGE)  this.drawGarage(ctx, w, h);
+    if (this.state === this.WELCOME) this.drawWelcome(ctx, w, h);
+    if (this.state === this.SETTINGS) this.drawSettings(ctx, w, h);
+    if (this.state === this.CREDITS) this.drawCredits(ctx, w, h);
 
     // A note stuck on with tape, which is what a transient message is.
     if (this.toastTime > 0) {
@@ -775,7 +804,13 @@ BR.Screens = {
   drawPause(ctx, w, h) {
     const T = BR.Toy;
     const cardW = Math.min(380, w - 48);
-    const cardH = 372;
+    /* The lessons row only exists while they are running, which is a first-run
+       state and nothing else. It is the KEYBOARD AND PAD route out of them —
+       the card's own SKIP button is a pointer and thumb target, and Screens'
+       key handler deliberately ignores the keyboard while a race is being
+       driven, so without this a pad player could not stop them at all. */
+    const coaching = !!(BR.Coach && BR.Coach.active);
+    const cardH = 372 + (coaching ? 46 : 0);
     /* Centred, but never above the top edge. On a screen shorter than the card
        — a phone in landscape is 375 — centring puts RESUME off the top, and
        RESUME is the one control here that has to be reachable. Pushed down, the
@@ -797,6 +832,11 @@ BR.Screens = {
     this.button(ctx, bx, by, bw, 36, 'RESTART RACE', 'restart', null);
     by += 46;
     this.button(ctx, bx, by, bw, 36, 'QUIT TO EVENTS', 'quitToEvents', null);
+
+    if (coaching) {
+      by += 46;
+      this.button(ctx, bx, by, bw, 36, 'SKIP THE LESSONS', 'coachSkip', null);
+    }
 
     // ── settings worth reaching mid-race ─────────────────────────────────
     by += 54;
@@ -915,9 +955,41 @@ BR.Screens = {
        Pre-existing, and the same shape of fault as the difficulty overlap
        already recorded here: a layout that mixes a proportional anchor with a
        fixed block cannot hold as the screen shortens. Above about 620 tall
-       nothing moves. */
+       nothing moves.
+
+       ── THE WHOLE COLUMN IS SOLVED BEFORE ANYTHING IS DRAWN ────────────────
+       It used to run the other way: `top` was chosen from the height, and the
+       stack was then wedged in underneath whatever was left. That cannot work,
+       because the stack is the part with a hard minimum — five controls and
+       two captions that physically cannot be closer together — and the header
+       is the part that can move. Solving the stack first and hanging the
+       header off it is why 812x375 now fits with nothing overlapping and
+       nothing sliced, and why 1280x800 is unmoved to the pixel. */
     const HEADER_H = 110;                  // subtitle, tally and hint below it
-    const top = Math.min(h * 0.22, Math.max(8, h * 0.44 - 8 - HEADER_H));
+    const ROW_H = 26;                      // the SETTINGS / CREDITS row
+    const BOT_PAD = 8;
+
+    /* Gaps measured from one control's TOP to the next one's. The minimum for
+       each is the height of the control it steps over, plus room for the
+       moulded caption that sits above the next one where there is one — a
+       caption drawn into the bevel of the button above it is the thing a
+       render at 812x375 caught. */
+    const wantG = [58, 58, 62, 46];
+    const minG  = [50, 60, 52, 40];
+    let wantSum = 0, minSum = 0;
+    for (let i = 0; i < 4; i++) { wantSum += wantG[i]; minSum += minG[i]; }
+
+    /* Anchored at 0.44 of the height, but never lower than the point where the
+       stack stops fitting above the bottom edge. */
+    let by = Math.min(h * 0.44, h - (minSum + ROW_H + BOT_PAD));
+    if (by < HEADER_H + 16) by = HEADER_H + 16;
+    const top = Math.min(h * 0.22, Math.max(8, by - 8 - HEADER_H));
+
+    const budget = h - BOT_PAD - ROW_H - by;
+    const s = BR.M.clamp((budget - minSum) / (wantSum - minSum), 0, 1);
+    const g = [];
+    for (let i = 0; i < 4; i++) g.push(minG[i] + (wantG[i] - minG[i]) * s);
+    const gButton = g[0], gButton2 = g[1], gSection = g[2];
 
     /* THE LOGO IS THE BOX FRONT. A wordmark printed on a sticker, tilted,
        because nothing a child owns is aligned.
@@ -982,27 +1054,34 @@ BR.Screens = {
        the scale is 1 and the layout is pixel-for-pixel what it was, so nothing
        that has been looked at on a desktop moves. Button heights are left alone
        because they are touch targets, and shrinking those to win space is how
-       a menu becomes unusable on exactly the devices it was shrunk for. */
-    const headerBottom = top + HEADER_H;   // stars line, plus the controls hint
-    const tail = 50;                       // difficulty row and its blurb
-    const natural = 58 + 58 + 62;
-    const s = Math.max(0.62, Math.min(1, (h - headerBottom - tail - 12) / natural));
-    const gButton = Math.round(58 * s);
-    const gSection = Math.round(62 * s);
+       a menu becomes unusable on exactly the devices it was shrunk for.
 
+       ── AND IT STILL OVERLAPPED, at both of the sizes this file argues about
+       A scale factor with a floor of 0.62 does not say anything about whether
+       the parts fit; it only says how hard it tried. Rendering the menu at
+       820x420 and at 812x375 with the save-code row still on it showed the row
+       drawn THROUGH the bottom of the difficulty tabs at both — 7px at one,
+       10px at the other — which is the same defect this document already
+       records as fixed, and it is the dangerous direction: hit() takes the
+       LAST matching region, so a press aimed at DIFFICULTY armed RESET
+       PROGRESS.
+
+       The gaps are now interpolated between what they WANT to be and the
+       smallest that keep two parts apart, against the space actually
+       available — solved at the top of this function, before the header is
+       placed. Nothing can overlap, because the minimum is the height of the
+       part above it; nothing can run off the bottom, because the budget is
+       measured from the bottom. On anything over about 640 tall the gaps sit
+       at their natural values and the desktop layout is unmoved, pixel for
+       pixel. */
     const bw = 240, bx = cx - bw / 2;
-    let by = h * 0.44;
-    // Pull the stack up if it would otherwise run off the bottom, but never up
-    // into the header.
-    const maxBy = h - (gButton * 2 + gSection + tail) - 12;
-    if (by > maxBy) by = Math.max(headerBottom + 8, maxBy);
 
     this.button(ctx, bx, by, bw, 46, 'RACE', 'goto', this.EVENTS, { primary: true });
     by += gButton;
     this.button(ctx, bx, by, bw, 42, 'GARAGE', 'goto', this.GARAGE);
 
     // ── players ───────────────────────────────────────────────────────────
-    by += gButton;
+    by += gButton2;
     ctx.save();
     ctx.textAlign = 'center';
     this.section(ctx, 'PLAYERS', cx, by - 16);
@@ -1068,46 +1147,27 @@ BR.Screens = {
                opts[i] === cur, T.YELLOW);
     }
 
-    /* ── save codes and reset progress ─────────────────────────────────────
-       15_Save_System.md open questions 2 and 4, in one row of small, dim
-       controls — they must be findable, not inviting.
+    /* ── settings and credits ──────────────────────────────────────────────
+       11_UI.md has listed both under "Main menu" since its first draft and
+       neither existed. What settings there were lived on the PAUSE card —
+       reachable only from inside a race — plus one auto-accelerate toggle on
+       an undocumented T key, which is the same as not existing.
 
-       COUNTED THROUGH SaveManager.saveTally(), not by walking the events map
-       here. This used to count any event with a truthy `medal`, and 'none' is
-       truthy: drawEvents calls eventRecord() for every event, which CREATES a
-       {medal:'none'} row, so simply opening the event list on a fresh save gave
-       the player eighteen medals and offered to erase them.
+       THE SAVE-CODE ROW MOVED IN THERE with them, and that is the point of
+       putting this row here rather than adding a fourth one. Copying a code
+       out, pasting one in and erasing everything are settings-shelf things, and
+       a menu that grows a row per feature is how the 820x420 overlap above
+       happened in the first place. The region count no longer depends on
+       whether the save has progress in it either, so the menu's focus order is
+       the same eleven controls on every save there has ever been.
 
-       USE A SAVE CODE is always here, including on an empty save — a brand new
-       browser is precisely where somebody needs to bring progress IN, and it is
-       the one case where importing destroys nothing. Copying out and resetting
-       only appear once there is something to copy or lose. */
-    const t = BR.SaveManager.saveTally();
-    const hasProgress = t.stars > 0 || t.medals > 0 || t.pieces > 0;
-
-    /* Pinned near the bottom, but NEVER above the end of the flowed content,
-       and NEVER off the bottom either.
-
-       Bottom-anchoring alone put it straight on top of the difficulty buttons
-       at 820x420 and below — and because hit() takes the last matching region,
-       the reset won: a press aimed at DIFFICULTY armed a destructive control.
-       Taking the max keeps it low on a normal window and clear of everything
-       on a short one.
-
-       THE MAX ALONE WAS NOT ENOUGH, and a render at 820x420 is what showed it:
-       pushing the row down to by + 70 put its bottom edge at 435 on a 420-tall
-       screen, so COPY MY CODE, USE A CODE and RESET PROGRESS were all sliced in
-       half by the edge of the window and none of them could be pressed. Not an
-       overlap this time, an overflow — the same fault turned inside out. The
-       min is the other half of the fix.
-
-       `by` is the difficulty row. Its blurb is the one line here that can be
-       dropped without losing a control, so on a screen too short for both, it
-       is what goes. */
-    const ry = Math.min(Math.max(h - 52, by + 70), h - 30);
+       Flowed under the difficulty tabs, then pushed to the bottom of the
+       screen if there is slack — so a desktop keeps its low, quiet row and a
+       short window keeps its buttons whole. */
+    const ry = Math.min(Math.max(by + g[3], h - 52), h - BOT_PAD - ROW_H);
 
     // The blurb, only if there is honestly room for it between the tabs and
-    // whatever is pinned to the bottom.
+    // the row.
     if (by + 56 <= ry - 6) {
       ctx.save();
       ctx.textAlign = 'center';
@@ -1118,42 +1178,278 @@ BR.Screens = {
       ctx.textAlign = 'left';
     }
 
-    if (hasProgress && this.resetArmed) {
-      this.drawResetConfirm(ctx, w, h, t);
-    } else if (hasProgress) {
-      // Only labelled when the label has somewhere to go: on a short window the
-      // caption would land in the difficulty blurb.
-      if (ry - 13 >= by + 58) {
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.font = T.label(10, 600);
-        ctx.fillStyle = 'rgba(240,232,214,0.34)';
-        ctx.fillText('A save code moves progress to another browser', cx, ry - 14);
-        ctx.restore();
-        ctx.textAlign = 'left';
-      }
-      const bw3 = 108, bg3 = 6, x0 = cx - (bw3 * 3 + bg3 * 2) / 2;
-      this.button(ctx, x0, ry, bw3, 24, 'COPY MY CODE',
-                  'saveExport', null, { small: true });
-      this.button(ctx, x0 + bw3 + bg3, ry, bw3, 24, 'USE A CODE',
-                  'saveImport', null, { small: true });
-      this.button(ctx, x0 + (bw3 + bg3) * 2, ry, bw3, 24, 'RESET PROGRESS',
-                  'resetArm', null, { small: true });
-    } else {
-      this.button(ctx, cx - 80, ry, 160, 24, 'USE A SAVE CODE',
-                  'saveImport', null, { small: true });
-    }
+    const bw2 = 132, bg2 = 8, x0 = cx - (bw2 * 2 + bg2) / 2;
+    this.button(ctx, x0, ry, bw2, ROW_H, 'SETTINGS', 'goto', this.SETTINGS,
+                { small: true });
+    this.button(ctx, x0 + bw2 + bg2, ry, bw2, ROW_H, 'CREDITS', 'goto',
+                this.CREDITS, { small: true });
 
+    /* Under the row rather than on top of it. At h - 30 this sat inside the
+       bottom row at every window size, including the desktop one — a warning
+       drawn through a button is a warning nobody reads. */
     if (!BR.SaveManager.storageOk) {
       ctx.save();
       ctx.textAlign = 'center';
       ctx.font = T.label(11, 700);
       ctx.fillStyle = '#ff9d6b';
       ctx.fillText('Storage unavailable — progress will not be saved',
-                   cx, h - 30);
+                   cx, Math.min(h - 14, ry + ROW_H + 4));
       ctx.restore();
       ctx.textAlign = 'left';
     }
+  },
+
+  /* ══ WELCOME ══════════════════════════════════════════════════════════════
+     The first thing a brand new save sees, in place of the menu.
+
+     One question, two answers, and no third state — a first-run screen that
+     can be dismissed WITHOUT answering is a first-run screen that comes back,
+     and this one must never appear twice. Escape counts as the second answer
+     (see back()).
+
+     It is deliberately not a tour, a settings wizard or a name entry. It is
+     the smallest possible fork in front of a player who does not yet know
+     whether they want to be taught, and the expensive half of it — the lessons
+     themselves — is the real first event with a leaflet on it (Coach.js).
+
+     The card is PAPER on a dark screen, not kraft: it is a note that came in
+     the box, and the two buttons under it are the only things on screen. */
+  drawWelcome(ctx, w, h) {
+    const T = BR.Toy;
+    const cx = w / 2;
+    const cw = Math.min(430, w - 28);
+    const x = (w - cw) / 2;
+    const ch = 116;
+
+    /* Measured, not assumed: the logo sticker is wider than its text, and the
+       block has to be centred as a whole or it drifts down a short screen. */
+    let ts = 34;
+    ctx.font = T.label(ts, 800);
+    const need = ctx.measureText('BEDROOM RACERS').width + 44;
+    if (need > w - 24) ts = Math.max(14, Math.floor(ts * (w - 24) / need));
+    const logoH = ts + Math.round(ts * 0.28) * 2;
+
+    const blockH = logoH + 18 + ch + 14 + 44 + 10 + 34;
+    let y = Math.max(10, (h - blockH) / 2);
+
+    T.banner(ctx, 'BEDROOM RACERS', cx, y + logoH / 2,
+             { size: ts, padX: Math.round(ts * 0.55), padY: Math.round(ts * 0.28),
+               fill: T.RED, ink: '#fff2dc', tilt: -0.016 });
+    y += logoH + 18;
+
+    T.card(ctx, x, y, cw, ch, 8, '#e8ddc3', 'paper');
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.font = T.label(15, 800);
+    ctx.fillStyle = T.INK;
+    ctx.fillText('NEW TO THE BOX?', x + 16, y + 14, cw - 32);
+    ctx.font = T.label(12, 600);
+    ctx.fillStyle = 'rgba(44,34,25,0.76)';
+    ctx.fillText('The first race can show you what the buttons are for,',
+                 x + 16, y + 40, cw - 32);
+    ctx.fillText('one at a time, as the rug asks for them.',
+                 x + 16, y + 58, cw - 32);
+    ctx.fillStyle = 'rgba(44,34,25,0.55)';
+    ctx.fillText('It is a real event. Real rivals, real stars, and you can',
+                 x + 16, y + 80, cw - 32);
+    ctx.fillText('stop the lessons whenever you like.', x + 16, y + 94, cw - 32);
+    ctx.restore();
+    y += ch + 14;
+
+    const bw = Math.min(260, cw);
+    this.button(ctx, cx - bw / 2, y, bw, 44, 'SHOW ME HOW', 'coachStart', null,
+                { primary: true });
+    y += 54;
+    this.button(ctx, cx - bw / 2, y, bw, 34, 'I WILL WORK IT OUT',
+                'coachDecline', null, { small: true });
+  },
+
+  /* ══ SETTINGS ═════════════════════════════════════════════════════════════
+     11_UI.md listed this on the main menu from the first draft and it was
+     never built. Everything it holds already existed and none of it could be
+     found: the volumes and the display toggles were on the PAUSE card, which
+     means inside a race; auto-accelerate was on the T key and written down
+     nowhere; the save codes and RESET PROGRESS were a row of small buttons on
+     the menu that also overlapped the difficulty tabs on a short screen.
+
+     ── TWO SHAPES, AND THE SHORT ONE IS NOT A SQUASHED TALL ONE ──────────────
+     The same conclusion the event rows reached. One column reads better and is
+     what a phone in portrait gets, because a portrait phone has height to
+     spare. A screen too short for the column — a laptop window, a phone in
+     landscape — gets two columns rather than shrunk controls, because these
+     are touch targets and the one thing that must not shrink is the thing you
+     are aiming at.
+
+     The threshold is measured, not guessed: the single column needs about 470
+     pixels of height including the BACK button, so that is where it switches.
+
+     DIFFICULTY IS NOT HERE. It stays on the menu, where 11_UI.md put it under
+     accessibility rather than options — it changes what a medal is worth, and
+     it belongs next to the RACE button rather than behind another press. */
+  drawSettings(ctx, w, h) {
+    const T = BR.Toy;
+    const roomy = h >= 470;
+    const two = !roomy && w >= 460;
+    const panelW = Math.min(two ? 600 : 380, w - 32);
+    const x = (w - panelW) / 2;
+    const top = Math.max(18, h * 0.07);
+
+    this.title(ctx, 'SETTINGS', x, top);
+
+    const colW = two ? Math.floor((panelW - 20) / 2) : panelW;
+    const colBX = two ? x + colW + 20 : x;
+    const cy0 = top + 46;
+
+    // ── column one: what you hear, and how the car answers ────────────────
+    let y = cy0;
+    this.section(ctx, 'SOUND', x, y - 13);
+    y = this.volSlider(ctx, x, y, colW, 'SFX', BR.Audio.sfxVolume, 'sfx');
+    y = this.volSlider(ctx, x, y, colW, 'MUSIC', BR.Audio.musicVolume, 'music');
+
+    y += 20;
+    this.section(ctx, 'DRIVING', x, y - 13);
+    this.button(ctx, x, y, colW, 30, 'AUTO-ACCELERATE  ' +
+                (BR.Input.autoAccelerate ? 'ON' : 'OFF'), 'autoAccel', null);
+    y += 36;
+
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.font = T.label(10, 600);
+    ctx.fillStyle = 'rgba(240,232,214,0.40)';
+    ctx.fillText('On by default. The T key does the same thing mid-race.',
+                 x, y, colW);
+    /* The control line, in one more place you can go and look. In-race it
+       fades after a couple of seconds, which is right for a countdown and no
+       use at all to somebody who has forgotten which key drifts. */
+    const line = BR.Touch && BR.Touch.capable
+      ? 'ON-SCREEN CONTROLS  ·  tap and hold'
+      : (BR.Input.padFor(0) ? BR.Input.PAD_LABEL : BR.Input.LABELS.solo);
+    ctx.fillStyle = 'rgba(240,232,214,0.55)';
+    ctx.font = T.label(10, 700);
+    ctx.fillText(line, x, y + 17, colW);
+    ctx.restore();
+    y += 38;
+    const colABottom = y;
+
+    // ── column two: what you see, the lessons, and the save ───────────────
+    y = two ? cy0 : colABottom + 26;
+    this.section(ctx, 'DISPLAY', colBX, y - 13);
+    const halfW = (colW - 8) / 2;
+    this.button(ctx, colBX, y, halfW, 30,
+                'MAP  ' + (BR.MiniMap.size > 0 ? 'ON' : 'OFF'), 'toggleMap', null);
+    this.button(ctx, colBX + halfW + 8, y, halfW, 30,
+                'CORNERS  ' + (BR.CornerHint.size > 0 ? 'ON' : 'OFF'),
+                'toggleCorners', null);
+    y += 50;
+
+    this.section(ctx, 'LEARNING', colBX, y - 13);
+    this.button(ctx, colBX, y, colW, 30, 'SHOW THE LESSONS AGAIN',
+                'coachStart', null);
+    y += 50;
+
+    /* ── save codes and reset progress, moved here from the menu ───────────
+       15_Save_System.md open questions 2 and 4. Findable, not inviting — the
+       same intent as before, in the place a player now goes looking for it.
+
+       COUNTED THROUGH SaveManager.saveTally(), not by walking the events map:
+       eventRecord() CREATES a {medal:'none'} row for every event the list
+       draws, and 'none' is truthy, so counting medals here gave a fresh save
+       eighteen of them and offered to erase them.
+
+       USE A SAVE CODE is always here, including on an empty save — a brand new
+       browser is exactly where somebody needs to bring progress IN, and it is
+       the one case where importing destroys nothing. */
+    const t = BR.SaveManager.saveTally();
+    const hasProgress = t.stars > 0 || t.medals > 0 || t.pieces > 0;
+
+    this.section(ctx, 'SAVE', colBX, y - 13);
+    if (hasProgress) {
+      this.button(ctx, colBX, y, halfW, 26, 'COPY MY CODE', 'saveExport', null,
+                  { small: true });
+      this.button(ctx, colBX + halfW + 8, y, halfW, 26, 'USE A CODE',
+                  'saveImport', null, { small: true });
+      y += 32;
+      this.button(ctx, colBX, y, colW, 26, 'RESET PROGRESS', 'resetArm', null,
+                  { small: true });
+      y += 32;
+    } else {
+      this.button(ctx, colBX, y, colW, 26, 'USE A SAVE CODE', 'saveImport',
+                  null, { small: true });
+      y += 32;
+    }
+
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.font = T.label(10, 600);
+    ctx.fillStyle = 'rgba(240,232,214,0.34)';
+    ctx.fillText('A save code moves progress to another browser.', colBX, y,
+                 colW);
+    ctx.restore();
+
+    const contentBottom = Math.max(colABottom, y + 16);
+    const by = Math.min(contentBottom + 18, h - 44);
+    this.button(ctx, x, by, 120, 36, '← BACK', 'goto', this.MENU);
+
+    if (!BR.SaveManager.storageOk) {
+      ctx.save();
+      ctx.textAlign = 'right';
+      ctx.font = T.label(11, 700);
+      ctx.fillStyle = '#ff9d6b';
+      ctx.fillText('Storage unavailable — nothing here is being saved',
+                   x + panelW, by + 12);
+      ctx.restore();
+      ctx.textAlign = 'left';
+    }
+
+    // Drawn over the top, last, so its two buttons win the hit test — the same
+    // arrangement the menu used when the reset lived there.
+    if (hasProgress && this.resetArmed) this.drawResetConfirm(ctx, w, h, t);
+  },
+
+  /* ══ CREDITS ══════════════════════════════════════════════════════════════
+     Short, and in the game's own voice rather than a film crawl. A game about
+     toys in a bedroom should not credit itself like a studio picture. */
+  drawCredits(ctx, w, h) {
+    const T = BR.Toy;
+    const cx = w / 2;
+    const cw = Math.min(430, w - 28);
+    const x = (w - cw) / 2;
+    const ch = 190;
+    const y = Math.max(52, (h - ch) / 2 - 10);
+
+    this.title(ctx, 'CREDITS', x, Math.max(14, y - 46));
+
+    T.card(ctx, x, y, cw, ch, 8, '#e8ddc3', 'paper');
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.font = T.label(17, 800);
+    ctx.fillStyle = T.INK;
+    ctx.fillText('BEDROOM RACERS', cx, y + 16, cw - 32);
+
+    ctx.font = T.label(12, 700);
+    ctx.fillStyle = 'rgba(44,34,25,0.80)';
+    ctx.fillText('Made by Dumb-Tony, with Claude.', cx, y + 44, cw - 32);
+
+    ctx.font = T.label(11, 600);
+    ctx.fillStyle = 'rgba(44,34,25,0.62)';
+    ctx.fillText('No engine, no toolchain, no build step —', cx, y + 74, cw - 32);
+    ctx.fillText('scripts in a page and a canvas to draw on.', cx, y + 90, cw - 32);
+    ctx.fillText('Twelve tracks, six worlds, twenty-six events,', cx, y + 112, cw - 32);
+    ctx.fillText('and a rug that does not forgive.', cx, y + 128, cw - 32);
+    ctx.restore();
+
+    // The tagline gets the sticker, because it is the one line that is the
+    // game rather than about it.
+    T.banner(ctx, 'The toys race when nobody is watching', cx, y + ch - 22,
+             { size: 11, padX: 12, padY: 6, fill: T.YELLOW, tilt: -0.02 });
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+
+    const by = Math.min(Math.max(y + ch + 16, h - 52), h - 44);
+    this.button(ctx, x, by, 120, 36, '← BACK', 'goto', this.MENU);
   },
 
   /* ── the armed reset ──────────────────────────────────────────────────────
@@ -1199,7 +1495,7 @@ BR.Screens = {
     this.button(ctx, w / 2 - bw - 6, y + ch - 44, bw, 30, 'YES, ERASE IT ALL',
                 'resetConfirm', null, { small: true, danger: true });
     this.button(ctx, w / 2 + 6, y + ch - 44, bw, 30, 'KEEP MY PROGRESS',
-                'goto', this.MENU, { small: true });
+                'goto', this.SETTINGS, { small: true });
   },
 
   /* A latching tab — one of a row where exactly one is down. The chosen one is

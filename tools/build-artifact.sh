@@ -65,6 +65,7 @@ FILES=(
   "src/ui/HUD.js"
   "src/ui/MiniMap.js"
   "src/ui/CornerHint.js"
+  "src/ui/Coach.js"
   "src/ui/Screens.js"
   "src/main.js"
 )
