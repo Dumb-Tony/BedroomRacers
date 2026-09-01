@@ -47,6 +47,23 @@ BR.SaveManager = {
         mapSize: 0.82,
         cornerHint: 1,
 
+        /* ── ACCESSIBILITY ──────────────────────────────────────────────────
+           11_UI.md lists these as "not optional, and not deferred", several of
+           them load-bearing for the 8+ audience this game is aimed at.
+
+           `cameraRotation` clamps how much of the world's turn the camera
+           follows: 1 is the game as designed, 0 holds a fixed bearing. The
+           chase camera rotates the entire world around the car, which the doc
+           names as a known motion-sickness trigger and harder for younger
+           players to parse — and it is genuinely one number, because the
+           projection already takes yaw as a parameter.
+
+           `markShapes` stops opponent identity resting on colour alone. Every
+           car here is NAMED for its colour — Red Racer, Blue Buggy — so the
+           minimap is exactly where that assumption bites. */
+        cameraRotation: 1,
+        markShapes: false,
+
         /* Has this seat been shown how to play (src/ui/Coach.js). A SETTING,
            not progress, and deliberately: reset() keeps settings and import
            keeps this device's, so wiping your stars or pasting in a save code

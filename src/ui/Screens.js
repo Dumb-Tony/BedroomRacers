@@ -303,6 +303,30 @@ BR.Screens = {
         BR.SaveManager.save();
         BR.Audio.checkpoint();
         break;
+      /* ── accessibility (11_UI.md) ─────────────────────────────────────────
+         Three steps rather than a slider, because the useful answers are "as
+         designed", "less of it" and "none": a continuous control here invites
+         hunting for a value, and the measurement says the middle is not even
+         proportional — full rotation travels 598 degrees of yaw over forty
+         seconds, half travels 498, and off travels none. */
+      case 'camRot': {
+        const st = BR.SaveManager.get().settings;
+        const now = st.cameraRotation === undefined ? 1 : st.cameraRotation;
+        const next = now === 1 ? 0.5 : (now === 0.5 ? 0 : 1);
+        st.cameraRotation = next;
+        BR.Renderer.cameraRotation = next;
+        BR.SaveManager.save();
+        BR.Audio.checkpoint();
+        break;
+      }
+      case 'markShapes': {
+        const st = BR.SaveManager.get().settings;
+        st.markShapes = !st.markShapes;
+        BR.MiniMap.markShapes = st.markShapes;
+        BR.SaveManager.save();
+        BR.Audio.checkpoint();
+        break;
+      }
       /* ── reset progress ──────────────────────────────────────────────────
          15_Save_System.md open question 4: "probably yes, in settings, with
          confirmation."
@@ -1313,6 +1337,27 @@ BR.Screens = {
                 (BR.Input.autoAccelerate ? 'ON' : 'OFF'), 'autoAccel', null);
     y += 36;
 
+    /* ── accessibility ─────────────────────────────────────────────────────
+       11_UI.md calls these "not optional, and not deferred", and several
+       load-bearing for the 8+ audience. Two of the list are here now.
+
+       Camera rotation matters most: the chase camera turns the entire world
+       around the car, which that doc names as a known motion-sickness trigger
+       and harder for younger players to read. Colour marks matter more in this
+       game than in most, because every car is NAMED for its colour. */
+    const camRot = (function () {
+      const s = BR.SaveManager.get().settings.cameraRotation;
+      return s === undefined ? 1 : s;
+    })();
+    this.button(ctx, x, y, colW, 30, 'CAMERA ROTATION  ' +
+                (camRot === 1 ? 'FULL' : camRot === 0.5 ? 'REDUCED' : 'FIXED'),
+                'camRot', null);
+    y += 36;
+    this.button(ctx, x, y, colW, 30, 'SHAPES ON THE MAP  ' +
+                (BR.SaveManager.get().settings.markShapes ? 'ON' : 'OFF'),
+                'markShapes', null);
+    y += 36;
+
     ctx.save();
     ctx.textAlign = 'left';
     ctx.font = T.label(10, 600);
@@ -1437,7 +1482,27 @@ BR.Screens = {
     ctx.fillStyle = 'rgba(44,34,25,0.62)';
     ctx.fillText('No engine, no toolchain, no build step —', cx, y + 74, cw - 32);
     ctx.fillText('scripts in a page and a canvas to draw on.', cx, y + 90, cw - 32);
-    ctx.fillText('Twelve tracks, six worlds, twenty-six events,', cx, y + 112, cw - 32);
+    /* COUNTED, NOT WRITTEN DOWN. This read "Twelve tracks, six worlds,
+       twenty-six events" as literal text — true the day it was typed, and
+       exactly the kind of line that quietly stops being true. The published
+       page header had already drifted the same way twice, still advertising
+       eight tracks and four worlds long after there were ten and five. A
+       credits screen that lies about its own game is worse than one that says
+       nothing. */
+    const nTracks = Object.keys(BR.TRACKS || {}).length;
+    const nEvents = (BR.EVENTS || []).length;
+    const seenWorlds = {};
+    for (const tid in (BR.TRACKS || {})) {
+      const w = BR.TRACKS[tid] && BR.TRACKS[tid].world;
+      if (w) seenWorlds[w] = 1;
+    }
+    /* +1 because Bedside Boulevard carries world 'town-rug' while the project
+       has always counted it as a place of its own — 11_UI.md and 18_Roadmap.md
+       both describe the pre-kitchen game as "fourteen events across four
+       worlds" when there were three `world` values. */
+    const nWorlds = Object.keys(seenWorlds).length + 1;
+    ctx.fillText(nTracks + ' tracks, ' + nWorlds + ' worlds, ' + nEvents +
+                 ' events,', cx, y + 112, cw - 32);
     ctx.fillText('and a rug that does not forgive.', cx, y + 128, cw - 32);
     ctx.restore();
 

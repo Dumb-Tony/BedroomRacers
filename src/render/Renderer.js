@@ -197,6 +197,29 @@ BR.Renderer = {
       targetYaw = v.heading;
     }
 
+    /* ── REDUCED CAMERA ROTATION (11_UI.md accessibility) ───────────────────
+       The chase camera turns the whole world around the car. 11_UI.md names
+       that as a known motion-sickness trigger and harder for younger players to
+       parse, and asks for an option that "clamps or disables yaw rotation,
+       falling back toward a fixed-orientation view".
+
+       It really is one number. The target is blended toward a FIXED bearing
+       rather than the yaw rate being slowed, because slowing the rate does not
+       reduce rotation — it only makes the same rotation arrive late, which is
+       worse for both parsing and nausea. At 0 the world holds still and the car
+       turns within the frame, which is the top-down reading a rotating chase
+       view denies you.
+
+       `_fixedYaw` is the bearing it settles to: the direction the car was
+       facing when the race began, so a track's opening straight still runs up
+       the screen rather than off to one side. */
+    const rot = this.cameraRotation === undefined ? 1 : this.cameraRotation;
+    if (cam._fixedYaw === undefined) cam._fixedYaw = targetYaw;
+    if (rot < 1) {
+      const toFixed = M.wrapAngle(cam._fixedYaw - targetYaw);
+      targetYaw = targetYaw + toFixed * (1 - rot);
+    }
+
     const dYaw = M.wrapAngle(targetYaw - cam.yaw);
     cam.yaw += dYaw * (1 - Math.exp(-C.yawRate * dt));
 

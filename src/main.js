@@ -111,6 +111,12 @@ BR.Game = {
     BR.Audio.musicVolume = save.settings.musicVolume;
     BR.Input.autoAccelerate = save.settings.autoAccelerate;
     if (BR.MiniMap) BR.MiniMap.size = save.settings.mapSize;
+    // Accessibility settings live on the renderer, which is where they are read
+    // every frame — see the note on `cameraRotation` in SaveManager.
+    if (save.settings.cameraRotation !== undefined) {
+      BR.Renderer.cameraRotation = save.settings.cameraRotation;
+    }
+    if (BR.MiniMap) BR.MiniMap.markShapes = !!save.settings.markShapes;
     if (BR.CornerHint && save.settings.cornerHint !== undefined) {
       BR.CornerHint.size = save.settings.cornerHint;
     }

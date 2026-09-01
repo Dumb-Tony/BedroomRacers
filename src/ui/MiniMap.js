@@ -47,6 +47,50 @@ BR.MiniMap = {
     return { x: f.cx + (x - f.wx) * f.scale, y: f.cy + (y - f.wy) * f.scale };
   },
 
+  /** Whether opponent markers carry a shape as well as a colour. */
+  markShapes: false,
+
+  /**
+   * A distinguishable marker path for opponent `n`, centred on x,y.
+   *
+   * Five shapes, chosen to differ in SILHOUETTE rather than in detail: at four
+   * pixels on a minimap, an outline is a blob and only the gross shape reads.
+   * Circle, square, triangle, diamond, then a wide bar — each has a different
+   * ratio of width to height and a different number of corners, which survives
+   * being two pixels across in a way that "a slightly different rounded thing"
+   * does not. Beyond five it wraps, and by then the grid is full anyway.
+   *
+   * Leaves the path open for the caller to fill and stroke, exactly as the
+   * plain `arc` it replaces did.
+   */
+  marker(ctx, x, y, r, n) {
+    ctx.beginPath();
+    switch (n % 5) {
+      case 0:
+        ctx.arc(x, y, r * 0.9, 0, Math.PI * 2);
+        break;
+      case 1:
+        ctx.rect(x - r * 0.8, y - r * 0.8, r * 1.6, r * 1.6);
+        break;
+      case 2:
+        ctx.moveTo(x, y - r);
+        ctx.lineTo(x + r, y + r * 0.8);
+        ctx.lineTo(x - r, y + r * 0.8);
+        ctx.closePath();
+        break;
+      case 3:
+        ctx.moveTo(x, y - r * 1.1);
+        ctx.lineTo(x + r * 1.1, y);
+        ctx.lineTo(x, y + r * 1.1);
+        ctx.lineTo(x - r * 1.1, y);
+        ctx.closePath();
+        break;
+      default:
+        ctx.rect(x - r * 1.25, y - r * 0.55, r * 2.5, r * 1.1);
+        break;
+    }
+  },
+
   draw(ctx, game, view, w, h) {
     if (this.size <= 0.01) return;
     const track = game.arena;
@@ -153,12 +197,24 @@ BR.MiniMap = {
     // In their own body colours, so identifying a car on the map matches
     // identifying it on the track.
     const self = view.vehicle;
+    let shapeIdx = 0;
     for (let i = 0; i < game.vehicles.length; i++) {
       const v = game.vehicles[i];
       if (v === self) continue;
       const p = this.toMap(v.x, v.y);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 3.6, 0, Math.PI * 2);
+
+      /* SHAPE AS WELL AS COLOUR, when asked for. 11_UI.md: "Never rely on
+         colour alone for position indicators or opponent identification; pair
+         with shape or number." It matters more here than in most games, because
+         every car in this one is NAMED for its colour — Red Racer, Green
+         Pickup — so to a red-green colourblind player they are two identical
+         dots, on the one display whose entire job is telling you who is where.
+
+         Off by default: plain dots read more cleanly when colour does work, so
+         this is a preference rather than a correction applied to everybody. */
+      if (this.markShapes) this.marker(ctx, p.x, p.y, 4.0, shapeIdx++);
+      else { ctx.beginPath(); ctx.arc(p.x, p.y, 3.6, 0, Math.PI * 2); }
+
       ctx.fillStyle = v.spec.colorTop;
       ctx.fill();
       ctx.strokeStyle = 'rgba(0,0,0,0.5)';
