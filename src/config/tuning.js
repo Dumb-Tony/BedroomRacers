@@ -177,8 +177,35 @@ BR.PHYSICS = {
 };
 
 /* ── SURFACES ──────────────────────────────────────────────────────────────
-   Multiplicative modifiers. Phase 1 only uses rugRoad, but the lookup is
-   wired so surface zones drop straight in at Phase 3. See 05_Tracks.md.    */
+   Multiplicative modifiers. See 05_Tracks.md.
+
+   EVERY ONE OF THESE IS DRIVEN ON. That was not always true — this table was
+   written in Phase 1, when only `rugRoad` was reachable and the rest were a
+   promise that surface zones would drop in later. The promise came good, and
+   the comment saying otherwise outlived it by six phases.
+
+   Which track declares which, counted over the twelve files by the value and
+   not by the word, so a mention in a comment does not count:
+
+     rugRoad     Rug Loop, and what TrackManager falls back to when a track
+                 declares no baseSurface at all
+     rugGrass    both kitchen tracks, both sofa tracks — 4
+     hardwood    Bedside Boulevard, both kitchen, both sofa, and the bedroom
+                 floor UNDER both stunt decks — 7, the widest use here
+     blanket     Bedside Boulevard, both kitchen, both sofa — 5
+     plastic     the moulded decks on the two stunt tracks — 2
+     paper       both kitchen tracks, both sofa tracks — 4
+     bookCover   Bedside Boulevard, and nowhere else — 1, the narrowest use in
+                 the table, and still a real one
+     sand        the four Sandbox tracks — 4
+     looseSand   the four Sandbox tracks, and both sofa tracks — 6
+     puddle      both kitchen, all four Sandbox, both sofa — 8
+     packedSand  NEVER declared by a track, and correctly so: it is what sand
+                 becomes when it is driven on, blended in by SandGrid
+
+   A surface with no track is dead tuning, so add the track in the same commit
+   as the numbers. `plastic` sat here fully tuned and unreachable until the
+   stunt decks stopped silently defaulting to carpet.                        */
 BR.SURFACES = {
   rugRoad:   { grip: 1.00, maxSpeed: 1.00, accel: 1.00 },
   rugGrass:  { grip: 0.95, maxSpeed: 0.82, accel: 0.90 },

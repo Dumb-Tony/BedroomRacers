@@ -1,12 +1,25 @@
 # 16 — Content Pipeline
 
-> **DRAFT.** Not covered by the source GDD. This document exists because the
-> "expandable structure" pillar (`00_Vision.md`) is a promise that only holds if
-> adding content is genuinely cheap. Right now, it isn't — there is no pipeline at all.
+> **SETTLED — Phase 5, and holding at twelve tracks.** Not covered by the source
+> GDD. This document exists because the "expandable structure" pillar
+> (`00_Vision.md`) is a promise that only holds if adding content is genuinely
+> cheap.
 >
-> Resolve before Phase 5, when track count grows past two.
+> ~~Right now, it isn't — there is no pipeline at all. Resolve before Phase 5,
+> when track count grows past two.~~ Questions 1, 2 and 4 are answered below and
+> the answer to the big one was *change the schema, not the tooling*. Question 3
+> stays open because it is not a technical question.
+>
+> **The problem statement below is preserved as written**, because it is the
+> reasoning the answer had to beat, and it was wrong in an instructive way.
 
-## The problem
+## The problem, as it looked before the schema changed
+
+> Every claim in this section is still true **of the schema it was written
+> about** — the hand-authored polygons-and-segments format that used to be in
+> `05_Tracks.md`. None of it is true of what tracks actually declare now. Kept
+> because "the tool is unavoidable" is what a wrong schema feels like from the
+> inside.
 
 The GDD calls for six town-rug tracks, five-plus vehicles, and multiple future worlds.
 Hand-writing the track schema in `05_Tracks.md` as raw JavaScript is fine for one

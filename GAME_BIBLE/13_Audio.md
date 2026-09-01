@@ -516,9 +516,9 @@ minute, and the same seed gives the same sequence twice.
 Worth recording. The first version threw `t is not defined` in two of eleven
 voices, and **smoke passed anyway** — `Audio.update` returns early unless the
 audio context is actually `running`, which it never is in headless Chrome. The
-43 checks say nothing about audio at all. Only a harness that stubs the context
-and drives the scheduler directly can see this code, which is exactly what the
-music and material harnesses already do.
+smoke checks say nothing about audio at all, at any count. Only a harness that
+stubs the context and drives the scheduler directly can see this code, which is
+exactly what the music and material harnesses already do.
 
 ## The sound of speed (Phase 11)
 

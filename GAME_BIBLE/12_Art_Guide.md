@@ -432,9 +432,11 @@ do not trace it.
    height/depth ambiguity and 12% more occlusion for 10–19px of extra lift.
    Measured above.
 5. ~~**Fake perspective — yes or no?**~~ **Yes, as object scaling.** Built and
-   tunable. The remaining sub-question is whether the ground plane should narrow
-   too, which would be true perspective and a much larger change — currently it
-   does not.
+   tunable. ~~The remaining sub-question is whether the ground plane should
+   narrow too.~~ **Answered in Phase 11: no, and the deciding number is how
+   little it would change** — about 18% of road width at the very top of the
+   frame, against giving up a projection with no singularity behind the camera
+   and a constant height/depth exchange rate. Measured below.
 6. ~~Does the rug get a full illustrated texture, or is it composed from tiles?~~
    **Tiles — two of them, mismatched, plus the one thing a tile cannot do: an
    edge.** Built and measured below, +30 operations a frame.
@@ -1074,3 +1076,65 @@ frame for fifteen distinct values.
 
 All 22 events measured **0.00** against the committed baseline. This is a
 render-only pass and nothing in it can be seen by a lap time.
+
+## Question 5's other half: should the ground narrow too? (Phase 11)
+
+**No.** Objects scale with distance and the ground plane does not, and that
+stays true. This is the sub-question left open when fake perspective was built:
+*would true perspective — a road that narrows as it recedes — be better?*
+
+It would be more correct. It is not worth what it costs, and the measurement
+that decides it is how little it would actually change.
+
+### What it would buy: 18% at the top of the frame
+
+The road would have to taper by whatever `depthScale` already applies to
+objects: 0.30 spread over `depthRange` 2400 units. Measured against the visible
+strip:
+
+| canvas, CSS px | units ahead of the car | ground scale it would get | a 280-wide road becomes |
+| --- | --- | --- | --- |
+| 1280×800, parked | 1438 | 0.820 | 230 |
+| 1280×800, top speed | 1712 | 0.786 | 220 |
+| 375×812, parked | 1459 | 0.818 | 229 |
+
+So the whole visible taper is about **fifty units over the top half of the
+screen**, on a road drawn 280 wide at the car. The geometric inconsistency the
+question worries about — a car at the far edge drawn at 0.82 on a road drawn at
+1.00 — is 18% at the extreme, and shrinks to nothing over most of the frame.
+
+Three depth cues already carry that distance and all three are object-side:
+`depthScale` shrinks the object, `shadowFalloff` lifts its shadow toward the
+ambient, and `CAMERA.depthFade` hazes the far edge. The eye keys on those.
+
+### What it would cost: the projection stops being linear
+
+`project()` is called **98 times**, all of them inside `Renderer.js`, which
+sounds contained. The problem is not the call sites; it is that a divide by
+depth removes three properties the rest of the renderer is built on:
+
+- **No singularity behind the camera.** The cull is a plain sx/sy box test with
+  no near plane, and the comment on `anyVisible` explains why: an axonometric
+  projection has nothing to reject against. A perspective divide mirrors
+  everything behind the camera into the frame, so every visibility test needs a
+  near-plane reject again. That test existed once, was written backwards, and
+  silently threw away **two thirds of the visible walls** — 28 of 81 kept on Rug
+  Loop. Re-introducing the need for it is re-introducing that bug's habitat.
+- **`heightScale / groundTilt` is a constant.** 2.83 — the exchange rate between
+  one unit of height and one unit of receding ground. It is quoted as a number
+  in this document (occlusion: a prop hides 2.83× its height of ground), in
+  `05_Tracks.md`'s readability rules, and it is used arithmetically in
+  `drawRoomFloor` to inset the floor ring. Under perspective it becomes a
+  function of depth and every one of those becomes an approximation.
+- **The plane is drawn as flat fills.** The road, the room floor, the rug tiles,
+  the markings, the finish line, the boost pads, the shortcut polygon and the
+  sand grid are all quads and paths in the ground plane, filled and patterned
+  without regard to depth. Narrowing the plane means every one of them becomes a
+  trapezoid with depth-varying line widths and pattern scales.
+
+### The rule this settles
+
+**Anything with a single ground anchor scales; anything that IS the plane does
+not.** A new drawable belongs to one of those two categories and the choice is
+not a judgement call. If it has an anchor, shrink it about the anchor with
+`Pj.scaleAt`. If it is painted on the floor, leave it alone.

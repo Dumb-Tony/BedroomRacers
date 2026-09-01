@@ -502,11 +502,10 @@ BR.AIDriver = {
     return input;
   },
 
-  /** Distance to the closest other car. */
   /**
    * Distance to the nearest rival IN FRONT, or Infinity if there is none.
    *
-   * Targeting used `nearestRival`, which is omnidirectional, and in an
+   * Targeting used to ask for the nearest rival in ANY direction, and in an
    * eight-car pack somebody is nearly always within a few hundred units in
    * SOME direction. So a high-skill driver never had to wait for a target and
    * fired the instant it was handed anything — measured at a 0.02s median
@@ -530,18 +529,6 @@ BR.AIDriver = {
       if (along <= 0) continue;
       const d = Math.hypot(dx, dy);
       if (along < d * 0.55) continue;          // off to one side, not in front
-      if (d < best) best = d;
-    }
-    return best;
-  },
-
-  nearestRival(v) {
-    const list = (BR.Game && BR.Game.vehicles) || [];
-    let best = Infinity;
-    for (let i = 0; i < list.length; i++) {
-      const o = list[i];
-      if (o === v || o.isGhost) continue;
-      const d = Math.hypot(o.x - v.x, o.y - v.y);
       if (d < best) best = d;
     }
     return best;

@@ -105,6 +105,13 @@ BR.TRACKS['stunt-shelf-run'] = {
     { from: 0.55, to: 0.66, side: 'outer' },
   ],
 
+  /* NO `shortcut` CHORD, and the fork below is what stands in for it. A chord
+     cuts across a detour and needs ground under it; two of this track's three
+     decks are 210 and 440 units up with a bedroom floor underneath, so a cut
+     between them is a bridge to nowhere — the same reason both kitchen tracks
+     record for going without one. The route choice here is the gate: same
+     stretch of road, two entry speeds, two payouts. See 05_Tracks.md, which now
+     asks every track without a chord to say what it has instead. */
   zones: [],
 
   /* One ride, and it is a FORK — the track's switching gate.
@@ -185,9 +192,27 @@ BR.TRACKS['stunt-shelf-run'] = {
   ],
   hazards: [],
 
+  /* BOTH BESIDE FLOOR SECTIONS, and on this track that is a harder constraint
+     than it sounds. A prop takes the height of the nearest CENTRELINE point,
+     so what matters is not how far it is from the road but which stretch of
+     road is nearest — and on a figure-eight with three decks, most of the
+     west half of the room is nearest to the long drop rather than to the floor
+     underneath it.
+
+     The crayon used to sit at (620,2900). Measured: 303 units from a road
+     whose half-width is 150, nearest centreline index 101, lifted to z 394.5.
+     Rendered and looked at — it hung in the air off the outside of the drop,
+     over the floorboards, and its collision octagon hung there with it, drawn
+     as a grey barrier ring round nothing. Counted inside drawProp, so it is
+     post-cull: DRAWN in 661 of the 2410 frames of a lap. Eleven seconds a lap,
+     not a corner case.
+
+     So it is over here instead, beside the opening straight at t 0.12, where
+     the nearest centreline point is on the floor and z resolves to 0. Same
+     room, same distance off the road, standing on something. */
   props: [
-    { type: 'block',  x: 2300, y: 1250, r: 32, h: 38, rot: 0.4 },
-    { type: 'crayon', x:  620, y: 2900, r: 30, h: 26, rot: 1.6 },
+    { type: 'block',  x: 2300, y: 1250, r: 32, h: 38, rot: 0.4 },   // z 0, 441 out
+    { type: 'crayon', x: 3520, y: 2960, r: 30, h: 26, rot: 1.6 },   // z 0, 293 out
   ],
 
   /* The furniture it is all built over. */

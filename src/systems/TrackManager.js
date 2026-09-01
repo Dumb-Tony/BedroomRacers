@@ -527,7 +527,88 @@ BR.TrackManager = {
       out.hazards.forEach(function (h) { lift(h, h.x, h.y); });
       out.finishZ = elev[self.nearestIndex(line, def.finish[0], def.finish[1])].z;
     }
+
+    // AFTER the lift, because half of what it checks is the height the lift
+    // just handed out.
+    out.badProps = this.findMisplacedProps(out);
+
     return out;
+  },
+
+  /**
+   * Props that are in the wrong place, in the two ways a prop can be.
+   *
+   * BOTH of these shipped, and neither was visible from the data.
+   *
+   * **Hanging in the air.** A prop is authored in world coordinates and takes
+   * the height of the nearest CENTRELINE point, which on an elevated track is
+   * not a decision the author made — it is whichever stretch of road happens to
+   * be closest. Shelf Run's crayon sat 303 units from a road half 150 wide,
+   * inherited z 394.5 from the drop it was beside, and hung over the
+   * floorboards — drawn, counted inside `drawProp`, in 661 of the 2410 frames
+   * of a lap. Its collision octagon hung there too, drawn as a grey barrier
+   * ring round nothing at all.
+   *
+   * Collectibles cannot make this mistake, because they are authored against
+   * the track (`t`/`offset`) rather than against the room — see the note on
+   * hand-placed pieces in 05_Tracks.md. Props still are, so they need the
+   * check instead.
+   *
+   * **Standing inside a ride.** Dresser Drop's third block was authored a phase
+   * before the magnetic booster, and the booster was laid over the top of it:
+   * 31 units off the axis of a 190-wide ribbon that grabs the car and throws it
+   * at 1.55x. Nothing complained. The AI quietly swerved round it every lap.
+   *
+   * Reported on `arena.badProps` and as a console warning, the same shape as
+   * `findStrayRects` — silence is the wrong response to scenery in the road.
+   */
+  findMisplacedProps(out) {
+    const line = out.centreline, half = out.halfWidth;
+    const rails = out.rails || [];
+    const bad = [];
+
+    for (let i = 0; i < out.props.length; i++) {
+      const p = out.props[i];
+      const where = 'prop[' + i + '] ' + p.type + ' at ' +
+                    Math.round(p.x) + ',' + Math.round(p.y);
+
+      /* Lifted clear of the ground with no deck under it. HALF-WIDTH IS THE
+         WHOLE TEST, and it holds even on a track that is elevated end to end
+         like the kitchen table: `drawGround` fills the bounds quad at z 0
+         always, so the only thing ever drawn at height is the road. Past the
+         kerb there is nothing but air, whatever the nearest centreline point
+         happens to say. */
+      if ((p.z || 0) > 0) {
+        const c = line[this.nearestIndex(line, p.x, p.y)];
+        const d = Math.hypot(c[0] - p.x, c[1] - p.y);
+        if (d > half) {
+          bad.push(where + ' is ' + Math.round(d) + ' from the centreline of a ' +
+                   'deck ' + Math.round(half) + ' half-wide, lifted to z ' +
+                   Math.round(p.z) + ' — it hangs in mid-air');
+        }
+      }
+
+      /* Standing in a rail's ribbon. The mouth is corner-anchored like every
+         other rectangle in a track file; the ride runs `length` along `dir`
+         from its centre and is `width` across. */
+      for (let r = 0; r < rails.length; r++) {
+        const R = rails[r];
+        const mx = R.x + R.w / 2, my = R.y + R.h / 2;
+        const ex = mx + R.dir[0] * R.length, ey = my + R.dir[1] * R.length;
+        const d = this.distToSegment(p.x, p.y, mx, my, ex, ey);
+        const clear = R.width / 2 + (p.r || 26);
+        if (d < clear) {
+          bad.push(where + ' stands ' + Math.round(d) + ' from the axis of ' +
+                   (R.kind || 'loop') + '[' + r + '], inside its ' +
+                   R.width + '-wide ribbon');
+        }
+      }
+    }
+
+    if (bad.length && typeof console !== 'undefined') {
+      console.warn('TRACK ' + out.id + ': ' + bad.join('; '));
+    }
+    return bad;
   },
 
   /**

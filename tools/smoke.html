@@ -74,6 +74,13 @@
           if (A.elevated && A.levellessWalls) {
             throw new Error(A.levellessWalls + ' walls with no level');
           }
+          /* Scenery hanging off the side of a raised deck, or standing inside
+             a rail. Folded into this check rather than added as its own, so
+             the reported count keeps meaning "one per track" — see
+             TrackManager.findMisplacedProps. */
+          if (A.badProps && A.badProps.length) {
+            throw new Error('misplaced props: ' + A.badProps.join('; '));
+          }
         });
       })(id);
     }

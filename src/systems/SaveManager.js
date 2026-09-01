@@ -217,13 +217,11 @@ BR.SaveManager = {
     }
   },
 
-  wipe() {
-    this.data = this.defaults();
-    if (this.storageOk) {
-      try { window.localStorage.removeItem(this.KEY); } catch (e) {}
-    }
-    this.saveNow();
-  },
+  /* There was a `wipe()` here that took everything, settings included. Nothing
+     called it: the only reset the game offers is the two-step button on the
+     main menu, and that goes through `reset()`, which deliberately KEEPS
+     settings (15_Save_System.md q4). Two functions for "start again" that
+     disagree about volume and difficulty is one too many. */
 
   /* ══ SAVE CODES ═══════════════════════════════════════════════════════════
      15_Save_System.md open question 2. LocalStorage is per-origin AND per
